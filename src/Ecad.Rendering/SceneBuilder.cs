@@ -1,6 +1,7 @@
 using System.Numerics;
 using Ecad.Geometry;
 using Ecad.KiCad;
+using Ecad.Rendering.Fonts;
 
 namespace Ecad.Rendering;
 
@@ -257,19 +258,22 @@ public static class SceneBuilder
 
             var size = text.Size;
             double scale = text.ToBoard.ScaleFactor;
-            var prim = new TextPrim(
-                scene.ToScene(text.BoardPosition.ToDouble()),
-                (float)text.BoardAngle,
-                (float)(size.Y * scale / Mm),
-                (float)(size.X * scale / Mm),
-                (float)((text.Thickness ?? size.Y / 8) * scale / Mm),
-                value,
+            var style = new StrokeTextStyle(
+                size.X * scale,
+                size.Y * scale,
+                text.PenWidth * scale,
                 text.HorizontalJustify switch { "left" => TextHAlign.Left, "right" => TextHAlign.Right, _ => TextHAlign.Center },
                 text.VerticalJustify switch { "top" => TextVAlign.Top, "bottom" => TextVAlign.Bottom, _ => TextVAlign.Center },
+                text.DrawAngle,
                 text.IsMirrored,
-                owner);
+                text.IsItalic,
+                text.LineSpacing);
 
-            scene.Layer(layerName).Texts.Add(prim);
+            // Text becomes ordinary stroked segments, so every backend, hit-testing and highlighting handle it.
+            var lines = scene.Layer(layerName).Lines;
+            float width = (float)(style.PenWidth / Mm);
+            StrokeTextLayout.Layout(StrokeFont.Default, value, text.BoardPosition.ToDouble(), style,
+                (a, b) => lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), width, owner)));
         }
 
         public void Line(string layer, Vector2D a, Vector2D b, double widthNm, int owner) =>

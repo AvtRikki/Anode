@@ -122,6 +122,63 @@ public sealed class Text : BoardItem
     /// <summary>Text angle in board frame; KiCad stores it absolute even for footprint texts, like pad orientation.</summary>
     public double BoardAngle => StoredAngle;
 
+    /// <summary>
+    /// Footprint texts are kept readable (never upside down) unless marked <c>(unlocked yes)</c>;
+    /// "unlocked" refers to keep-upright, not to the locked flag.
+    /// </summary>
+    public bool IsKeepUpright =>
+        _footprint is not null && !Node.ChildBool("unlocked") && Node.Find("at")?.HasSymbol("unlocked") != true;
+
+    /// <summary>Angle actually drawn: (-90, 90] for keep-upright texts, [0, 360) otherwise.</summary>
+    public double DrawAngle
+    {
+        get
+        {
+            double angle = BoardAngle;
+            if (IsKeepUpright)
+            {
+                while (angle > 90)
+                {
+                    angle -= 180;
+                }
+
+                while (angle <= -90)
+                {
+                    angle += 180;
+                }
+
+                return angle;
+            }
+
+            angle %= 360;
+            return angle < 0 ? angle + 360 : angle;
+        }
+    }
+
+    public double LineSpacing => Font?.ChildDouble("line_spacing") ?? 1;
+
+    /// <summary>Stroke width in nm, following KiCad's effective pen width rules.</summary>
+    public long PenWidth
+    {
+        get
+        {
+            var size = Size;
+            long minSize = Math.Min(Math.Abs(size.X), Math.Abs(size.Y));
+            long pen = Thickness ?? 0;
+            if (pen <= 1)
+            {
+                pen = (long)Math.Round(minSize / (IsBold ? 5.0 : 8.0));
+            }
+            else if (IsBold && Board.Version >= KiCadFormat.BoldIsStrokeMultiplier)
+            {
+                pen = (long)Math.Round(pen * KiCadFormat.BoldStrokeMultiplier);
+            }
+
+            // KiCad clamps pens of small texts to a quarter of the glyph size.
+            return Math.Min(pen, (long)Math.Round(minSize * 0.25));
+        }
+    }
+
     public override Transform2D ToBoard => _footprint?.Transform ?? Transform2D.Identity;
 
     private SList? Effects => Node.Find("effects");

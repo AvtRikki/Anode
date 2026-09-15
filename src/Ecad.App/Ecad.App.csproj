@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Ecad.Rendering.Skia\Ecad.Rendering.Skia.csproj" />
+    <ProjectReference Include="..\Ecad.Rendering.OpenGL\Ecad.Rendering.OpenGL.csproj" />
     <ProjectReference Include="..\Ecad.KiCad\Ecad.KiCad.csproj" />
   </ItemGroup>
 </Project>

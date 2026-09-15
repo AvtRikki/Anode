@@ -56,11 +56,18 @@ public partial class MainViewModel : ObservableObject
         try
         {
             var sw = Stopwatch.StartNew();
-            var (board, scene, loadMs) = await Task.Run(() =>
+            var (board, scene, loadMs, sceneMs) = await Task.Run(() =>
             {
                 var b = Board.Load(path);
-                double ms = sw.Elapsed.TotalMilliseconds;
-                return (b, SceneBuilder.Build(b), ms);
+                double parsed = sw.Elapsed.TotalMilliseconds;
+                var s = SceneBuilder.Build(b);
+                if (AppOptions.Renderer == RendererKind.OpenGl)
+                {
+                    // GPU upload needs triangles; compute them here instead of stalling the first frame.
+                    SceneTriangulator.Triangulate(s);
+                }
+
+                return (b, s, parsed, sw.Elapsed.TotalMilliseconds - parsed);
             });
 
             SelectedOwner = -1;
@@ -79,7 +86,7 @@ public partial class MainViewModel : ObservableObject
             string warning = !board.IsSupportedVersion ? " · ⚠ older than KiCad 8" : board.IsNewerThanKnown ? " · ⚠ newer than known format" : string.Empty;
             Status = $"{version} · {board.Footprints.Count:N0} footprints · {board.Segments.Count + board.Arcs.Count:N0} tracks · "
                      + $"{board.Vias.Count:N0} vias · {board.Zones.Count:N0} zones · {scene.PrimitiveCount:N0} primitives · "
-                     + $"parse {loadMs:N0} ms, scene {sw.Elapsed.TotalMilliseconds - loadMs:N0} ms{warning}";
+                     + $"parse {loadMs:N0} ms, scene {sceneMs:N0} ms{warning}";
 
             FitRequested?.Invoke();
         }

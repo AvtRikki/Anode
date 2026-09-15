@@ -19,7 +19,7 @@ public partial class App : Application
             var viewModel = new MainViewModel();
             desktop.MainWindow = new MainWindow { DataContext = viewModel };
 
-            if (desktop.Args is [var path, ..] && File.Exists(path))
+            if (desktop.Args?.FirstOrDefault(File.Exists) is { } path)
             {
                 _ = viewModel.OpenAsync(path);
             }

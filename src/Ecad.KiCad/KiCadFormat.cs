@@ -13,6 +13,12 @@ public static class KiCadFormat
     /// <summary>Footprints use (transform (translate)(rotate)(scale)) and children are stored in library frame.</summary>
     public const int FootprintAffineTransform = 20260616;
 
+    /// <summary>Bold text stores the base pen width and multiplies it when drawing.</summary>
+    public const int BoldIsStrokeMultiplier = 20260826;
+
+    /// <summary>Pen width multiplier for bold stroke text (KiCad BOLD_STROKE_MULTIPLIER).</summary>
+    public const double BoldStrokeMultiplier = 1.6;
+
     /// <summary>Newest version this code was checked against.</summary>
     public const int NewestKnown = 20260901;
 

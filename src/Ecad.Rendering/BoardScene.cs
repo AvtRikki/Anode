@@ -23,9 +23,7 @@ public sealed class LayerGeometry(string name)
 
     public List<PolygonPrim> Polygons { get; } = [];
 
-    public List<TextPrim> Texts { get; } = [];
-
-    public int PrimitiveCount => Lines.Count + Circles.Count + Polygons.Count + Texts.Count;
+    public int PrimitiveCount => Lines.Count + Circles.Count + Polygons.Count;
 
     public RectD Bounds { get; internal set; } = RectD.Empty;
 
@@ -134,11 +132,6 @@ public sealed class BoardScene
         foreach (var p in layer.Polygons)
         {
             r = r.Union(p.Bounds);
-        }
-
-        foreach (var t in layer.Texts)
-        {
-            r = r.Union(t.Position.X, t.Position.Y);
         }
 
         return r;

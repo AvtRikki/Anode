@@ -11,6 +11,7 @@ class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        AppOptions.Renderer = AppOptions.ParseRenderer(args);
         try
         {
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -27,11 +28,24 @@ class Program
 
     // Avalonia configuration, don't remove; also used by visual designer.
     public static AppBuilder BuildAvaloniaApp()
-        => AppBuilder.Configure<App>()
+    {
+        var builder = AppBuilder.Configure<App>()
             .UsePlatformDetect()
 #if DEBUG
             .WithDeveloperTools()
 #endif
             .WithInterFont()
             .LogToTrace();
+
+        // Avalonia's macOS compositor defaults to Metal, which OpenGlControlBase cannot share textures with.
+        if (AppOptions.Renderer == RendererKind.OpenGl)
+        {
+            builder = builder.With(new AvaloniaNativePlatformOptions
+            {
+                RenderingMode = [AvaloniaNativeRenderingMode.OpenGl, AvaloniaNativeRenderingMode.Software],
+            });
+        }
+
+        return builder;
+    }
 }

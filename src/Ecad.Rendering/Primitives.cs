@@ -38,8 +38,22 @@ public readonly record struct LinePrim(Vector2 A, Vector2 B, float Width, int Ow
 public readonly record struct CirclePrim(Vector2 Center, float Radius, int Owner);
 
 /// <summary>Filled simple polygon (implicitly closed): zone fills, pads, filled shapes.</summary>
-public sealed record PolygonPrim(Vector2[] Points, int Owner)
+public sealed class PolygonPrim(Vector2[] points, int owner)
 {
+    private int[]? _triangles;
+
+    public Vector2[] Points { get; } = points;
+
+    public int Owner { get; } = owner;
+
+    public bool IsTriangulated => _triangles is not null;
+
+    /// <summary>
+    /// Triangle indices into <see cref="Points"/>, computed on first access and cached.
+    /// Large zone fills take hundreds of milliseconds; see <see cref="SceneTriangulator"/> to do it up front.
+    /// </summary>
+    public int[] Triangles => _triangles ??= [.. Ecad.Geometry.Earcut.Triangulate(Points)];
+
     public RectD Bounds
     {
         get
@@ -68,16 +82,3 @@ public enum TextVAlign
     Center,
     Bottom,
 }
-
-/// <param name="AngleDegrees">Counter-clockwise on screen.</param>
-public sealed record TextPrim(
-    Vector2 Position,
-    float AngleDegrees,
-    float Height,
-    float Width,
-    float Thickness,
-    string Text,
-    TextHAlign HAlign,
-    TextVAlign VAlign,
-    bool Mirrored,
-    int Owner);

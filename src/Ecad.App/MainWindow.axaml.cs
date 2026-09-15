@@ -40,7 +40,7 @@ public partial class MainWindow : Window
         {
             if (_viewModel is not null)
             {
-                _viewModel.FrameText = string.Create(CultureInfo.InvariantCulture, $"{ms,6:0.0} ms");
+                _viewModel.FrameText = string.Create(CultureInfo.InvariantCulture, $"{Canvas.BackendName} {ms,6:0.0} ms");
             }
         };
     }

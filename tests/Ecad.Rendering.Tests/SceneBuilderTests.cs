@@ -119,6 +119,21 @@ public class SceneBuilderTests(ITestOutputHelper output)
         Assert.True(polygon.Points.Length > 8);
     }
 
+    [Fact]
+    public void Triangulator_fills_every_polygon()
+    {
+        var scene = SceneBuilder.Build(Board.Parse(Board4Layer));
+        var polygon = scene.Find("F.Cu")!.Polygons.Single();
+        Assert.False(polygon.IsTriangulated);
+
+        SceneTriangulator.Triangulate(scene, TestContext.Current.CancellationToken);
+
+        Assert.True(polygon.IsTriangulated);
+        Assert.NotEmpty(polygon.Triangles);
+        Assert.Equal(0, polygon.Triangles.Length % 3);
+        Assert.All(polygon.Triangles, i => Assert.InRange(i, 0, polygon.Points.Length - 1));
+    }
+
     public static TheoryData<string> Boards() => TestData.Files(".kicad_pcb");
 
     [Theory]

@@ -1,22 +1,19 @@
-using System.Diagnostics;
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.Platform;
-using Avalonia.Rendering.SceneGraph;
-using Avalonia.Skia;
-using Avalonia.Threading;
 using Ecad.Geometry;
 using Ecad.Rendering;
-using Ecad.Rendering.Skia;
 
 namespace Ecad.App.Controls;
 
-/// <summary>Interactive board view: wheel zoom around the cursor, middle/right-drag or space-drag pan, click to select.</summary>
-public sealed class BoardCanvas : Control
+/// <summary>
+/// Interactive board view: wheel zoom around the cursor, middle/right-drag or space-drag pan, click to select.
+/// Drawing is delegated to a Skia or OpenGL surface chosen by <see cref="AppOptions.Renderer"/>.
+/// </summary>
+public sealed class BoardCanvas : Panel
 {
     public static readonly StyledProperty<BoardScene?> SceneProperty =
         AvaloniaProperty.Register<BoardCanvas, BoardScene?>(nameof(Scene));
@@ -33,7 +30,7 @@ public sealed class BoardCanvas : Control
     private const double ClickSlopPixels = 4;
 
     private readonly Camera2D _camera = new();
-    private SkiaSceneRenderer? _renderer;
+    private readonly IBoardSurface _surface;
     private Point? _pressPoint;
     private Point _lastPoint;
     private bool _panning;
@@ -42,9 +39,20 @@ public sealed class BoardCanvas : Control
 
     static BoardCanvas()
     {
-        AffectsRender<BoardCanvas>(SceneProperty, FlipXProperty, SelectedOwnerProperty, HighlightNetProperty);
         FocusableProperty.OverrideDefaultValue<BoardCanvas>(true);
         ClipToBoundsProperty.OverrideDefaultValue<BoardCanvas>(true);
+    }
+
+    public BoardCanvas()
+    {
+        // A background makes the whole panel hit-testable for pointer input.
+        Background = Brushes.Transparent;
+
+        _surface = AppOptions.Renderer == RendererKind.OpenGl ? new GlBoardSurface() : new SkiaBoardSurface();
+        var control = (Control)_surface;
+        control.IsHitTestVisible = false;
+        Children.Add(control);
+        _surface.FrameRendered += ms => FrameRendered?.Invoke(ms);
     }
 
     public BoardScene? Scene
@@ -71,13 +79,15 @@ public sealed class BoardCanvas : Control
         set => SetValue(HighlightNetProperty, value);
     }
 
+    public string BackendName => _surface.BackendName;
+
     /// <summary>Cursor position in board millimetres; null when the pointer leaves.</summary>
     public event Action<Vector2D?>? CursorMoved;
 
     /// <summary>Render time of the last frame in milliseconds (raised on the UI thread).</summary>
     public event Action<double>? FrameRendered;
 
-    public void Redraw() => InvalidateVisual();
+    public void Redraw() => Present();
 
     public void ZoomToFit()
     {
@@ -94,7 +104,7 @@ public sealed class BoardCanvas : Control
 
         SyncViewport();
         _camera.Fit(scene.BoardOutline.IsEmpty ? scene.Bounds : scene.BoardOutline);
-        InvalidateVisual();
+        Present();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -103,57 +113,28 @@ public sealed class BoardCanvas : Control
 
         if (change.Property == SceneProperty)
         {
-            var old = _renderer;
-            _renderer = Scene is { } scene ? new SkiaSceneRenderer(scene) : null;
-
-            // The render thread may still hold the old renderer for a frame; dispose after it is done.
-            if (old is not null)
-            {
-                Dispatcher.UIThread.Post(old.Dispose, DispatcherPriority.Background);
-            }
-
+            _surface.Scene = Scene;
             ZoomToFit();
+            Present();
         }
-        else if (change.Property == FlipXProperty)
+        else if (change.Property == FlipXProperty || change.Property == SelectedOwnerProperty || change.Property == HighlightNetProperty)
         {
-            _camera.FlipX = FlipX;
+            Present();
         }
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
         base.OnSizeChanged(e);
-
-        // Keep the world point at the centre of the view where it was.
-        SyncViewport();
         if (_fitPending)
         {
             _fitPending = false;
             ZoomToFit();
         }
-    }
-
-    public override void Render(DrawingContext context)
-    {
-        var bounds = new Rect(Bounds.Size);
-        if (_renderer is null)
+        else
         {
-            var bg = LayerStyle.Background;
-            context.FillRectangle(new SolidColorBrush(Color.FromRgb(bg.R, bg.G, bg.B)), bounds);
-            return;
+            Present();
         }
-
-        SyncViewport();
-        var view = new ViewState(
-            _camera.WorldToScreenTransform,
-            _camera.PixelsPerMm,
-            bounds.Width,
-            bounds.Height,
-            _camera.FlipX,
-            SelectedOwner,
-            HighlightNet && SelectedOwner >= 0 && Scene is { } scene ? scene.OwnerNet(SelectedOwner) : null);
-
-        context.Custom(new SceneDrawOperation(bounds, _renderer, view, ReportFrame));
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -170,7 +151,7 @@ public sealed class BoardCanvas : Control
             _camera.ZoomAt(new Vector2D(p.X, p.Y), Math.Pow(1.2, e.Delta.Y));
         }
 
-        InvalidateVisual();
+        Present();
         e.Handled = true;
     }
 
@@ -204,7 +185,7 @@ public sealed class BoardCanvas : Control
         if (_panning)
         {
             _camera.PanPixels(p.X - _lastPoint.X, p.Y - _lastPoint.Y);
-            InvalidateVisual();
+            Present();
         }
 
         _lastPoint = p;
@@ -280,39 +261,25 @@ public sealed class BoardCanvas : Control
         _camera.FlipX = FlipX;
     }
 
-    private void ReportFrame(double milliseconds) =>
-        Dispatcher.UIThread.Post(() => FrameRendered?.Invoke(milliseconds), DispatcherPriority.Background);
-
-    private sealed class SceneDrawOperation(Rect bounds, SkiaSceneRenderer renderer, ViewState view, Action<double> rendered)
-        : ICustomDrawOperation
+    private void Present()
     {
-        public Rect Bounds => bounds;
-
-        public bool HitTest(Point p) => bounds.Contains(p);
-
-        public bool Equals(ICustomDrawOperation? other) => false;
-
-        public void Dispose()
+        if (Scene is not { } scene)
         {
+            _surface.Present(null);
+            return;
         }
 
-        public void Render(ImmediateDrawingContext context)
-        {
-            if (context.TryGetFeature<ISkiaSharpApiLeaseFeature>() is not { } leaseFeature)
-            {
-                return;
-            }
+        SyncViewport();
+        var view = new ViewState(
+            _camera.WorldToScreenTransform,
+            _camera.PixelsPerMm,
+            _camera.ViewportWidth,
+            _camera.ViewportHeight,
+            _camera.FlipX,
+            SelectedOwner,
+            HighlightNet && SelectedOwner >= 0 ? scene.OwnerNet(SelectedOwner) : null,
+            RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
 
-            using var lease = leaseFeature.Lease();
-            var canvas = lease.SkCanvas;
-            var sw = Stopwatch.StartNew();
-
-            canvas.Save();
-            canvas.ClipRect(new SkiaSharp.SKRect(0, 0, (float)bounds.Width, (float)bounds.Height));
-            renderer.Render(canvas, view);
-            canvas.Restore();
-
-            rendered(sw.Elapsed.TotalMilliseconds);
-        }
+        _surface.Present(view);
     }
 }

@@ -45,6 +45,14 @@ The offscreen render tests write PNGs to `test-output/renders/`.
 dotnet run --project src/Ecad.App -- path/to/board.kicad_pcb
 ```
 
+The renderer is chosen at startup. OpenGL is the default; the Skia fallback is selected like this:
+
+```bash
+dotnet run --project src/Ecad.App -- --renderer=skia path/to/board.kicad_pcb
+```
+
+The `ECAD_RENDERER=skia` environment variable does the same. See `docs/adr/0001-renderer.md` for the comparison.
+
 - Wheel: zoom around the cursor. Shift + wheel: pan horizontally.
 - Middle or right drag, or Space + left drag: pan.
 - Click: select an item and highlight its net. Esc clears the selection.

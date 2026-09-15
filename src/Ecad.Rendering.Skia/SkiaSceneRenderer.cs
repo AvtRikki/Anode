@@ -4,20 +4,9 @@ using SkiaSharp;
 
 namespace Ecad.Rendering.Skia;
 
-/// <summary>Immutable per-frame view parameters, captured on the UI thread and read on the render thread.</summary>
-public sealed record ViewState(
-    Transform2D WorldToScreen,
-    double PixelsPerMm,
-    double Width,
-    double Height,
-    bool FlipX,
-    int SelectedOwner = -1,
-    Net? HighlightNet = null,
-    bool ShowGrid = true);
-
 /// <summary>
-/// Prototype A: draws a <see cref="BoardScene"/> with SkiaSharp. Primitives are batched into one path per
-/// layer and stroke width, cached until the layer changes.
+/// Prototype A: draws a <see cref="BoardScene"/> with SkiaSharp. Primitives (text included, as stroke segments) are batched
+/// into one path per layer and stroke width, cached until the layer changes.
 /// </summary>
 public sealed class SkiaSceneRenderer : IDisposable
 {
@@ -28,7 +17,6 @@ public sealed class SkiaSceneRenderer : IDisposable
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _layerPaint = new();
-    private readonly SKFont _font = new(SKTypeface.Default);
     private readonly Lock _lock = new();
 
     private (int Owner, Net? Net) _highlightKey = (-1, null);
@@ -51,17 +39,14 @@ public sealed class SkiaSceneRenderer : IDisposable
         _fill.Color = ToSk(LayerStyle.Background);
         canvas.DrawRect(0, 0, (float)view.Width, (float)view.Height, _fill);
 
-        var toWorld = view.WorldToScreen.Inverse();
-        var a = toWorld.Apply(new Vector2D(0, 0));
-        var b = toWorld.Apply(new Vector2D(view.Width, view.Height));
-        var visible = new RectD(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
+        var visible = view.VisibleWorld;
 
         if (view.ShowGrid)
         {
             DrawGrid(canvas, view, visible);
         }
 
-        bool dimmed = view.HighlightNet is not null || view.SelectedOwner >= 0;
+        bool dimmed = view.IsDimmed;
         UpdateHighlight(view);
 
         canvas.Save();
@@ -92,8 +77,6 @@ public sealed class SkiaSceneRenderer : IDisposable
         }
 
         canvas.Restore();
-
-        DrawTexts(canvas, view, visible, dimmed);
     }
 
     private void DrawLayer(SKCanvas canvas, LayerCache cache, ColorRgba color, float minWorldWidth)
@@ -131,78 +114,9 @@ public sealed class SkiaSceneRenderer : IDisposable
         }
     }
 
-    private void DrawTexts(SKCanvas canvas, ViewState view, RectD visible, bool dimmed)
-    {
-        foreach (var layer in _scene.Layers)
-        {
-            if (!layer.IsVisible || layer.Texts.Count == 0)
-            {
-                continue;
-            }
-
-            var color = ToSk(layer.Color);
-            _fill.Color = dimmed ? color.WithAlpha(DimAlpha) : color;
-            foreach (var text in layer.Texts)
-            {
-                double heightPx = text.Height * view.PixelsPerMm;
-                if (heightPx < 4 || !visible.Inflate(text.Height * text.Text.Length).Contains(text.Position.X, text.Position.Y))
-                {
-                    continue;
-                }
-
-                DrawText(canvas, view, text, (float)heightPx);
-            }
-        }
-    }
-
-    private void DrawText(SKCanvas canvas, ViewState view, TextPrim text, float heightPx)
-    {
-        var screen = view.WorldToScreen.Apply(new Vector2D(text.Position.X, text.Position.Y));
-
-        // Keep text readable: angles in (90, 270] are drawn rotated by 180° with swapped justification.
-        double angle = ((text.AngleDegrees % 360) + 360) % 360;
-        var hAlign = text.HAlign;
-        var vAlign = text.VAlign;
-        if (angle > 90 && angle <= 270)
-        {
-            angle -= 180;
-            hAlign = hAlign switch { TextHAlign.Left => TextHAlign.Right, TextHAlign.Right => TextHAlign.Left, _ => hAlign };
-            vAlign = vAlign switch { TextVAlign.Top => TextVAlign.Bottom, TextVAlign.Bottom => TextVAlign.Top, _ => vAlign };
-        }
-
-        // KiCad text height is roughly the cap height; Skia sizes by em (cap height ≈ 0.72 em for the default face).
-        _font.Size = heightPx * 1.25f;
-
-        canvas.Save();
-        canvas.Translate((float)screen.X, (float)screen.Y);
-        canvas.RotateDegrees((float)(view.FlipX ? angle : -angle));
-        if (text.Mirrored ^ view.FlipX)
-        {
-            canvas.Scale(-1, 1);
-        }
-
-        float baseline = vAlign switch
-        {
-            TextVAlign.Top => heightPx,
-            TextVAlign.Center => heightPx / 2,
-            _ => 0,
-        };
-
-        var align = hAlign switch
-        {
-            TextHAlign.Left => SKTextAlign.Left,
-            TextHAlign.Right => SKTextAlign.Right,
-            _ => SKTextAlign.Center,
-        };
-
-        canvas.DrawText(text.Text, 0, baseline, align, _font, _fill);
-        canvas.Restore();
-    }
-
     private void DrawGrid(SKCanvas canvas, ViewState view, RectD visible)
     {
-        double[] steps = [0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 25, 50, 100, 250, 500, 1000];
-        double spacing = steps.FirstOrDefault(s => s * view.PixelsPerMm >= 24, steps[^1]);
+        double spacing = view.GridSpacing;
 
         _stroke.Color = ToSk(LayerStyle.Grid);
         _stroke.StrokeWidth = 1;
@@ -349,7 +263,6 @@ public sealed class SkiaSceneRenderer : IDisposable
             _stroke.Dispose();
             _fill.Dispose();
             _layerPaint.Dispose();
-            _font.Dispose();
         }
     }
 
