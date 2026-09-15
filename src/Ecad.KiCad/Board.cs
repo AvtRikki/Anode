@@ -109,6 +109,54 @@ public sealed class Board
     /// <summary>Top-level lists this model does not interpret (dimensions, groups, tables, images...). Kept in the file untouched.</summary>
     public IReadOnlyList<SList> OtherItems => _other;
 
+    /// <summary>All top-level items this model interprets.</summary>
+    public IEnumerable<BoardItem> Items =>
+        _shapes.Cast<BoardItem>().Concat(_zones).Concat(_footprints).Concat(_segments).Concat(_arcs).Concat(_vias).Concat(_texts);
+
+    /// <summary>
+    /// Removes a top-level item from the file and returns its index among the root's children,
+    /// which <see cref="Attach"/> uses to put it back exactly where it was.
+    /// </summary>
+    public int Detach(BoardItem item)
+    {
+        int index = Root.IndexOf(item.Node);
+        if (index < 0)
+        {
+            throw new InvalidOperationException("Item is not a top-level child of this board.");
+        }
+
+        Root.RemoveAt(index);
+        _ = item switch
+        {
+            Footprint f => _footprints.Remove(f),
+            Segment s => _segments.Remove(s),
+            TrackArc a => _arcs.Remove(a),
+            Via v => _vias.Remove(v),
+            Zone z => _zones.Remove(z),
+            Shape sh => _shapes.Remove(sh),
+            Text t => _texts.Remove(t),
+            _ => false,
+        };
+
+        return index;
+    }
+
+    /// <summary>Re-inserts an item previously removed with <see cref="Detach"/>.</summary>
+    public void Attach(BoardItem item, int index)
+    {
+        Root.Insert(Math.Clamp(index, 0, Root.Count), item.Node);
+        switch (item)
+        {
+            case Footprint f: _footprints.Add(f); break;
+            case Segment s: _segments.Add(s); break;
+            case TrackArc a: _arcs.Add(a); break;
+            case Via v: _vias.Add(v); break;
+            case Zone z: _zones.Add(z); break;
+            case Shape sh: _shapes.Add(sh); break;
+            case Text t: _texts.Add(t); break;
+        }
+    }
+
     public static Board Load(string path) => FromDocument(SDocument.Load(path));
 
     public static Board Parse(string text) => FromDocument(SDocument.Parse(text));

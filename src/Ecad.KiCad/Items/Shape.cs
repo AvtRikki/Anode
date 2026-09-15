@@ -22,12 +22,18 @@ public sealed class Shape : BoardItem
 {
     private readonly Transform2D _toBoard;
 
-    internal Shape(SList node, Board board, Transform2D toBoard)
+    internal Shape(SList node, Board board, Transform2D toBoard, Footprint? footprint = null)
         : base(node, board)
     {
         _toBoard = toBoard;
+        Footprint = footprint;
         Kind = KindFromHead(node.Head);
     }
+
+    /// <summary>Owning footprint for fp_* graphics and pad primitives; null for board graphics.</summary>
+    public Footprint? Footprint { get; }
+
+    public override BoardItem TopLevel => (BoardItem?)Footprint ?? this;
 
     public ShapeKind Kind { get; }
 

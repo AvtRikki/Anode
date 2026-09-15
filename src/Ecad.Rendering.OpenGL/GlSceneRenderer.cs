@@ -1,7 +1,7 @@
 using System.Diagnostics;
-using System.Numerics;
 using System.Runtime.InteropServices;
 using Ecad.Geometry;
+using Ecad.KiCad;
 using Silk.NET.OpenGL;
 
 namespace Ecad.Rendering.OpenGL;
@@ -9,8 +9,9 @@ namespace Ecad.Rendering.OpenGL;
 public readonly record struct GlRenderStats(double LastUploadMs, long GpuBytes, int DrawCalls);
 
 /// <summary>
-/// Prototype B: draws a <see cref="BoardScene"/> with OpenGL 3.3 / ES 3.0. Each layer is uploaded once into
-/// instance buffers (segments, discs) and an indexed triangle buffer (polygons triangulated with Earcut).
+/// Draws a <see cref="BoardScene"/> with OpenGL 3.3 / ES 3.0. Each layer is uploaded once into instance buffers
+/// (segments, discs) and an indexed triangle buffer (polygons triangulated with Earcut). Move previews reuse the
+/// same batches with a transform uniform, so dragging costs no uploads.
 /// All methods must be called on the thread that owns the current GL context.
 /// </summary>
 public sealed unsafe class GlSceneRenderer : IDisposable
@@ -25,12 +26,15 @@ public sealed unsafe class GlSceneRenderer : IDisposable
     private readonly GlProgram _fill;
     private readonly uint _quadVbo;
     private readonly Dictionary<LayerGeometry, GpuBatch> _batches = [];
-    private readonly List<float> _gridData = [];
+    private readonly List<(LayerGeometry Layer, GpuBatch Batch)> _preview = [];
+    private readonly List<float> _dynamic = [];
     private readonly GpuBatch _grid = new(0);
+    private readonly GpuBatch _box = new(0);
 
     private BoardScene? _scene;
     private Dictionary<LayerGeometry, GpuBatch>? _highlight;
-    private (int Owner, Ecad.KiCad.Net? Net) _highlightKey = (-1, null);
+    private (IReadOnlySet<int>? Owners, Net? Net) _highlightKey;
+    private IReadOnlyList<LayerGeometry>? _previewSource;
     private double _uploadMs;
     private int _drawCalls;
 
@@ -62,6 +66,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
 
         ReleaseBatches(_batches);
         ReleaseHighlight();
+        ReleasePreview();
         _scene = scene;
     }
 
@@ -113,7 +118,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             }
 
             var color = dimmed ? layer.Color.WithAlpha(Math.Min(layer.Color.A, DimAlpha)) : layer.Color;
-            Draw(batch, color, view);
+            Draw(batch, color, view, Transform2D.Identity);
         }
 
         uploaded |= UpdateHighlight(view);
@@ -123,9 +128,23 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             {
                 if (layer.IsVisible)
                 {
-                    Draw(batch, Brighten(layer.Color), view);
+                    Draw(batch, Brighten(layer.Color), view, Transform2D.Identity);
                 }
             }
+        }
+
+        uploaded |= UpdatePreview(view);
+        foreach (var (layer, batch) in _preview)
+        {
+            if (_scene.Find(layer.Name)?.IsVisible != false)
+            {
+                Draw(batch, Brighten(layer.Color), view, view.PreviewTransform);
+            }
+        }
+
+        if (view.SelectionBox is { } box)
+        {
+            DrawSelectionBox(view, box);
         }
 
         if (uploaded)
@@ -136,11 +155,11 @@ public sealed unsafe class GlSceneRenderer : IDisposable
         _gl.BindVertexArray(0);
     }
 
-    private void Draw(GpuBatch batch, ColorRgba color, ViewState view)
+    private void Draw(GpuBatch batch, ColorRgba color, ViewState view, Transform2D xform)
     {
         if (batch.IndexCount > 0)
         {
-            Use(_fill, color, view);
+            Use(_fill, color, view, xform);
             _gl.BindVertexArray(batch.FillVao);
             _gl.DrawElements(PrimitiveType.Triangles, (uint)batch.IndexCount, DrawElementsType.UnsignedInt, null);
             _drawCalls++;
@@ -148,7 +167,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
 
         if (batch.CircleCount > 0)
         {
-            Use(_circles, color, view);
+            Use(_circles, color, view, xform);
             _gl.BindVertexArray(batch.CircleVao);
             _gl.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, (uint)batch.CircleCount);
             _drawCalls++;
@@ -156,14 +175,14 @@ public sealed unsafe class GlSceneRenderer : IDisposable
 
         if (batch.SegmentCount > 0)
         {
-            Use(_segments, color, view);
+            Use(_segments, color, view, xform);
             _gl.BindVertexArray(batch.SegmentVao);
             _gl.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, (uint)batch.SegmentCount);
             _drawCalls++;
         }
     }
 
-    private void Use(GlProgram program, ColorRgba color, ViewState view)
+    private void Use(GlProgram program, ColorRgba color, ViewState view, Transform2D xform)
     {
         var t = view.WorldToScreen;
         double halfW = view.Width / 2, halfH = view.Height / 2;
@@ -181,54 +200,99 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             _gl.Uniform1(program.DevPxPerMm, (float)(Math.Abs(t.D) * view.RenderScaling));
         }
 
+        _gl.Uniform4(program.Xform, (float)xform.A, (float)xform.B, (float)xform.C, (float)xform.D);
+        _gl.Uniform2(program.XformT, (float)xform.Tx, (float)xform.Ty);
         _gl.Uniform4(program.Color, color.R / 255f, color.G / 255f, color.B / 255f, color.A / 255f);
     }
 
     private void DrawGrid(ViewState view, RectD visible)
     {
         double spacing = view.GridSpacing;
-        _gridData.Clear();
+        _dynamic.Clear();
         for (double x = Math.Floor(visible.MinX / spacing) * spacing; x <= visible.MaxX; x += spacing)
         {
-            _gridData.AddRange([(float)x, (float)visible.MinY, (float)x, (float)visible.MaxY, 0f]);
+            _dynamic.AddRange([(float)x, (float)visible.MinY, (float)x, (float)visible.MaxY, 0f]);
         }
 
         for (double y = Math.Floor(visible.MinY / spacing) * spacing; y <= visible.MaxY; y += spacing)
         {
-            _gridData.AddRange([(float)visible.MinX, (float)y, (float)visible.MaxX, (float)y, 0f]);
+            _dynamic.AddRange([(float)visible.MinX, (float)y, (float)visible.MaxX, (float)y, 0f]);
         }
 
-        if (_grid.SegmentVao == 0)
-        {
-            (_grid.SegmentVao, _grid.SegmentVbo) = CreateInstanced([], [(GlShaders.Attr1, 2, 0), (GlShaders.Attr2, 2, 2), (GlShaders.Attr3, 1, 4)], 5, BufferUsageARB.DynamicDraw);
-        }
-
-        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _grid.SegmentVbo);
-        _gl.BufferData(BufferTargetARB.ArrayBuffer, (ReadOnlySpan<float>)CollectionsMarshal.AsSpan(_gridData), BufferUsageARB.DynamicDraw);
-        _grid.SegmentCount = _gridData.Count / 5;
+        UploadDynamicSegments(_grid);
 
         // Grid lines are hairlines: the shader clamps width to half a pixel on each side.
-        var grid = LayerStyle.Grid;
-        Draw(_grid, grid, view with { RenderScaling = 1 });
+        Draw(_grid, LayerStyle.Grid, view with { RenderScaling = 1 }, Transform2D.Identity);
+    }
+
+    private void DrawSelectionBox(ViewState view, RectD box)
+    {
+        var color = ViewState.SelectionBoxColor(view.SelectionBoxCrossing);
+        float x0 = (float)box.MinX, y0 = (float)box.MinY, x1 = (float)box.MaxX, y1 = (float)box.MaxY;
+
+        _dynamic.Clear();
+        _dynamic.AddRange([x0, y0, x1, y0, 0f, x1, y0, x1, y1, 0f, x1, y1, x0, y1, 0f, x0, y1, x0, y0, 0f]);
+        UploadDynamicSegments(_box);
+
+        if (_box.FillVao == 0)
+        {
+            _box.FillVao = _gl.GenVertexArray();
+            _gl.BindVertexArray(_box.FillVao);
+            _box.FillVbo = _gl.GenBuffer();
+            _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _box.FillVbo);
+            _gl.EnableVertexAttribArray(GlShaders.Attr1);
+            _gl.VertexAttribPointer(GlShaders.Attr1, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), null);
+            _box.FillIbo = _gl.GenBuffer();
+            _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, _box.FillIbo);
+            _gl.BufferData(BufferTargetARB.ElementArrayBuffer, (ReadOnlySpan<uint>)[0, 1, 2, 0, 2, 3], BufferUsageARB.StaticDraw);
+            _gl.BindVertexArray(0);
+        }
+
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _box.FillVbo);
+        _gl.BufferData(BufferTargetARB.ArrayBuffer, (ReadOnlySpan<float>)[x0, y0, x1, y0, x1, y1, x0, y1], BufferUsageARB.DynamicDraw);
+        _box.IndexCount = 6;
+
+        // Translucent fill first (the batch draws fill, then outline segments), outline stays opaque.
+        Use(_fill, color.WithAlpha(40), view, Transform2D.Identity);
+        _gl.BindVertexArray(_box.FillVao);
+        _gl.DrawElements(PrimitiveType.Triangles, 6, DrawElementsType.UnsignedInt, null);
+        Use(_segments, color, view with { RenderScaling = 1 }, Transform2D.Identity);
+        _gl.BindVertexArray(_box.SegmentVao);
+        _gl.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, (uint)_box.SegmentCount);
+        _drawCalls += 2;
+    }
+
+    private void UploadDynamicSegments(GpuBatch batch)
+    {
+        if (batch.SegmentVao == 0)
+        {
+            (batch.SegmentVao, batch.SegmentVbo) = CreateInstanced([], [(GlShaders.Attr1, 2, 0), (GlShaders.Attr2, 2, 2), (GlShaders.Attr3, 1, 4)], 5, BufferUsageARB.DynamicDraw);
+        }
+
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, batch.SegmentVbo);
+        _gl.BufferData(BufferTargetARB.ArrayBuffer, (ReadOnlySpan<float>)CollectionsMarshal.AsSpan(_dynamic), BufferUsageARB.DynamicDraw);
+        batch.SegmentCount = _dynamic.Count / 5;
     }
 
     private bool UpdateHighlight(ViewState view)
     {
-        var key = (view.SelectedOwner, view.HighlightNet);
-        if (key == _highlightKey)
+        var key = (view.SelectedOwners, view.HighlightNet);
+        if (ReferenceEquals(key.SelectedOwners, _highlightKey.Owners) && key.HighlightNet == _highlightKey.Net)
         {
             return false;
         }
 
         ReleaseHighlight();
         _highlightKey = key;
-        if (_scene is null || (view.SelectedOwner < 0 && view.HighlightNet is null))
+        if (_scene is null || (view.SelectedOwners is not { Count: > 0 } && view.HighlightNet is null))
         {
             return false;
         }
 
         var scene = _scene;
-        bool Matches(int owner) => owner == view.SelectedOwner || (view.HighlightNet is not null && scene.OwnerNet(owner) == view.HighlightNet);
+        var owners = view.SelectedOwners;
+        var net = view.HighlightNet;
+        bool Matches(int owner) => owners?.Contains(owner) == true || (net is not null && scene.OwnerNet(owner) == net);
 
         _highlight = [];
         foreach (var layer in scene.Layers)
@@ -242,6 +306,28 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             {
                 _highlight[layer] = batch;
             }
+        }
+
+        return true;
+    }
+
+    private bool UpdatePreview(ViewState view)
+    {
+        if (ReferenceEquals(view.Preview, _previewSource))
+        {
+            return false;
+        }
+
+        ReleasePreview();
+        _previewSource = view.Preview;
+        if (view.Preview is null)
+        {
+            return false;
+        }
+
+        foreach (var layer in view.Preview)
+        {
+            _preview.Add((layer, Upload(layer, null)));
         }
 
         return true;
@@ -365,7 +451,18 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             _highlight = null;
         }
 
-        _highlightKey = (-1, null);
+        _highlightKey = default;
+    }
+
+    private void ReleasePreview()
+    {
+        foreach (var (_, batch) in _preview)
+        {
+            batch.Release(_gl);
+        }
+
+        _preview.Clear();
+        _previewSource = null;
     }
 
     private void ReleaseBatches(Dictionary<LayerGeometry, GpuBatch> batches)
@@ -385,7 +482,9 @@ public sealed unsafe class GlSceneRenderer : IDisposable
     {
         ReleaseBatches(_batches);
         ReleaseHighlight();
+        ReleasePreview();
         _grid.Release(_gl);
+        _box.Release(_gl);
         _gl.DeleteBuffer(_quadVbo);
         _segments.Dispose();
         _circles.Dispose();

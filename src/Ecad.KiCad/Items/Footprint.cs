@@ -13,26 +13,7 @@ public sealed class Footprint : BoardItem
     internal Footprint(SList node, Board board)
         : base(node, board)
     {
-        ReadPlacement();
-
-        foreach (var child in node.Lists())
-        {
-            switch (child.Head)
-            {
-                case "pad":
-                    _pads.Add(new Pad(child, board, this));
-                    break;
-                case "property" or "fp_text":
-                    _texts.Add(new Text(child, board, this));
-                    break;
-                case "zone":
-                    _zones.Add(new Zone(child, board, this));
-                    break;
-                case var head when Shape.IsShapeHead(head):
-                    _shapes.Add(new Shape(child, board, Transform));
-                    break;
-            }
-        }
+        Refresh();
     }
 
     /// <summary>Library identifier, e.g. <c>Resistor_SMD:R_0603_1608Metric</c>.</summary>
@@ -87,8 +68,46 @@ public sealed class Footprint : BoardItem
         }
     }
 
+    /// <summary>
+    /// Re-reads placement and rebuilds the child views from the CST. Call after the footprint's tree changed
+    /// (edits, undo); previously returned pads, shapes, texts and zones are no longer valid.
+    /// </summary>
+    public void Refresh()
+    {
+        _pads.Clear();
+        _shapes.Clear();
+        _texts.Clear();
+        _zones.Clear();
+
+        ReadPlacement();
+
+        foreach (var child in Node.Lists())
+        {
+            switch (child.Head)
+            {
+                case "pad":
+                    _pads.Add(new Pad(child, Board, this));
+                    break;
+                case "property" or "fp_text":
+                    _texts.Add(new Text(child, Board, this));
+                    break;
+                case "zone":
+                    _zones.Add(new Zone(child, Board, this));
+                    break;
+                case var head when Shape.IsShapeHead(head):
+                    _shapes.Add(new Shape(child, Board, Transform, this));
+                    break;
+            }
+        }
+    }
+
     private void ReadPlacement()
     {
+        Position = default;
+        Orientation = 0;
+        ScaleX = 1;
+        ScaleY = 1;
+
         if (Node.Find("transform") is { } transform)
         {
             Position = transform.ChildPoint("translate") ?? default;

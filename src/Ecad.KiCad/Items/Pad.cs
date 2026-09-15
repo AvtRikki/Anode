@@ -47,6 +47,8 @@ public sealed class Pad : BoardItem
 
     public Footprint Footprint { get; }
 
+    public override BoardItem TopLevel => Footprint;
+
     public string Number => Node.Str(1) ?? string.Empty;
 
     public PadType Type => Node.AtomAt(2)?.Raw switch
@@ -166,7 +168,7 @@ public sealed class Pad : BoardItem
             {
                 if (child.Head?.StartsWith("gr_", StringComparison.Ordinal) == true)
                 {
-                    yield return new Shape(child, Board, toBoard);
+                    yield return new Shape(child, Board, toBoard, Footprint);
                 }
             }
         }

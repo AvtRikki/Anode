@@ -31,13 +31,19 @@ public sealed class LayerGeometry(string name)
     public int Version { get; internal set; }
 }
 
-/// <summary>Backend-agnostic display list for a board.</summary>
+/// <summary>
+/// Backend-agnostic display list for a board. Primitives belong to owners (pads, tracks, texts...), and owners
+/// are grouped by their top-level item so edited items can be removed and rebuilt without touching the rest.
+/// </summary>
 public sealed class BoardScene
 {
     private readonly Dictionary<string, LayerGeometry> _byName = new(StringComparer.Ordinal);
     private readonly List<LayerGeometry> _layers = [];
-    private readonly List<BoardItem> _owners = [];
+    private readonly List<BoardItem?> _owners = [];
     private readonly List<Net?> _ownerNets = [];
+    private readonly List<RectD> _ownerBounds = [];
+    private readonly Dictionary<BoardItem, List<int>> _ownersByTop = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<LayerGeometry> _touched = [];
 
     internal BoardScene(Board board, Vector2L originNm)
     {
@@ -52,29 +58,119 @@ public sealed class BoardScene
 
     public RectD BoardOutline { get; internal set; } = RectD.Empty;
 
-    public RectD Bounds { get; internal set; } = RectD.Empty;
+    public RectD Bounds { get; private set; } = RectD.Empty;
 
     /// <summary>Layers in draw order (bottom first).</summary>
     public IReadOnlyList<LayerGeometry> Layers => _layers;
 
     public LayerGeometry? Find(string name) => _byName.GetValueOrDefault(name);
 
-    public BoardItem Owner(int id) => _owners[id];
-
-    public Net? OwnerNet(int id) => _ownerNets[id];
-
     public int OwnerCount => _owners.Count;
 
     public int PrimitiveCount => _layers.Sum(l => l.PrimitiveCount);
 
-    public Vector2 ToScene(Vector2D boardNm) =>
-        new((float)((boardNm.X - OriginNm.X) / Units.NmPerMm), (float)((boardNm.Y - OriginNm.Y) / Units.NmPerMm));
+    /// <summary>Top-level items that currently have primitives in the scene.</summary>
+    public IEnumerable<BoardItem> TopLevelItems => _ownersByTop.Keys;
+
+    public bool IsLive(int id) => (uint)id < (uint)_owners.Count && _owners[id] is not null;
+
+    public BoardItem Owner(int id) => _owners[id] ?? throw new InvalidOperationException($"Owner {id} was removed from the scene.");
+
+    public BoardItem TopLevelOf(int id) => Owner(id).TopLevel;
+
+    public Net? OwnerNet(int id) => _ownerNets[id];
+
+    public RectD OwnerBounds(int id) => _ownerBounds[id];
+
+    public IReadOnlyList<int> OwnersOf(BoardItem topLevel) =>
+        _ownersByTop.TryGetValue(topLevel, out var ids) ? ids : [];
+
+    public RectD BoundsOf(BoardItem topLevel)
+    {
+        var bounds = RectD.Empty;
+        foreach (int id in OwnersOf(topLevel))
+        {
+            bounds = bounds.Union(_ownerBounds[id]);
+        }
+
+        return bounds;
+    }
+
+    public Vector2 ToScene(Vector2D boardNm)
+    {
+        var mm = ToSceneMm(boardNm);
+        return new Vector2((float)mm.X, (float)mm.Y);
+    }
+
+    public Vector2D ToSceneMm(Vector2D boardNm) =>
+        new((boardNm.X - OriginNm.X) / Units.NmPerMm, (boardNm.Y - OriginNm.Y) / Units.NmPerMm);
 
     public Vector2D ToBoardNm(Vector2D sceneMm) =>
         new(sceneMm.X * Units.NmPerMm + OriginNm.X, sceneMm.Y * Units.NmPerMm + OriginNm.Y);
 
+    /// <summary>
+    /// Removes every primitive of the given top-level items. With <paramref name="collect"/> the removed primitives
+    /// are returned as detached layers in draw order, e.g. to draw a move preview.
+    /// </summary>
+    public IReadOnlyList<LayerGeometry> Remove(IEnumerable<BoardItem> topLevelItems, bool collect = false)
+    {
+        var ids = new HashSet<int>();
+        foreach (var top in topLevelItems)
+        {
+            if (_ownersByTop.Remove(top, out var list))
+            {
+                foreach (int id in list)
+                {
+                    ids.Add(id);
+                    _owners[id] = null;
+                    _ownerNets[id] = null;
+                }
+            }
+        }
+
+        if (ids.Count == 0)
+        {
+            return [];
+        }
+
+        var removed = new List<LayerGeometry>();
+        foreach (var layer in _byName.Values)
+        {
+            var copy = collect ? new LayerGeometry(layer.Name) { Color = layer.Color } : null;
+            int count = layer.Lines.RemoveAll(p => Take(p.Owner, p, copy?.Lines))
+                        + layer.Circles.RemoveAll(p => Take(p.Owner, p, copy?.Circles))
+                        + layer.Polygons.RemoveAll(p => Take(p.Owner, p, copy?.Polygons));
+
+            if (count > 0)
+            {
+                _touched.Add(layer);
+                if (copy is not null)
+                {
+                    copy.Bounds = ComputeBounds(copy);
+                    removed.Add(copy);
+                }
+            }
+        }
+
+        Commit();
+        removed.Sort((a, b) => a.DrawOrder.CompareTo(b.DrawOrder));
+        return removed;
+
+        bool Take<T>(int owner, T primitive, List<T>? sink)
+        {
+            if (!ids.Contains(owner))
+            {
+                return false;
+            }
+
+            sink?.Add(primitive);
+            return true;
+        }
+    }
+
     internal int AddOwner(BoardItem item)
     {
+        int id = _owners.Count;
         _owners.Add(item);
         _ownerNets.Add(item switch
         {
@@ -86,8 +182,20 @@ public sealed class BoardScene
             Shape sh => sh.Net,
             _ => null,
         });
-        return _owners.Count - 1;
+        _ownerBounds.Add(RectD.Empty);
+
+        var top = item.TopLevel;
+        if (!_ownersByTop.TryGetValue(top, out var ids))
+        {
+            ids = [];
+            _ownersByTop[top] = ids;
+        }
+
+        ids.Add(id);
+        return id;
     }
+
+    internal void GrowOwner(int id, RectD bounds) => _ownerBounds[id] = _ownerBounds[id].Union(bounds);
 
     internal LayerGeometry Layer(string name)
     {
@@ -97,18 +205,27 @@ public sealed class BoardScene
             _byName[name] = layer;
         }
 
+        _touched.Add(layer);
         return layer;
     }
 
-    internal void Finish()
+    /// <summary>Applies pending changes: bounds and versions of touched layers, layer order, scene bounds.</summary>
+    internal void Commit()
     {
+        foreach (var layer in _touched)
+        {
+            layer.Bounds = ComputeBounds(layer);
+            layer.Version++;
+        }
+
+        _touched.Clear();
+
         _layers.Clear();
         _layers.AddRange(_byName.Values.Where(l => l.PrimitiveCount > 0).OrderBy(l => l.DrawOrder).ThenBy(l => l.Name, StringComparer.Ordinal));
 
         var all = RectD.Empty;
         foreach (var layer in _layers)
         {
-            layer.Bounds = ComputeBounds(layer);
             all = all.Union(layer.Bounds);
         }
 

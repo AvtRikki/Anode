@@ -12,7 +12,16 @@
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="_Open…" InputGesture="Meta+O" Click="OnOpenClick" />
+                <MenuItem Header="_Save" InputGesture="Meta+S" Click="OnSaveClick" IsEnabled="{Binding HasBoard}" />
                 <MenuItem Header="Save _As…" InputGesture="Meta+Shift+S" Click="OnSaveAsClick" IsEnabled="{Binding HasBoard}" />
+            </MenuItem>
+            <MenuItem Header="_Edit">
+                <MenuItem Header="_Undo" InputGesture="Meta+Z" Click="OnUndoClick" IsEnabled="{Binding CanUndo}" />
+                <MenuItem Header="_Redo" InputGesture="Meta+Shift+Z" Click="OnRedoClick" IsEnabled="{Binding CanRedo}" />
+                <Separator />
+                <MenuItem Header="_Move" InputGesture="M" IsEnabled="False" />
+                <MenuItem Header="_Rotate" InputGesture="R" Click="OnRotateClick" IsEnabled="{Binding HasBoard}" />
+                <MenuItem Header="_Delete" InputGesture="Delete" Click="OnDeleteClick" IsEnabled="{Binding HasBoard}" />
             </MenuItem>
             <MenuItem Header="_View">
                 <MenuItem Header="Zoom to _Fit" InputGesture="Home" Click="OnFitClick" IsEnabled="{Binding HasBoard}" />
@@ -22,10 +31,11 @@
         </Menu>
 
         <Border DockPanel.Dock="Bottom" Background="#121C2C" BorderBrush="#22304A" BorderThickness="0,1,0,0" Padding="10,4">
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBlock Classes="status" Text="{Binding Status}" TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Column="1" Classes="status" Margin="16,0" FontFamily="Menlo, Consolas, monospace" Text="{Binding CursorText}" />
-                <TextBlock Grid.Column="2" Classes="status" FontFamily="Menlo, Consolas, monospace" Text="{Binding FrameText}" />
+                <TextBlock Grid.Column="1" Classes="status" Margin="16,0" Text="{Binding SelectionText}" />
+                <TextBlock Grid.Column="2" Classes="status" Margin="0,0,16,0" FontFamily="Menlo, Consolas, monospace" Text="{Binding CursorText}" />
+                <TextBlock Grid.Column="3" Classes="status" FontFamily="Menlo, Consolas, monospace" Text="{Binding FrameText}" />
             </Grid>
         </Border>
 
@@ -58,9 +68,8 @@
             <!-- Board -->
             <Panel Grid.Column="2">
                 <controls:BoardCanvas x:Name="Canvas"
-                                      Scene="{Binding Scene}"
+                                      Editor="{Binding Editor}"
                                       FlipX="{Binding FlipView}"
-                                      SelectedOwner="{Binding SelectedOwner, Mode=TwoWay}"
                                       HighlightNet="{Binding HighlightNet}" />
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasBoard}" Spacing="8">
                     <TextBlock Text="Drop a .kicad_pcb here" FontSize="22" Foreground="#6F819C" HorizontalAlignment="Center" />

@@ -16,6 +16,8 @@ public sealed class Text : BoardItem
 
     public Footprint? Footprint => _footprint;
 
+    public override BoardItem TopLevel => (BoardItem?)_footprint ?? this;
+
     /// <summary>Property name ("Reference", "Value"...) or fp_text type ("reference", "user"...); null for gr_text.</summary>
     public string? FieldName => Node.Head is "property" or "fp_text" ? Node.Str(1) : null;
 

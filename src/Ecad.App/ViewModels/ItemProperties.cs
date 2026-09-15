@@ -11,6 +11,17 @@ internal static class ItemProperties
     {
         switch (item)
         {
+            case Footprint fp:
+                yield return Row("Type", "Footprint");
+                yield return Row("Reference", fp.Reference ?? "—");
+                yield return Row("Value", fp.Value ?? "—");
+                yield return Row("Library", fp.LibId);
+                yield return Row("Position", Point(fp.Position));
+                yield return Row("Orientation", Deg(fp.Orientation));
+                yield return Row("Side", fp.IsOnBack ? "Bottom" : "Top");
+                yield return Row("Pads", fp.Pads.Count.ToString(CultureInfo.InvariantCulture));
+                break;
+
             case Pad pad:
                 yield return Row("Type", "Pad");
                 yield return Row("Footprint", pad.Footprint.Reference ?? pad.Footprint.LibId);

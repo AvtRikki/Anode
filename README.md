@@ -53,11 +53,21 @@ dotnet run --project src/Ecad.App -- --renderer=skia path/to/board.kicad_pcb
 
 The `ECAD_RENDERER=skia` environment variable does the same. See `docs/adr/0001-renderer.md` for the comparison.
 
+Viewing:
+
 - Wheel: zoom around the cursor. Shift + wheel: pan horizontally.
 - Middle or right drag, or Space + left drag: pan.
-- Click: select an item and highlight its net. Esc clears the selection.
-- Home: zoom to fit. ⌘O: open. ⌘⇧S: save as.
-- Files can be dropped onto the window.
+- Home: zoom to fit. ⌘O: open. Files can also be dropped onto the window.
+
+Editing (footprints, tracks, arcs, vias, board graphics, texts and zones):
+
+- Click: select; Shift+click adds or removes. Clicking a pad selects its footprint and highlights the pad's net.
+- Drag from empty space: box selection. Left-to-right selects enclosed items, right-to-left everything touched.
+- Drag a selected item, or press M and click to place: move with the anchor snapped to a 0.1 mm grid.
+- R rotates 90° counter-clockwise (Shift+R clockwise), also while moving. Delete or Backspace deletes.
+- Esc cancels a move or clears the selection.
+- ⌘Z undo, ⌘⇧Z redo, ⌘S save, ⌘⇧S save as. Undoing everything restores the file byte for byte, and closing
+  or opening another board asks about unsaved changes.
 
 On macOS the window needs an active display. With the lid closed and no external monitor,
 Avalonia cannot start its render timer.

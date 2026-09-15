@@ -18,5 +18,8 @@ public abstract class SNode
 
     public void Remove() => Parent?.Remove(this);
 
+    /// <summary>Detached copy of this subtree, trivia included.</summary>
+    public abstract SNode DeepClone();
+
     public override string ToString() => SWriter.WriteNode(this);
 }

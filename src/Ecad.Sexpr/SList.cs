@@ -155,6 +155,88 @@ public sealed class SList : SNode, IReadOnlyList<SNode>
         node.Parent = null;
     }
 
+    public override SNode DeepClone() => CloneList();
+
+    /// <summary>Detached deep copy with all trivia, suitable as an undo snapshot.</summary>
+    public SList CloneList()
+    {
+        var copy = new SList
+        {
+            LeadingTrivia = LeadingTrivia,
+            CloseTrivia = CloseTrivia,
+            _items = new SNode[_count],
+        };
+
+        for (int i = 0; i < _count; i++)
+        {
+            copy.AddParsed(_items[i].DeepClone());
+        }
+
+        return copy;
+    }
+
+    /// <summary>
+    /// Restores this list from a snapshot made by <see cref="CloneList"/>. Child nodes are reused wherever the
+    /// structure still matches, so references to nested lists (a footprint's pads, for example) stay valid.
+    /// </summary>
+    public void RestoreFrom(SList snapshot)
+    {
+        LeadingTrivia = snapshot.LeadingTrivia;
+        CloseTrivia = snapshot.CloseTrivia;
+
+        if (HasSameShape(snapshot))
+        {
+            for (int i = 0; i < _count; i++)
+            {
+                if (_items[i] is SList list)
+                {
+                    list.RestoreFrom((SList)snapshot._items[i]);
+                }
+                else
+                {
+                    ((SAtom)_items[i]).CopyFrom((SAtom)snapshot._items[i]);
+                }
+            }
+
+            return;
+        }
+
+        while (_count > 0)
+        {
+            RemoveAt(_count - 1);
+        }
+
+        for (int i = 0; i < snapshot._count; i++)
+        {
+            AddParsed(snapshot._items[i].DeepClone());
+        }
+    }
+
+    private bool HasSameShape(SList other)
+    {
+        if (other._count != _count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < _count; i++)
+        {
+            if (_items[i] is SList mine)
+            {
+                if (other._items[i] is not SList theirs || mine.Head != theirs.Head)
+                {
+                    return false;
+                }
+            }
+            else if (other._items[i] is not SAtom)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>Appends without touching trivia; used by the parser.</summary>
     internal void AddParsed(SNode node) => InsertParsed(_count, node);
 

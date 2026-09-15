@@ -114,7 +114,7 @@ public class GlRenderTests(ITestOutputHelper output)
 
         var camera = new Camera2D { ViewportWidth = Width, ViewportHeight = Height };
         camera.Fit(scene.BoardOutline);
-        var view = View(camera) with { SelectedOwner = padOwner, HighlightNet = scene.OwnerNet(padOwner) };
+        var view = View(camera) with { SelectedOwners = new HashSet<int> { padOwner }, HighlightNet = scene.OwnerNet(padOwner) };
 
         renderer.Render(view, target.Framebuffer, Width, Height);
         int dimmedCalls = renderer.Stats.DrawCalls;

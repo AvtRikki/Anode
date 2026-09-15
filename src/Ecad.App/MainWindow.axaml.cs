@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     };
 
     private MainViewModel? _viewModel;
+    private bool _closeConfirmed;
 
     public MainWindow()
     {
@@ -25,6 +26,7 @@ public partial class MainWindow : Window
         DragDrop.SetAllowDrop(this, true);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
+        Closing += OnClosing;
 
         Canvas.CursorMoved += p =>
         {
@@ -66,33 +68,51 @@ public partial class MainWindow : Window
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (e.Handled)
+        if (e.Handled || _viewModel is null)
         {
             return;
         }
 
         bool command = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
-        if (command && e.Key == Key.O)
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        switch (e.Key)
         {
-            OnOpenClick(this, e);
-            e.Handled = true;
+            case Key.O when command:
+                OnOpenClick(this, e);
+                break;
+            case Key.S when command && shift:
+                OnSaveAsClick(this, e);
+                break;
+            case Key.S when command:
+                OnSaveClick(this, e);
+                break;
+            case Key.Z when command && shift:
+            case Key.Y when command:
+                _viewModel.Redo();
+                break;
+            case Key.Z when command:
+                _viewModel.Undo();
+                break;
+            case Key.Home:
+                Canvas.ZoomToFit();
+                break;
+            default:
+                return;
         }
-        else if (command && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.S)
-        {
-            OnSaveAsClick(this, e);
-            e.Handled = true;
-        }
-        else if (e.Key == Key.Home)
-        {
-            Canvas.ZoomToFit();
-            e.Handled = true;
-        }
+
+        e.Handled = true;
     }
 
     private void OnFitRequested() => Dispatcher.UIThread.Post(Canvas.ZoomToFit, DispatcherPriority.Loaded);
 
     private async void OnOpenClick(object? sender, RoutedEventArgs e)
     {
+        if (!await ConfirmDiscardOrSaveAsync())
+        {
+            return;
+        }
+
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open KiCad board",
@@ -105,6 +125,8 @@ public partial class MainWindow : Window
             await _viewModel.OpenAsync(path);
         }
     }
+
+    private void OnSaveClick(object? sender, RoutedEventArgs e) => _viewModel?.Save();
 
     private async void OnSaveAsClick(object? sender, RoutedEventArgs e)
     {
@@ -128,6 +150,14 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnUndoClick(object? sender, RoutedEventArgs e) => _viewModel?.Undo();
+
+    private void OnRedoClick(object? sender, RoutedEventArgs e) => _viewModel?.Redo();
+
+    private void OnRotateClick(object? sender, RoutedEventArgs e) => _viewModel?.Rotate(90);
+
+    private void OnDeleteClick(object? sender, RoutedEventArgs e) => _viewModel?.DeleteSelection();
+
     private void OnFitClick(object? sender, RoutedEventArgs e) => Canvas.ZoomToFit();
 
     private void OnDragOver(object? sender, DragEventArgs e)
@@ -137,9 +167,41 @@ public partial class MainWindow : Window
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
-        if (e.DataTransfer.TryGetFile()?.TryGetLocalPath() is { } path && _viewModel is not null)
+        if (e.DataTransfer.TryGetFile()?.TryGetLocalPath() is { } path && _viewModel is not null && await ConfirmDiscardOrSaveAsync())
         {
             await _viewModel.OpenAsync(path);
         }
+    }
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_closeConfirmed || _viewModel is not { IsDirty: true })
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        if (await ConfirmDiscardOrSaveAsync())
+        {
+            _closeConfirmed = true;
+            Close();
+        }
+    }
+
+    /// <summary>Returns true when it is fine to replace the current board: nothing unsaved, saved, or discarded.</summary>
+    private async Task<bool> ConfirmDiscardOrSaveAsync()
+    {
+        if (_viewModel is not { IsDirty: true } vm)
+        {
+            return true;
+        }
+
+        var choice = await new UnsavedChangesDialog(Path.GetFileName(vm.FilePath ?? "board")).ShowDialog<UnsavedChoice>(this);
+        return choice switch
+        {
+            UnsavedChoice.Save => vm.Save(),
+            UnsavedChoice.Discard => true,
+            _ => false,
+        };
     }
 }

@@ -16,6 +16,10 @@ public sealed class Zone : BoardItem
         _footprint = footprint;
     }
 
+    public Footprint? Footprint => _footprint;
+
+    public override BoardItem TopLevel => (BoardItem?)_footprint ?? this;
+
     public string? Name => Node.ChildString("name");
 
     public Net? Net => Board.Nets.Resolve(Node.Find("net"));

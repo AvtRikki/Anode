@@ -66,4 +66,13 @@ public sealed class SAtom : SNode
         _raw = SNumber.Format(value);
         Kind = SAtomKind.Symbol;
     }
+
+    public override SNode DeepClone() => new SAtom(_raw, Kind) { LeadingTrivia = LeadingTrivia };
+
+    internal void CopyFrom(SAtom other)
+    {
+        _raw = other._raw;
+        Kind = other.Kind;
+        LeadingTrivia = other.LeadingTrivia;
+    }
 }

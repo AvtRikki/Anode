@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Ecad.Editor;
 using Ecad.KiCad;
 using Ecad.Rendering;
 
@@ -14,7 +15,7 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasBoard))]
-    public partial BoardScene? Scene { get; set; }
+    public partial BoardEditor? Editor { get; set; }
 
     [ObservableProperty]
     public partial string Title { get; set; } = "Ecad";
@@ -29,6 +30,9 @@ public partial class MainViewModel : ObservableObject
     public partial string FrameText { get; set; } = string.Empty;
 
     [ObservableProperty]
+    public partial string SelectionText { get; set; } = string.Empty;
+
+    [ObservableProperty]
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
@@ -38,9 +42,15 @@ public partial class MainViewModel : ObservableObject
     public partial bool HighlightNet { get; set; } = true;
 
     [ObservableProperty]
-    public partial int SelectedOwner { get; set; } = -1;
+    public partial bool CanUndo { get; set; }
 
-    public bool HasBoard => Scene is not null;
+    [ObservableProperty]
+    public partial bool CanRedo { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsDirty { get; set; }
+
+    public bool HasBoard => Editor is not null;
 
     public string? FilePath { get; private set; }
 
@@ -70,11 +80,16 @@ public partial class MainViewModel : ObservableObject
                 return (b, s, parsed, sw.Elapsed.TotalMilliseconds - parsed);
             });
 
-            SelectedOwner = -1;
-            Properties.Clear();
+            var editor = new BoardEditor(scene) { TriangulateChanges = AppOptions.Renderer == RendererKind.OpenGl };
+            Detach(Editor);
+            editor.SelectionChanged += OnSelectionChanged;
+            editor.History.Changed += OnHistoryChanged;
+
             FilePath = path;
-            Scene = scene;
-            Title = $"{Path.GetFileName(path)} — Ecad";
+            Editor = editor;
+            Properties.Clear();
+            SelectionText = string.Empty;
+            OnHistoryChanged();
 
             Layers.Clear();
             foreach (var layer in scene.Layers.Reverse())
@@ -100,35 +115,107 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    public void SaveAs(string path)
+    public bool Save() => FilePath is { } path && SaveAs(path);
+
+    public bool SaveAs(string path)
     {
-        if (Scene is null)
+        if (Editor is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            Editor.Save(path);
+            FilePath = path;
+            OnHistoryChanged();
+            Status = $"Saved {Path.GetFileName(path)}";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Status = $"Failed to save: {ex.Message}";
+            return false;
+        }
+    }
+
+    public void Undo() => Run(e => e.Undo());
+
+    public void Redo() => Run(e => e.Redo());
+
+    public void DeleteSelection() => Run(e => e.DeleteSelection());
+
+    public void Rotate(double degrees) => Run(e => e.Rotate(degrees));
+
+    private void Run(Action<BoardEditor> action)
+    {
+        if (Editor is null)
         {
             return;
         }
 
         try
         {
-            Scene.Board.Save(path);
-            Status = $"Saved {Path.GetFileName(path)}";
+            action(Editor);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or KiCadFormatException)
         {
-            Status = $"Failed to save: {ex.Message}";
+            Status = ex.Message;
         }
     }
 
-    partial void OnSelectedOwnerChanged(int value)
+    private void OnSelectionChanged()
     {
         Properties.Clear();
-        if (Scene is null || value < 0)
+        if (Editor is not { } editor)
         {
             return;
         }
 
-        foreach (var row in ItemProperties.For(Scene.Owner(value)))
+        var selection = editor.Selection;
+        SelectionText = selection.Count switch
+        {
+            0 => string.Empty,
+            1 => "1 item selected",
+            _ => $"{selection.Count} items selected",
+        };
+
+        if (selection.Count != 1)
+        {
+            return;
+        }
+
+        foreach (var row in ItemProperties.For(selection[0]))
         {
             Properties.Add(row);
+        }
+
+        // For a footprint, also show the pad, text or graphic that was clicked.
+        if (editor.Scene.IsLive(editor.FocusOwner) && editor.Scene.Owner(editor.FocusOwner) is var focus && !ReferenceEquals(focus, selection[0]))
+        {
+            Properties.Add(new PropertyRow(string.Empty, string.Empty));
+            foreach (var row in ItemProperties.For(focus))
+            {
+                Properties.Add(row);
+            }
+        }
+    }
+
+    private void OnHistoryChanged()
+    {
+        var history = Editor?.History;
+        CanUndo = history?.CanUndo == true;
+        CanRedo = history?.CanRedo == true;
+        IsDirty = history?.IsDirty == true;
+        Title = FilePath is null ? "Ecad" : $"{Path.GetFileName(FilePath)}{(IsDirty ? " •" : string.Empty)} — Ecad";
+    }
+
+    private void Detach(BoardEditor? editor)
+    {
+        if (editor is not null)
+        {
+            editor.SelectionChanged -= OnSelectionChanged;
+            editor.History.Changed -= OnHistoryChanged;
         }
     }
 

@@ -1,41 +1,51 @@
 using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Media;
+using Ecad.Editor;
 using Ecad.Geometry;
 using Ecad.Rendering;
 
 namespace Ecad.App.Controls;
 
 /// <summary>
-/// Interactive board view: wheel zoom around the cursor, middle/right-drag or space-drag pan, click to select.
+/// Interactive board view. Wheel zooms around the cursor; middle/right drag or Space+drag pans.
+/// Left click selects (Shift toggles), dragging an item moves it, dragging empty space draws a selection box
+/// (left-to-right encloses, right-to-left crosses). M moves the selection with the cursor, R rotates, Delete deletes.
 /// Drawing is delegated to a Skia or OpenGL surface chosen by <see cref="AppOptions.Renderer"/>.
 /// </summary>
 public sealed class BoardCanvas : Panel
 {
-    public static readonly StyledProperty<BoardScene?> SceneProperty =
-        AvaloniaProperty.Register<BoardCanvas, BoardScene?>(nameof(Scene));
+    public static readonly StyledProperty<BoardEditor?> EditorProperty =
+        AvaloniaProperty.Register<BoardCanvas, BoardEditor?>(nameof(Editor));
 
     public static readonly StyledProperty<bool> FlipXProperty =
         AvaloniaProperty.Register<BoardCanvas, bool>(nameof(FlipX));
 
-    public static readonly StyledProperty<int> SelectedOwnerProperty =
-        AvaloniaProperty.Register<BoardCanvas, int>(nameof(SelectedOwner), -1, defaultBindingMode: BindingMode.TwoWay);
-
     public static readonly StyledProperty<bool> HighlightNetProperty =
         AvaloniaProperty.Register<BoardCanvas, bool>(nameof(HighlightNet), true);
 
-    private const double ClickSlopPixels = 4;
+    private const double DragSlopPixels = 4;
 
     private readonly Camera2D _camera = new();
     private readonly IBoardSurface _surface;
-    private Point? _pressPoint;
+    private Gesture _gesture;
+    private Point _pressPoint;
+    private int _pressOwner = -1;
     private Point _lastPoint;
-    private bool _panning;
     private bool _spaceDown;
     private bool _fitPending;
+
+    private enum Gesture
+    {
+        None,
+        Pressed,
+        Panning,
+        Moving,
+        MovingWithCursor,
+        BoxSelecting,
+    }
 
     static BoardCanvas()
     {
@@ -55,22 +65,16 @@ public sealed class BoardCanvas : Panel
         _surface.FrameRendered += ms => FrameRendered?.Invoke(ms);
     }
 
-    public BoardScene? Scene
+    public BoardEditor? Editor
     {
-        get => GetValue(SceneProperty);
-        set => SetValue(SceneProperty, value);
+        get => GetValue(EditorProperty);
+        set => SetValue(EditorProperty, value);
     }
 
     public bool FlipX
     {
         get => GetValue(FlipXProperty);
         set => SetValue(FlipXProperty, value);
-    }
-
-    public int SelectedOwner
-    {
-        get => GetValue(SelectedOwnerProperty);
-        set => SetValue(SelectedOwnerProperty, value);
     }
 
     public bool HighlightNet
@@ -91,7 +95,7 @@ public sealed class BoardCanvas : Panel
 
     public void ZoomToFit()
     {
-        if (Scene is not { } scene)
+        if (Editor?.Scene is not { } scene)
         {
             return;
         }
@@ -111,13 +115,26 @@ public sealed class BoardCanvas : Panel
     {
         base.OnPropertyChanged(change);
 
-        if (change.Property == SceneProperty)
+        if (change.Property == EditorProperty)
         {
-            _surface.Scene = Scene;
+            if (change.OldValue is BoardEditor old)
+            {
+                old.SceneChanged -= Present;
+                old.SelectionChanged -= Present;
+            }
+
+            _gesture = Gesture.None;
+            if (Editor is { } editor)
+            {
+                editor.SceneChanged += Present;
+                editor.SelectionChanged += Present;
+            }
+
+            _surface.Scene = Editor?.Scene;
             ZoomToFit();
             Present();
         }
-        else if (change.Property == FlipXProperty || change.Property == SelectedOwnerProperty || change.Property == HighlightNetProperty)
+        else if (change.Property == FlipXProperty || change.Property == HighlightNetProperty)
         {
             Present();
         }
@@ -151,6 +168,7 @@ public sealed class BoardCanvas : Panel
             _camera.ZoomAt(new Vector2D(p.X, p.Y), Math.Pow(1.2, e.Delta.Y));
         }
 
+        UpdateMoveToCursor(p);
         Present();
         e.Handled = true;
     }
@@ -166,12 +184,26 @@ public sealed class BoardCanvas : Panel
 
         if (props.IsMiddleButtonPressed || props.IsRightButtonPressed || (props.IsLeftButtonPressed && _spaceDown))
         {
-            _panning = true;
-            e.Pointer.Capture(this);
+            if (_gesture is Gesture.None)
+            {
+                _gesture = Gesture.Panning;
+                e.Pointer.Capture(this);
+            }
         }
-        else if (props.IsLeftButtonPressed)
+        else if (props.IsLeftButtonPressed && Editor is { } editor)
         {
-            _pressPoint = point.Position;
+            if (_gesture == Gesture.MovingWithCursor)
+            {
+                editor.CommitMove();
+                _gesture = Gesture.None;
+            }
+            else
+            {
+                _gesture = Gesture.Pressed;
+                _pressPoint = point.Position;
+                _pressOwner = Pick(point.Position);
+                e.Pointer.Capture(this);
+            }
         }
 
         e.Handled = true;
@@ -181,19 +213,51 @@ public sealed class BoardCanvas : Panel
     {
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
+        var editor = Editor;
 
-        if (_panning)
+        switch (_gesture)
         {
-            _camera.PanPixels(p.X - _lastPoint.X, p.Y - _lastPoint.Y);
-            Present();
+            case Gesture.Panning:
+                _camera.PanPixels(p.X - _lastPoint.X, p.Y - _lastPoint.Y);
+                Present();
+                break;
+
+            case Gesture.Pressed when editor is not null && Distance(p, _pressPoint) > DragSlopPixels:
+                bool toggle = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+                _gesture = Gesture.BoxSelecting;
+                if (editor.Scene.IsLive(_pressOwner))
+                {
+                    var grabbed = editor.Scene.TopLevelOf(_pressOwner);
+                    if (!editor.IsSelected(grabbed))
+                    {
+                        editor.Click(_pressOwner, toggle);
+                    }
+
+                    if (editor.BeginMove(grabbed, World(_pressPoint)))
+                    {
+                        _gesture = Gesture.Moving;
+                        editor.UpdateMove(World(p));
+                    }
+                }
+
+                Present();
+                break;
+
+            case Gesture.Moving or Gesture.MovingWithCursor:
+                UpdateMoveToCursor(p);
+                Present();
+                break;
+
+            case Gesture.BoxSelecting:
+                Present();
+                break;
         }
 
         _lastPoint = p;
 
-        if (Scene is { } scene)
+        if (editor is not null)
         {
-            var world = _camera.ScreenToWorld(new Vector2D(p.X, p.Y));
-            var board = scene.ToBoardNm(world);
+            var board = editor.Scene.ToBoardNm(World(p));
             CursorMoved?.Invoke(new Vector2D(board.X / Units.NmPerMm, board.Y / Units.NmPerMm));
         }
     }
@@ -202,21 +266,36 @@ public sealed class BoardCanvas : Panel
     {
         base.OnPointerReleased(e);
         var p = e.GetPosition(this);
+        var editor = Editor;
+        bool toggle = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
-        if (_panning)
+        switch (_gesture)
         {
-            _panning = false;
-            e.Pointer.Capture(null);
-        }
-        else if (_pressPoint is { } press && Scene is { } scene
-                 && Math.Abs(p.X - press.X) <= ClickSlopPixels && Math.Abs(p.Y - press.Y) <= ClickSlopPixels)
-        {
-            var world = _camera.ScreenToWorld(new Vector2D(p.X, p.Y));
-            float tolerance = (float)(ClickSlopPixels / _camera.PixelsPerMm);
-            SelectedOwner = HitTester.Pick(scene, new Vector2((float)world.X, (float)world.Y), tolerance);
+            case Gesture.Panning:
+                _gesture = Gesture.None;
+                break;
+
+            case Gesture.Pressed:
+                _gesture = Gesture.None;
+                editor?.Click(_pressOwner, toggle);
+                break;
+
+            case Gesture.Moving:
+                _gesture = Gesture.None;
+                editor?.CommitMove();
+                break;
+
+            case Gesture.BoxSelecting:
+                _gesture = Gesture.None;
+                editor?.SelectInBox(SelectionBox(p), crossing: IsCrossing(p), toggle);
+                break;
+
+            default:
+                return;
         }
 
-        _pressPoint = null;
+        e.Pointer.Capture(null);
+        Present();
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
@@ -228,21 +307,56 @@ public sealed class BoardCanvas : Panel
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        var editor = Editor;
+        bool command = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
         switch (e.Key)
         {
             case Key.Space:
                 _spaceDown = true;
-                e.Handled = true;
                 break;
+
             case Key.Home:
                 ZoomToFit();
-                e.Handled = true;
                 break;
+
             case Key.Escape:
-                SelectedOwner = -1;
-                e.Handled = true;
+                if (editor?.Move is not null)
+                {
+                    editor.CancelMove();
+                }
+                else if (_gesture != Gesture.BoxSelecting)
+                {
+                    editor?.SetSelection([]);
+                }
+
+                _gesture = Gesture.None;
+                Present();
                 break;
+
+            case Key.M when !command && editor is not null && _gesture == Gesture.None && editor.Selection.Count > 0:
+                if (editor.BeginMove(null, World(_lastPoint)))
+                {
+                    _gesture = Gesture.MovingWithCursor;
+                    UpdateMoveToCursor(_lastPoint);
+                }
+
+                break;
+
+            case Key.R when !command && editor is not null:
+                editor.Rotate(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -90 : 90);
+                Present();
+                break;
+
+            case Key.Delete or Key.Back when editor is not null && _gesture == Gesture.None:
+                editor.DeleteSelection();
+                break;
+
+            default:
+                return;
         }
+
+        e.Handled = true;
     }
 
     protected override void OnKeyUp(KeyEventArgs e)
@@ -254,6 +368,44 @@ public sealed class BoardCanvas : Panel
         }
     }
 
+    private int Pick(Point screen)
+    {
+        if (Editor?.Scene is not { } scene)
+        {
+            return -1;
+        }
+
+        var world = World(screen);
+        float tolerance = (float)(DragSlopPixels / _camera.PixelsPerMm);
+        return HitTester.Pick(scene, new Vector2((float)world.X, (float)world.Y), tolerance);
+    }
+
+    private void UpdateMoveToCursor(Point screen)
+    {
+        if (_gesture is Gesture.Moving or Gesture.MovingWithCursor)
+        {
+            Editor?.UpdateMove(World(screen));
+        }
+    }
+
+    private Vector2D World(Point screen)
+    {
+        SyncViewport();
+        return _camera.ScreenToWorld(new Vector2D(screen.X, screen.Y));
+    }
+
+    private RectD SelectionBox(Point current)
+    {
+        var a = World(_pressPoint);
+        var b = World(current);
+        return new RectD(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
+    }
+
+    /// <summary>Right-to-left on screen means crossing selection, regardless of bottom view mirroring.</summary>
+    private bool IsCrossing(Point current) => current.X < _pressPoint.X;
+
+    private static double Distance(Point a, Point b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
     private void SyncViewport()
     {
         _camera.ViewportWidth = Math.Max(Bounds.Width, 1);
@@ -263,22 +415,29 @@ public sealed class BoardCanvas : Panel
 
     private void Present()
     {
-        if (Scene is not { } scene)
+        if (Editor is not { } editor)
         {
             _surface.Present(null);
             return;
         }
 
         SyncViewport();
+        var move = editor.Move;
         var view = new ViewState(
             _camera.WorldToScreenTransform,
             _camera.PixelsPerMm,
             _camera.ViewportWidth,
             _camera.ViewportHeight,
             _camera.FlipX,
-            SelectedOwner,
-            HighlightNet && SelectedOwner >= 0 ? scene.OwnerNet(SelectedOwner) : null,
-            RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
+            editor.SelectedOwners,
+            HighlightNet ? editor.FocusNet : null,
+            RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1)
+        {
+            Preview = move?.Preview,
+            PreviewTransform = move?.PreviewTransform ?? Transform2D.Identity,
+            SelectionBox = _gesture == Gesture.BoxSelecting ? SelectionBox(_lastPoint) : null,
+            SelectionBoxCrossing = _gesture == Gesture.BoxSelecting && IsCrossing(_lastPoint),
+        };
 
         _surface.Present(view);
     }

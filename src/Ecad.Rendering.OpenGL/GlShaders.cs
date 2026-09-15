@@ -31,6 +31,13 @@ internal static class GlShaders
         uniform vec2 u_scale;
         uniform vec2 u_halfViewport;
         uniform float u_devPxPerMm;
+        uniform vec4 u_xform;
+        uniform vec2 u_xformT;
+
+        vec2 xf(vec2 p)
+        {
+            return vec2(u_xform.x * p.x + u_xform.z * p.y, u_xform.y * p.x + u_xform.w * p.y) + u_xformT;
+        }
 
         vec4 toClip(vec2 p)
         {
@@ -54,15 +61,17 @@ internal static class GlShaders
         {
             float px = 1.0 / u_devPxPerMm;
             float hw = max(a_hw, 0.5 * px);
-            vec2 d = a_b - a_a;
+            vec2 a = xf(a_a);
+            vec2 b = xf(a_b);
+            vec2 d = b - a;
             float len = length(d);
             vec2 dir = len > 0.0 ? d / len : vec2(1.0, 0.0);
             vec2 nrm = vec2(-dir.y, dir.x);
             float r = hw + px;
-            vec2 p = mix(a_a - dir * r, a_b + dir * r, a_corner.x) + nrm * (a_corner.y * r);
+            vec2 p = mix(a - dir * r, b + dir * r, a_corner.x) + nrm * (a_corner.y * r);
             v_p = p;
-            v_a = a_a;
-            v_b = a_b;
+            v_a = a;
+            v_b = b;
             v_hw = hw;
             gl_Position = toClip(p);
         }
@@ -104,9 +113,10 @@ internal static class GlShaders
             float px = 1.0 / u_devPxPerMm;
             float r = max(a_r, 0.5 * px);
             float extent = r + px;
-            vec2 p = a_c + vec2(a_corner.x * 2.0 - 1.0, a_corner.y) * extent;
+            vec2 c = xf(a_c);
+            vec2 p = c + vec2(a_corner.x * 2.0 - 1.0, a_corner.y) * extent;
             v_p = p;
-            v_c = a_c;
+            v_c = c;
             v_r = r;
             gl_Position = toClip(p);
         }
@@ -135,7 +145,7 @@ internal static class GlShaders
 
         void main()
         {
-            gl_Position = toClip(a_pos);
+            gl_Position = toClip(xf(a_pos));
         }
         """;
 
@@ -215,6 +225,10 @@ internal sealed class GlProgram(GL gl, uint handle) : IDisposable
     public int DevPxPerMm { get; } = gl.GetUniformLocation(handle, "u_devPxPerMm");
 
     public int Color { get; } = gl.GetUniformLocation(handle, "u_color");
+
+    public int Xform { get; } = gl.GetUniformLocation(handle, "u_xform");
+
+    public int XformT { get; } = gl.GetUniformLocation(handle, "u_xformT");
 
     public void Dispose() => gl.DeleteProgram(Handle);
 }

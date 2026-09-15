@@ -5,8 +5,8 @@ using SkiaSharp;
 namespace Ecad.Rendering.Skia;
 
 /// <summary>
-/// Prototype A: draws a <see cref="BoardScene"/> with SkiaSharp. Primitives (text included, as stroke segments) are batched
-/// into one path per layer and stroke width, cached until the layer changes.
+/// Fallback renderer: draws a <see cref="BoardScene"/> with SkiaSharp. Primitives (text included, as stroke segments)
+/// are batched into one path per layer and stroke width, cached until the layer changes.
 /// </summary>
 public sealed class SkiaSceneRenderer : IDisposable
 {
@@ -14,13 +14,15 @@ public sealed class SkiaSceneRenderer : IDisposable
 
     private readonly BoardScene _scene;
     private readonly Dictionary<LayerGeometry, LayerCache> _cache = [];
+    private readonly Dictionary<LayerGeometry, LayerCache> _previewCache = [];
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _layerPaint = new();
     private readonly Lock _lock = new();
 
-    private (int Owner, Net? Net) _highlightKey = (-1, null);
+    private (IReadOnlySet<int>? Owners, Net? Net) _highlightKey;
     private Dictionary<LayerGeometry, LayerCache>? _highlight;
+    private IReadOnlyList<LayerGeometry>? _previewSource;
 
     public SkiaSceneRenderer(BoardScene scene) => _scene = scene;
 
@@ -48,6 +50,7 @@ public sealed class SkiaSceneRenderer : IDisposable
 
         bool dimmed = view.IsDimmed;
         UpdateHighlight(view);
+        UpdatePreview(view);
 
         canvas.Save();
         var matrix = ToSk(view.WorldToScreen);
@@ -76,7 +79,28 @@ public sealed class SkiaSceneRenderer : IDisposable
             }
         }
 
+        if (view.Preview is { } preview)
+        {
+            canvas.Save();
+            var previewMatrix = ToSk(view.PreviewTransform);
+            canvas.Concat(in previewMatrix);
+            foreach (var layer in preview)
+            {
+                if (_scene.Find(layer.Name)?.IsVisible != false)
+                {
+                    DrawLayer(canvas, GetCache(_previewCache, layer), Brighten(layer.Color), minWorldWidth);
+                }
+            }
+
+            canvas.Restore();
+        }
+
         canvas.Restore();
+
+        if (view.SelectionBox is { } box)
+        {
+            DrawSelectionBox(canvas, view, box);
+        }
     }
 
     private void DrawLayer(SKCanvas canvas, LayerCache cache, ColorRgba color, float minWorldWidth)
@@ -135,23 +159,38 @@ public sealed class SkiaSceneRenderer : IDisposable
         }
     }
 
+    private void DrawSelectionBox(SKCanvas canvas, ViewState view, RectD box)
+    {
+        var a = view.WorldToScreen.Apply(new Vector2D(box.MinX, box.MinY));
+        var b = view.WorldToScreen.Apply(new Vector2D(box.MaxX, box.MaxY));
+        var rect = new SKRect((float)Math.Min(a.X, b.X), (float)Math.Min(a.Y, b.Y), (float)Math.Max(a.X, b.X), (float)Math.Max(a.Y, b.Y));
+        var color = ViewState.SelectionBoxColor(view.SelectionBoxCrossing);
+
+        _fill.Color = ToSk(color.WithAlpha(40));
+        canvas.DrawRect(rect, _fill);
+        _stroke.Color = ToSk(color);
+        _stroke.StrokeWidth = 1;
+        canvas.DrawRect(rect, _stroke);
+    }
+
     private void UpdateHighlight(ViewState view)
     {
-        var key = (view.SelectedOwner, view.HighlightNet);
-        if (key == _highlightKey)
+        if (ReferenceEquals(view.SelectedOwners, _highlightKey.Owners) && view.HighlightNet == _highlightKey.Net)
         {
             return;
         }
 
         DisposeCaches(_highlight);
         _highlight = null;
-        _highlightKey = key;
-        if (view.SelectedOwner < 0 && view.HighlightNet is null)
+        _highlightKey = (view.SelectedOwners, view.HighlightNet);
+        if (view.SelectedOwners is not { Count: > 0 } && view.HighlightNet is null)
         {
             return;
         }
 
-        bool Matches(int owner) => owner == view.SelectedOwner || (view.HighlightNet is not null && _scene.OwnerNet(owner) == view.HighlightNet);
+        var owners = view.SelectedOwners;
+        var net = view.HighlightNet;
+        bool Matches(int owner) => owners?.Contains(owner) == true || (net is not null && _scene.OwnerNet(owner) == net);
 
         _highlight = [];
         foreach (var layer in _scene.Layers)
@@ -166,6 +205,18 @@ public sealed class SkiaSceneRenderer : IDisposable
                 cache.Dispose();
             }
         }
+    }
+
+    private void UpdatePreview(ViewState view)
+    {
+        if (ReferenceEquals(view.Preview, _previewSource))
+        {
+            return;
+        }
+
+        DisposeCaches(_previewCache);
+        _previewCache.Clear();
+        _previewSource = view.Preview;
     }
 
     private static LayerCache GetCache(Dictionary<LayerGeometry, LayerCache> caches, LayerGeometry layer)
@@ -258,7 +309,9 @@ public sealed class SkiaSceneRenderer : IDisposable
         {
             DisposeCaches(_cache);
             DisposeCaches(_highlight);
+            DisposeCaches(_previewCache);
             _cache.Clear();
+            _previewCache.Clear();
             _highlight = null;
             _stroke.Dispose();
             _fill.Dispose();

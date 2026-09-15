@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Ecad.App/Ecad.App.csproj" />
+    <Project Path="src/Ecad.Editor/Ecad.Editor.csproj" />
     <Project Path="src/Ecad.Geometry/Ecad.Geometry.csproj" />
     <Project Path="src/Ecad.KiCad/Ecad.KiCad.csproj" />
     <Project Path="src/Ecad.Rendering.OpenGL/Ecad.Rendering.OpenGL.csproj" />
@@ -9,6 +10,7 @@
     <Project Path="src/Ecad.Sexpr/Ecad.Sexpr.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Ecad.Editor.Tests/Ecad.Editor.Tests.csproj" />
     <Project Path="tests/Ecad.Geometry.Tests/Ecad.Geometry.Tests.csproj" />
     <Project Path="tests/Ecad.KiCad.Tests/Ecad.KiCad.Tests.csproj" />
     <Project Path="tests/Ecad.Rendering.OpenGL.Tests/Ecad.Rendering.OpenGL.Tests.csproj" />
