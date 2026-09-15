@@ -1,0 +1,19 @@
+using Ecad.Geometry;
+using Ecad.Sexpr;
+
+namespace Ecad.KiCad;
+
+/// <summary>Typed view over a CST list. Reads are computed from the tree, so the file stays the source of truth.</summary>
+public abstract class BoardItem(SList node, Board board)
+{
+    public SList Node { get; } = node;
+
+    public Board Board { get; } = board;
+
+    public string? Uuid => Node.ChildString("uuid");
+
+    public bool IsLocked => Node.HasSymbol("locked") || Node.ChildBool("locked");
+
+    /// <summary>Transform from the coordinates stored in this item to board coordinates.</summary>
+    public virtual Transform2D ToBoard => Transform2D.Identity;
+}
