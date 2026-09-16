@@ -1,0 +1,72 @@
+{
+  "scope": { "schematic": "schematic" },
+  "sch": {
+    "document": { "label": "KiCad schematic", "untitled": "schematic" },
+    "panel": { "sheets": "Sheets", "sheets.rail": "Sh" },
+    "sheets": {
+      "empty": "Sheets appear once a schematic is open",
+      "root": "Root sheet",
+      "children": "Child sheets",
+      "missing": "file not found"
+    },
+    "command": {
+      "fit": "Fit sheet to window",
+      "openSheet": "Open child sheet"
+    },
+    "summary": { "sheet": "schematic · {0}" },
+    "symbol": { "one": "symbol", "other": "symbols" },
+    "status": {
+      "cursor": "X {0} Y {1} {2}",
+      "symbols": "{0} {1}",
+      "selected": "selected: {0}"
+    },
+    "issue": {
+      "oldFormat": { "title": "Old format", "detail": "The file is older than KiCad 8; it may read differently." },
+      "newFormat": { "title": "Newer format", "detail": "The sheet comes from a newer KiCad; unknown fields are preserved as they are." },
+      "version": "version {0}",
+      "noDefinition": { "title": "Symbol without a definition", "detail": "{0}" },
+      "definitions": "{0} of {1}"
+    },
+    "selection": { "multi": "{0} objects" },
+    "item": {
+      "symbol": "Symbol",
+      "wire": "Wire",
+      "bus": "Bus",
+      "junction": "Junction",
+      "noConnect": "No connect",
+      "label": "Label",
+      "globalLabel": "Global label",
+      "hierarchicalLabel": "Hierarchical label",
+      "netclassFlag": "Net class flag",
+      "text": "Text",
+      "sheet": "Sheet",
+      "graphic": "Graphic",
+      "other": "Object"
+    },
+    "property": {
+      "reference": "Reference",
+      "value": "Value",
+      "library": "Library",
+      "footprint": "Footprint",
+      "unit": "Unit",
+      "position": "Position",
+      "angle": "Angle",
+      "mirror": "Mirror",
+      "dnp": "Do not populate",
+      "pins": "Pins",
+      "name": "Name",
+      "file": "File",
+      "size": "Size",
+      "text": "Text",
+      "shape": "Shape",
+      "length": "Length",
+      "uuid": "UUID"
+    },
+    "value": { "yes": "yes", "no": "no", "none": "—" },
+    "units": { "mm": "mm" },
+    "log": {
+      "loaded": "{0}: {1} symbols, {2} primitives.",
+      "activated": "{0} {1}: .kicad_sch, sheets panel."
+    }
+  }
+}

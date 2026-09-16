@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Loaded into its own AssemblyLoadContext by the workbench, so it carries its own deps.json. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Translations, read by JsonTextCatalog.FromAssembly. -->
+    <EmbeddedResource Include="i18n\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The host already ships these; compile against them but never copy them next to the plugin. -->
+    <PackageReference Include="Avalonia" Version="12.1.2" ExcludeAssets="runtime" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" ExcludeAssets="runtime" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" ExcludeAssets="runtime" />
+    <ProjectReference Include="..\..\app\Anode.Sdk\Anode.Sdk.csproj" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The PCB domain itself: private to this plugin. -->
+    <ProjectReference Include="..\..\core\Anode.Kicad\Anode.Kicad.csproj" />
+    <ProjectReference Include="..\..\core\Anode.Editing\Anode.Editing.csproj" />
+    <ProjectReference Include="..\..\render\Anode.Render.Avalonia\Anode.Render.Avalonia.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Anode.Workbench.App"
+             RequestedThemeVariant="Dark">
+  <!-- Dark chrome by default (mockup 2a); drawings stay light in both themes. -->
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://Anode.Workbench/Themes/KicadOne.axaml" />
+  </Application.Styles>
+</Application>

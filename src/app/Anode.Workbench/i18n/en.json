@@ -1,0 +1,105 @@
+{
+  "scope": {
+    "window": "window",
+    "file": "file"
+  },
+  "action": {
+    "show": "Show"
+  },
+  "command": {
+    "shell": { "palette": "Command palette" },
+    "file": { "open": "Open…", "save": "Save", "saveAs": "Save as…" },
+    "doc": { "close": "Close tab" },
+    "view": {
+      "split": "Split window / merge",
+      "leftDock": "Left dock",
+      "rightDock": "Right dock",
+      "bottomDock": "Bottom dock",
+      "theme": "Switch chrome theme",
+      "start": "Start page",
+      "language": "Language: {0}"
+    }
+  },
+  "panel": {
+    "project": "Project",
+    "project.rail": "Pr",
+    "inspector": "Inspector",
+    "inspector.rail": "In",
+    "issues": "Checks",
+    "issues.rail": "Ck",
+    "console": "Console",
+    "console.rail": "Co"
+  },
+  "shell": {
+    "project": {
+      "none": "No project",
+      "switcher": "Projects",
+      "emptyTitle": "No project open",
+      "emptyHint": "Open a KiCad board — its folder becomes the project.",
+      "files": "Files",
+      "count": "{0} files · {1}"
+    },
+    "inspector": { "empty": "Select an object on the canvas" },
+    "issues": {
+      "none": "Checks found nothing, or have not run yet",
+      "noDocument": "No active document"
+    },
+    "console": { "info": "info", "warning": "warning", "error": "error" },
+    "search": { "placeholder": "Project, component, command…" },
+    "palette": {
+      "placeholder": "Command, component, net…",
+      "empty": "Nothing found",
+      "footer": "↑↓ select   ⏎ run   Esc close",
+      "beta": "beta"
+    },
+    "hint": { "leftDock": "⌥1 left dock", "rightDock": "⌥2 right", "bottomDock": "⌥3 bottom" },
+    "rail": { "label": "RAIL", "toRail": "Send to rail", "more": "Panels in the rail" },
+    "slideOver": { "pin": "Pin", "pinHint": "Make it a dock (or double click the rail icon)" },
+    "stack": { "collapse": "Collapse / expand" },
+    "tabs": {
+      "emptyTitle": "No open documents",
+      "emptyHint": "⌘O open · ⌘K palette · drop a file",
+      "close": "Close (⌘W)"
+    },
+    "status": { "busy": "opening…" },
+    "start": {
+      "title": "Start",
+      "open": "Open…",
+      "continue": "Continue",
+      "continueEmpty": "Recent boards appear here. Open a .kicad_pcb or drop a file onto the window.",
+      "waiting": "Waiting for you",
+      "waitingEmpty": "Reviews and orders appear once a team server is connected.",
+      "startWith": "Start with",
+      "tagBoard": "KiCad board (.kicad_pcb)",
+      "tagPalette": "Command palette"
+    },
+    "time": {
+      "now": "just now",
+      "minutes": "{0} min ago",
+      "hours": "{0} h ago",
+      "yesterday": "yesterday",
+      "days": "{0} d ago"
+    },
+    "unsaved": {
+      "title": "Unsaved changes",
+      "one": "Save changes to “{0}”?",
+      "many": "Save changes to {0} documents?",
+      "detail": "If you don't save, the changes are lost.",
+      "save": "Save",
+      "discard": "Don't save",
+      "cancel": "Cancel"
+    },
+    "banner": { "noPlugin": "No plugin opens {0}" },
+    "log": {
+      "noPlugin": "No plugin for {0} files ({1}).",
+      "opened": "{0} opened ({1}).",
+      "openFailed": "Could not open {0}: {1}",
+      "saved": "{0} saved.",
+      "saveFailed": "Could not save {0}: {1}",
+      "splitHint": "Open at least two documents to split the window.",
+      "commandUnavailable": "Command “{0}” is not available right now.",
+      "pluginActivated": "Plugin {0} {1} connected.",
+      "pluginFailed": "Plugin {0} did not start: {1}"
+    }
+  }
+}

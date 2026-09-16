@@ -1,0 +1,359 @@
+<!--
+  Kicad·One theme (docs/design/kicad-one-ui-kit.md, ECAD IDE mockups 1a–2d).
+  Chrome paints change with the theme; drawing inks never do. Magenta means "your decision is needed",
+  cyan means "clickable / selected" — never decorative.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="Chrome.Bg" Color="#f3f2f2" />
+          <SolidColorBrush x:Key="Chrome.Raised" Color="#eae9e9" />
+          <SolidColorBrush x:Key="Chrome.Active" Color="#eae9e9" />
+          <SolidColorBrush x:Key="Chrome.Field" Color="#eae9e9" />
+          <SolidColorBrush x:Key="Chrome.Text" Color="#201e1d" />
+          <SolidColorBrush x:Key="Chrome.TextDim" Color="#94201e1d" />
+          <SolidColorBrush x:Key="Chrome.TextFaint" Color="#73201e1d" />
+          <SolidColorBrush x:Key="Chrome.Line" Color="#1a201e1d" />
+          <SolidColorBrush x:Key="Chrome.Hover" Color="#0f201e1d" />
+          <SolidColorBrush x:Key="Chrome.Pressed" Color="#1f201e1d" />
+          <SolidColorBrush x:Key="State.Accent" Color="#0088b0" />
+          <SolidColorBrush x:Key="State.AccentText" Color="#006786" />
+          <SolidColorBrush x:Key="State.AccentWash" Color="#e9f8ff" />
+          <SolidColorBrush x:Key="State.Alert" Color="#d6006c" />
+          <SolidColorBrush x:Key="State.AlertText" Color="#aa0b56" />
+          <SolidColorBrush x:Key="State.AlertWash" Color="#fff1f4" />
+          <SolidColorBrush x:Key="State.Neutral500" Color="#9b9797" />
+          <SolidColorBrush x:Key="State.OnAccent" Color="#f3f2f2" />
+          <SolidColorBrush x:Key="Canvas.Backdrop" Color="#f8f4f4" />
+          <BoxShadows x:Key="Shadow.Sm">0 1 2 0 #24201e1d</BoxShadows>
+          <BoxShadows x:Key="Shadow.Lg">0 12 32 0 #38201e1d</BoxShadows>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="Chrome.Bg" Color="#1b1a19" />
+          <SolidColorBrush x:Key="Chrome.Raised" Color="#232120" />
+          <SolidColorBrush x:Key="Chrome.Active" Color="#2c2928" />
+          <SolidColorBrush x:Key="Chrome.Field" Color="#2c2928" />
+          <SolidColorBrush x:Key="Chrome.Text" Color="#f3f2f2" />
+          <SolidColorBrush x:Key="Chrome.TextDim" Color="#a8a3a0" />
+          <SolidColorBrush x:Key="Chrome.TextFaint" Color="#8f8a87" />
+          <SolidColorBrush x:Key="Chrome.Line" Color="#24f3f2f2" />
+          <SolidColorBrush x:Key="Chrome.Hover" Color="#12f3f2f2" />
+          <SolidColorBrush x:Key="Chrome.Pressed" Color="#22f3f2f2" />
+          <SolidColorBrush x:Key="State.Accent" Color="#34b3d8" />
+          <SolidColorBrush x:Key="State.AccentText" Color="#62c5ee" />
+          <SolidColorBrush x:Key="State.AccentWash" Color="#0f4d63" />
+          <SolidColorBrush x:Key="State.Alert" Color="#ff4d99" />
+          <SolidColorBrush x:Key="State.AlertText" Color="#ff90b1" />
+          <SolidColorBrush x:Key="State.AlertWash" Color="#5c0b34" />
+          <SolidColorBrush x:Key="State.Neutral500" Color="#7d7979" />
+          <SolidColorBrush x:Key="State.OnAccent" Color="#1b1a19" />
+          <SolidColorBrush x:Key="Canvas.Backdrop" Color="#e9e6e5" />
+          <BoxShadows x:Key="Shadow.Sm">0 1 6 0 #66000000</BoxShadows>
+          <BoxShadows x:Key="Shadow.Lg">0 12 32 0 #99000000</BoxShadows>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- Drawing inks: not themed. -->
+      <SolidColorBrush x:Key="Ink.CopperFront" Color="#d6006c" />
+      <SolidColorBrush x:Key="Ink.CopperBack" Color="#0088b0" />
+      <SolidColorBrush x:Key="Ink.Mask" Color="#edbb00" />
+      <SolidColorBrush x:Key="Ink.Silk" Color="#201e1d" />
+      <SolidColorBrush x:Key="Ink.Sheet" Color="#f8f4f4" />
+
+      <FontFamily x:Key="Font.Serif">avares://Anode.Workbench/Assets/Fonts#Source Serif 4</FontFamily>
+      <FontFamily x:Key="Font.Mono">avares://Anode.Workbench/Assets/Fonts#JetBrains Mono</FontFamily>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- ——— Type ——— -->
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Serif}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+  </Style>
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="TextBlock.value">
+    <Setter Property="FontSize" Value="12" />
+  </Style>
+  <Style Selector="TextBlock.dim">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <Style Selector="TextBlock.faint">
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextFaint}" />
+  </Style>
+  <Style Selector="TextBlock.strong">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.overline">
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="LetterSpacing" Value="1.1" />
+    <Setter Property="Foreground" Value="{DynamicResource State.Accent}" />
+  </Style>
+  <Style Selector="TextBlock.overline.alert">
+    <Setter Property="Foreground" Value="{DynamicResource State.Alert}" />
+  </Style>
+  <Style Selector="TextBlock.brand">
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="15" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.accentText">
+    <Setter Property="Foreground" Value="{DynamicResource State.AccentText}" />
+  </Style>
+  <Style Selector="TextBlock.alertText">
+    <Setter Property="Foreground" Value="{DynamicResource State.AlertText}" />
+  </Style>
+
+  <!-- ——— Plates ——— -->
+  <Style Selector="Border.line">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Line}" />
+  </Style>
+  <Style Selector="Border.field">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Field}" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="7,3" />
+  </Style>
+  <Style Selector="Border.swatch">
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.TextFaint}" />
+  </Style>
+  <Style Selector="Border.issueMarker.error">
+    <Setter Property="Background" Value="{DynamicResource State.Alert}" />
+  </Style>
+  <Style Selector="Border.issueMarker.warning">
+    <Setter Property="Background" Value="{DynamicResource State.Neutral500}" />
+  </Style>
+
+  <Style Selector="Border.tag">
+    <Setter Property="CornerRadius" Value="1.5" />
+    <Setter Property="Padding" Value="10,3" />
+  </Style>
+  <Style Selector="Border.tag > TextBlock">
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Border.tag.accent">
+    <Setter Property="Background" Value="{DynamicResource State.AccentWash}" />
+  </Style>
+  <Style Selector="Border.tag.accent > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource State.AccentText}" />
+  </Style>
+  <Style Selector="Border.tag.alert">
+    <Setter Property="Background" Value="{DynamicResource State.AlertWash}" />
+  </Style>
+  <Style Selector="Border.tag.alert > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource State.AlertText}" />
+  </Style>
+  <Style Selector="Border.tag.neutral">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Field}" />
+  </Style>
+  <Style Selector="Border.tag.outline">
+    <Setter Property="BorderBrush" Value="{DynamicResource State.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Border.tag.outline > TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource State.Accent}" />
+  </Style>
+
+  <!-- ——— Flat buttons (chrome, rows, tabs) ——— -->
+  <Style Selector="Button.flat, Button.docTab, Button.stackTab, Button.railItem, Button.row, Button.searchField, Button.tagButton, Button.tool">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FontWeight" Value="Normal" />
+  </Style>
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.row:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.railItem:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.flat:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.row:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Pressed}" />
+  </Style>
+  <Style Selector="Button.row">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="Button.row.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.AccentWash}" />
+  </Style>
+  <Style Selector="Button.row.selected">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Document tabs: active on the active fill, 600; others dim. -->
+  <Style Selector="Button.docTab">
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="CornerRadius" Value="2,2,0,0" />
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <Style Selector="Button.docTab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.docTab.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Active}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.docTab.active">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Stack tabs: 12 px, active 600 with a 2 px accent underline. -->
+  <Style Selector="Button.stackTab">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Padding" Value="0,0,0,3" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <Style Selector="Button.stackTab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.stackTab.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource State.Accent}" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.stackTab.active">
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Icon rail: 26×26, mono labels; the open one fills with accent. -->
+  <Style Selector="Button.railItem">
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="26" />
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
+    <Setter Property="FontSize" Value="10" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <Style Selector="Button.railItem.open /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource State.OnAccent}" />
+  </Style>
+
+  <!-- Toolbar tools: 28×24, selected fills with accent. -->
+  <Style Selector="Button.tool">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.tool.selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource State.OnAccent}" />
+  </Style>
+
+  <!-- Search field in the title bar and on the start page. -->
+  <Style Selector="Button.searchField">
+    <Setter Property="Padding" Value="10,5" />
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+  <Style Selector="Button.searchField:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.TextFaint}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+
+  <!-- Tags that act. -->
+  <Style Selector="Button.tagButton">
+    <Setter Property="Padding" Value="10,3" />
+    <Setter Property="CornerRadius" Value="1.5" />
+    <Setter Property="FontSize" Value="11" />
+  </Style>
+  <Style Selector="Button.tagButton.accent /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.AccentWash}" />
+    <Setter Property="Foreground" Value="{DynamicResource State.AccentText}" />
+  </Style>
+  <Style Selector="Button.tagButton.alert /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.AlertWash}" />
+    <Setter Property="Foreground" Value="{DynamicResource State.AlertText}" />
+  </Style>
+  <Style Selector="Button.tagButton.neutral /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Field}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.tagButton.outline /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource State.Accent}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource State.Accent}" />
+  </Style>
+  <Style Selector="Button.tagButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+
+  <!-- Title bar menu. -->
+  <Style Selector="Menu.titleMenu > MenuItem">
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Serif}" />
+  </Style>
+
+  <!-- Command palette. -->
+  <Style Selector="TextBox.paletteInput">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="FontSize" Value="16" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="CaretBrush" Value="{DynamicResource State.Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="TextBox.paletteInput /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="TextBox.paletteInput:focus /template/ Border#PART_BorderElement, TextBox.paletteInput:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBox.palette">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0,6" />
+  </Style>
+  <Style Selector="ListBox.palette > ListBoxItem">
+    <Setter Property="Padding" Value="14,8" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBox.palette > ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.palette > ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.AccentWash}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="ListBox.palette > ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+
+  <Style Selector="GridSplitter.dock">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+</Styles>

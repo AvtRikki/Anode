@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Anode.Sexpr\Anode.Sexpr.csproj" />
+    <ProjectReference Include="..\Anode.Geometry\Anode.Geometry.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+  </PropertyGroup>
+
+</Project>

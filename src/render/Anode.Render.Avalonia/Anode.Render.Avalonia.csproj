@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Shared by the domain plugins; each loads its own copy into its own context. -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The host ships these; compile against them but do not copy them next to a plugin. -->
+    <PackageReference Include="Avalonia" Version="12.1.2" ExcludeAssets="runtime" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" ExcludeAssets="runtime" />
+    <PackageReference Include="SkiaSharp" Version="3.119.4" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\app\Anode.Sdk\Anode.Sdk.csproj" Private="false" />
+    <ProjectReference Include="..\Anode.Render.Skia\Anode.Render.Skia.csproj" />
+    <ProjectReference Include="..\Anode.Render.OpenGl\Anode.Render.OpenGl.csproj" />
+  </ItemGroup>
+</Project>

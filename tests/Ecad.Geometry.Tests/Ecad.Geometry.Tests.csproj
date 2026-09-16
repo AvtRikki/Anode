@@ -1,7 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\Ecad.Geometry\Ecad.Geometry.csproj" />
-  </ItemGroup>
-
-</Project>

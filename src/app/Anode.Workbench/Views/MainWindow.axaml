@@ -1,0 +1,259 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Anode.Workbench.ViewModels"
+        xmlns:views="using:Anode.Workbench.Views"
+        xmlns:controls="using:Anode.Workbench.Controls"
+        xmlns:services="using:Anode.Workbench.Services"
+        xmlns:platform="using:Anode.Sdk"
+        x:Class="Anode.Workbench.Views.MainWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="{Binding WindowTitle}"
+        Width="1440" Height="900" MinWidth="960" MinHeight="600"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1">
+  <!-- Kicad·One workbench (mockups 1a, 1b, 2a–2d): title bar, rail, docks, split document area, status bar;
+       palette, slide-over and banner are overlays. Every action lives in the palette, so there is no menu bar. -->
+  <Grid x:Name="Root" RowDefinitions="44,*,26">
+
+    <!-- ——— Title bar (1a / 2a): brand, project, search. It *is* the window title bar: the native one is off. ——— -->
+    <Border Grid.Row="0" Background="{DynamicResource Chrome.Raised}"
+            PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
+      <DockPanel x:Name="TitleBarContent" Margin="14,0" VerticalAlignment="Center">
+        <TextBlock DockPanel.Dock="Left" Classes="brand" VerticalAlignment="Center" Margin="0,0,20,0">
+          <Run Text="Kicad" /><Run Text="·" Foreground="{DynamicResource State.Accent}" /><Run Text="One" />
+        </TextBlock>
+
+        <Button x:Name="ProjectButton" DockPanel.Dock="Left" Classes="flat" Padding="11,5"
+                Background="{DynamicResource Chrome.Bg}" BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="1" CornerRadius="2"
+                Click="OnProjectClick" ToolTip.Tip="{Binding Strings.ProjectSwitcher}">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="{Binding ProjectName}" FontWeight="SemiBold" FontSize="12.5" />
+            <TextBlock Text="▾" Classes="faint" FontSize="10" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <TextBlock Classes="mono faint" Text="{Binding Strings.HintLeftDock}" VerticalAlignment="Center" />
+          <TextBlock Classes="mono faint" Text="{Binding Strings.HintRightDock}" VerticalAlignment="Center" />
+          <TextBlock Classes="mono faint" Text="{Binding Strings.HintBottomDock}" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Button Classes="searchField" Width="320" HorizontalAlignment="Right" Margin="0,0,18,0" Click="OnSearchClick">
+          <DockPanel>
+            <TextBlock DockPanel.Dock="Right" Classes="mono faint" Text="⌘K" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Strings.SearchPlaceholder}" FontSize="12.5" VerticalAlignment="Center" />
+          </DockPanel>
+        </Button>
+      </DockPanel>
+    </Border>
+
+    <!-- ——— Body: rail · left dock · documents + bottom dock · right dock ——— -->
+    <Grid x:Name="Body" Grid.Row="1" ColumnDefinitions="Auto,212,1,*,1,268">
+
+      <!-- Icon rail (2b/2c): single click shows a panel over the canvas, double click pins it as a dock. -->
+      <Border Grid.Column="0" Width="38" Background="{DynamicResource Chrome.Raised}" IsVisible="{Binding HasRail}"
+              BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="0,0,1,0">
+        <DockPanel Margin="0,8">
+          <LayoutTransformControl DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,0">
+            <LayoutTransformControl.LayoutTransform>
+              <RotateTransform Angle="90" />
+            </LayoutTransformControl.LayoutTransform>
+            <TextBlock Classes="mono faint" FontSize="9" LetterSpacing="1" Text="{Binding Strings.RailLabel}" />
+          </LayoutTransformControl>
+          <StackPanel Spacing="3">
+            <ItemsControl ItemsSource="{Binding Rail}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Spacing="3" HorizontalAlignment="Center" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:RailItemViewModel">
+                  <Button Classes="railItem" Classes.open="{Binding IsOpen}" Content="{Binding Label}"
+                          Command="{Binding ToggleCommand}" DoubleTapped="OnRailDoubleTapped"
+                          ToolTip.Tip="{Binding Title}" />
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Border Width="20" Height="1" Margin="0,5" Classes="line" HorizontalAlignment="Center" />
+            <Button Classes="railItem" Content="+" HorizontalAlignment="Center" Click="OnSearchClick"
+                    ToolTip.Tip="{Binding Strings.RailMore}" />
+          </StackPanel>
+        </DockPanel>
+      </Border>
+
+      <controls:DockColumn Grid.Column="1" Stacks="{Binding LeftStacks}" IsVisible="{Binding IsLeftDockShown}" ClipToBounds="True" />
+      <Border Grid.Column="2" Classes="line" IsVisible="{Binding IsLeftDockShown}" />
+      <GridSplitter x:Name="LeftSplitter" Grid.Column="2" Classes="dock" Width="7" Margin="-3,0" ResizeDirection="Columns"
+                    IsVisible="{Binding IsLeftDockShown}" />
+
+      <Grid x:Name="Center" Grid.Column="3" RowDefinitions="*,1,150">
+        <!-- Document panes: the window splits into at most two, each with its own tab strip (1b). -->
+        <ItemsControl Grid.Row="0" ItemsSource="{Binding Panes}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <UniformGrid Rows="1" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DocumentPaneViewModel">
+              <DockPanel PointerPressed="OnPanePointerPressed" Background="{DynamicResource Chrome.Bg}">
+                <Border DockPanel.Dock="Left" Width="1" Classes="line" IsVisible="{Binding IsSecondary}" />
+                <DockPanel DockPanel.Dock="Top" Height="32" Margin="8,0">
+                  <TextBlock DockPanel.Dock="Right" Classes="mono dim" Text="{Binding Summary}" VerticalAlignment="Center" Margin="12,0,4,0" />
+                  <ItemsControl ItemsSource="{Binding Tabs}" VerticalAlignment="Bottom" ClipToBounds="True">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DocumentTabViewModel">
+                        <Button Classes="docTab" Classes.active="{Binding IsActive}" Command="{Binding ActivateCommand}"
+                                PointerReleased="OnTabPointerReleased"
+                                ToolTip.Tip="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.TabClose}">
+                          <StackPanel Orientation="Horizontal" Spacing="7">
+                            <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                            <Ellipse Width="5" Height="5" Fill="{DynamicResource State.Alert}" IsVisible="{Binding IsDirty}" VerticalAlignment="Center" />
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </DockPanel>
+                <Panel Background="{DynamicResource Canvas.Backdrop}">
+                  <ContentControl Content="{Binding ActiveView}" />
+                  <StackPanel IsVisible="{Binding !HasDocument}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
+                    <TextBlock Text="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.TabsEmptyTitle}"
+                               Foreground="#201e1d" FontSize="15" HorizontalAlignment="Center" />
+                    <TextBlock Classes="mono" Foreground="#8c201e1d" HorizontalAlignment="Center"
+                               Text="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.TabsEmptyHint}" />
+                  </StackPanel>
+                </Panel>
+              </DockPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- The single notification (SyncBanner): stays until its cause is resolved. -->
+        <Border Grid.Row="0" IsVisible="{Binding CurrentBanner, Converter={x:Static ObjectConverters.IsNotNull}}"
+                HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,44,0,0" Padding="12,6,6,6"
+                Background="{DynamicResource Chrome.Bg}" BoxShadow="{DynamicResource Shadow.Sm}">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{DynamicResource State.Accent}" />
+            <Ellipse Width="6" Height="6" VerticalAlignment="Center" Margin="-16,0,0,0"
+                     Fill="{DynamicResource State.Alert}" IsVisible="{Binding CurrentBanner.IsAlert, FallbackValue=False}" />
+            <TextBlock Text="{Binding CurrentBanner.Message, FallbackValue=''}" FontSize="12.5" VerticalAlignment="Center" />
+            <Button Classes="tagButton outline" Content="{Binding CurrentBanner.ActionLabel, FallbackValue=''}" Click="OnBannerAction"
+                    IsVisible="{Binding CurrentBanner.ActionLabel, Converter={x:Static ObjectConverters.IsNotNull}, FallbackValue=False}" />
+            <Button Classes="flat" Width="20" Height="20" HorizontalContentAlignment="Center" Click="OnBannerDismiss">
+              <TextBlock Classes="faint" Text="×" FontSize="14" Margin="0,-2,0,0" />
+            </Button>
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" Classes="line" IsVisible="{Binding IsBottomDockShown}" />
+        <GridSplitter x:Name="BottomSplitter" Grid.Row="1" Classes="dock" Height="7" Margin="0,-3" ResizeDirection="Rows"
+                      IsVisible="{Binding IsBottomDockShown}" />
+        <Panel Grid.Row="2" IsVisible="{Binding IsBottomDockShown}">
+          <views:DockStackView DataContext="{Binding BottomStack}" />
+        </Panel>
+      </Grid>
+
+      <Border Grid.Column="4" Classes="line" IsVisible="{Binding IsRightDockShown}" />
+      <GridSplitter x:Name="RightSplitter" Grid.Column="4" Classes="dock" Width="7" Margin="-3,0" ResizeDirection="Columns"
+                    IsVisible="{Binding IsRightDockShown}" />
+      <controls:DockColumn Grid.Column="5" Stacks="{Binding RightStacks}" IsVisible="{Binding IsRightDockShown}" ClipToBounds="True" />
+
+      <!-- Slide-over (2d): a rail panel over the canvas edge, one at a time, leaves on Esc. -->
+      <Border Grid.Column="1" Grid.ColumnSpan="3" Width="268" HorizontalAlignment="Left" ZIndex="10"
+              IsVisible="{Binding SlideOver, Converter={x:Static ObjectConverters.IsNotNull}}"
+              Background="{DynamicResource Chrome.Bg}" BoxShadow="{DynamicResource Shadow.Lg}">
+        <DockPanel Margin="13,14">
+          <DockPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock DockPanel.Dock="Right" Classes="mono faint" FontSize="10" Text="Esc" VerticalAlignment="Center" />
+            <Button DockPanel.Dock="Right" Classes="tagButton neutral" Content="{Binding Strings.SlideOverPin}" Margin="0,0,10,0"
+                    Click="OnSlideOverPin" ToolTip.Tip="{Binding Strings.SlideOverPinHint}" />
+            <TextBlock Text="{Binding SlideOver.Title, FallbackValue=''}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </DockPanel>
+          <ContentControl Content="{Binding SlideOverContent}" />
+        </DockPanel>
+      </Border>
+    </Grid>
+
+    <!-- ——— Status bar ——— -->
+    <Border Grid.Row="2" Background="{DynamicResource Chrome.Raised}">
+      <DockPanel Margin="14,0">
+        <ItemsControl DockPanel.Dock="Right" ItemsSource="{Binding StatusRight}" VerticalAlignment="Center">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="20" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="platform:StatusField">
+              <TextBlock Classes="mono dim" Classes.alertText="{Binding IsAlert}" Text="{Binding Text}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <StackPanel Orientation="Horizontal" Spacing="20" VerticalAlignment="Center">
+          <TextBlock Classes="mono dim" Text="{Binding Strings.StatusBusy}" IsVisible="{Binding IsBusy}" />
+          <ItemsControl ItemsSource="{Binding StatusLeft}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="20" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="platform:StatusField">
+                <TextBlock Classes="mono dim" Classes.alertText="{Binding IsAlert}" Text="{Binding Text}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </DockPanel>
+    </Border>
+
+    <!-- ——— Command palette (1b): 560 wide, 76 from the top ——— -->
+    <Panel x:Name="PaletteLayer" Grid.Row="0" Grid.RowSpan="3" IsVisible="{Binding IsPaletteOpen}" Background="#26000000"
+           PointerPressed="OnPaletteBackdropPressed">
+      <Border Width="560" VerticalAlignment="Top" HorizontalAlignment="Center" Margin="0,76,0,0"
+              Background="{DynamicResource Chrome.Bg}" BoxShadow="{DynamicResource Shadow.Lg}"
+              BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="1" PointerPressed="OnPalettePanelPressed">
+        <DockPanel>
+          <DockPanel DockPanel.Dock="Top" Margin="14,12">
+            <TextBlock DockPanel.Dock="Right" Classes="mono faint" Text="Esc" VerticalAlignment="Center" />
+            <TextBox x:Name="PaletteInput" Classes="paletteInput" Text="{Binding Palette.Query}"
+                     PlaceholderText="{Binding Strings.PalettePlaceholder}" />
+          </DockPanel>
+          <Border DockPanel.Dock="Top" Height="1" Classes="line" />
+          <Border DockPanel.Dock="Bottom" Height="1" Classes="line" />
+          <DockPanel DockPanel.Dock="Bottom" Margin="14,7">
+            <TextBlock Classes="mono faint" Text="{Binding Strings.PaletteFooter}" />
+          </DockPanel>
+          <Panel>
+            <TextBlock Classes="dim" Margin="14,14" Text="{Binding Strings.PaletteEmpty}"
+                       IsVisible="{Binding !Palette.Results.Count}" />
+            <ListBox x:Name="PaletteList" Classes="palette" ItemsSource="{Binding Palette.Results}"
+                     SelectedIndex="{Binding Palette.SelectedIndex}" MaxHeight="380"
+                     Tapped="OnPaletteItemTapped">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="services:CommandMatch">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="10">
+                    <controls:HighlightedText Match="{Binding}" FontSize="13.5" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Classes="mono dim" Text="{Binding Command.Scope}" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Classes="tag alert" IsVisible="{Binding Command.IsBeta}" Padding="6,1">
+                      <TextBlock Text="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.PaletteBeta}" />
+                    </Border>
+                    <TextBlock Grid.Column="3" Classes="mono faint" Text="{Binding Command.ShortcutText}" MinWidth="36"
+                               TextAlignment="Right" VerticalAlignment="Center" />
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+          </Panel>
+        </DockPanel>
+      </Border>
+    </Panel>
+  </Grid>
+</Window>

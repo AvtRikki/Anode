@@ -1,0 +1,37 @@
+<Solution>
+  <Folder Name="/core/">
+    <Project Path="src/core/Anode.Editing/Anode.Editing.csproj" />
+    <Project Path="src/core/Anode.Geometry/Anode.Geometry.csproj" />
+    <Project Path="src/core/Anode.Kicad/Anode.Kicad.csproj" />
+    <Project Path="src/core/Anode.Sexpr/Anode.Sexpr.csproj" />
+  </Folder>
+  <Folder Name="/render/">
+    <Project Path="src/render/Anode.Render.Avalonia/Anode.Render.Avalonia.csproj" />
+    <Project Path="src/render/Anode.Render.OpenGl/Anode.Render.OpenGl.csproj" />
+    <Project Path="src/render/Anode.Render.Skia/Anode.Render.Skia.csproj" />
+    <Project Path="src/render/Anode.Render/Anode.Render.csproj" />
+  </Folder>
+  <Folder Name="/app/">
+    <Project Path="src/app/Anode.Sdk/Anode.Sdk.csproj" />
+    <Project Path="src/app/Anode.Workbench/Anode.Workbench.csproj" />
+  </Folder>
+  <Folder Name="/plugins/">
+    <Project Path="src/plugins/Anode.Plugin.Pcb/Anode.Plugin.Pcb.csproj" />
+    <Project Path="src/plugins/Anode.Plugin.Schematic/Anode.Plugin.Schematic.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/core/">
+    <Project Path="tests/core/Anode.Editing.Tests/Anode.Editing.Tests.csproj" />
+    <Project Path="tests/core/Anode.Geometry.Tests/Anode.Geometry.Tests.csproj" />
+    <Project Path="tests/core/Anode.Kicad.Tests/Anode.Kicad.Tests.csproj" />
+    <Project Path="tests/core/Anode.Sexpr.Tests/Anode.Sexpr.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/render/">
+    <Project Path="tests/render/Anode.Render.OpenGl.Tests/Anode.Render.OpenGl.Tests.csproj" />
+    <Project Path="tests/render/Anode.Render.Skia.Tests/Anode.Render.Skia.Tests.csproj" />
+    <Project Path="tests/render/Anode.Render.Tests/Anode.Render.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/app/">
+    <Project Path="tests/app/Anode.Workbench.Tests/Anode.Workbench.Tests.csproj" />
+  </Folder>
+</Solution>

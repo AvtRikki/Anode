@@ -12,14 +12,14 @@ The viewer must draw large KiCad boards with smooth pan and zoom. The largest fi
 
 Rendering sits behind a backend-agnostic display list:
 
-- `Ecad.Rendering.SceneBuilder` turns a `Board` into per-layer `LinePrim`, `CirclePrim`, `PolygonPrim` and `TextPrim`
+- `Anode.Render.SceneBuilder` turns a `Board` into per-layer `LinePrim`, `CirclePrim`, `PolygonPrim` and `TextPrim`
   in scene millimetres (centred on the board outline, `float` precision).
 - `Camera2D` maps scene coordinates to screen pixels; `ViewState` is the per-frame snapshot a backend draws.
 - `HitTester` picks the topmost item; zones are only picked when nothing else is hit.
 
-The app chooses the backend at startup: `--renderer=skia|opengl` or `ECAD_RENDERER`.
+The app chooses the backend at startup: `--renderer=skia|opengl` or `ANODE_RENDERER`.
 
-## Prototype A: SkiaSharp (`Ecad.Rendering.Skia`)
+## Prototype A: SkiaSharp (`Anode.Render.Skia`)
 
 - One cached `SKPath` per layer and stroke width, one for circles, one for polygons.
 - Semi-transparent layers are composited with `SaveLayer`, so overlapping primitives don't stack alpha.
@@ -27,7 +27,7 @@ The app chooses the backend at startup: `--renderer=skia|opengl` or `ECAD_RENDER
 - Text is drawn in screen space with a system font and skipped below 4 px height.
 - In the app it runs inside an Avalonia `ICustomDrawOperation` through `ISkiaSharpApiLeaseFeature`.
 
-## Prototype B: OpenGL 3.3 / ES 3.0 (`Ecad.Rendering.OpenGL`)
+## Prototype B: OpenGL 3.3 / ES 3.0 (`Anode.Render.OpenGl`)
 
 - Silk.NET bindings over the context from Avalonia's `OpenGlControlBase` (or CGL in tests).
 - Segments and discs are instanced quads with signed-distance fragment shaders: round caps and one-pixel
@@ -47,9 +47,9 @@ and MSAA on polygon edges.
 
 Apple M4, Debug build, 1600×1000, whole board fitted.
 
-- **Skia:** offscreen CPU raster, `tests/Ecad.Rendering.Skia.Tests`.
+- **Skia:** offscreen CPU raster, `tests/render/Anode.Render.Skia.Tests`.
 - **OpenGL:** headless CGL 4.1 context on Metal, 60 frames of zoom and pan, each timed with `glFinish`,
-  `tests/Ecad.Rendering.OpenGL.Tests`.
+  `tests/render/Anode.Render.OpenGl.Tests`.
 
 | Board | Primitives | Skia cached frame (CPU) | OpenGL median / p95 (GPU) | OpenGL first frame | Triangulation (background) | GPU buffers |
 |---|---:|---:|---:|---:|---:|---:|
@@ -78,7 +78,7 @@ Skia stays useful for text, printing and PNG export.
 
 ## Text
 
-Text is laid out with KiCad's newstroke font (`Ecad.Rendering.Fonts`), following KiCad's placement rules,
+Text is laid out with KiCad's newstroke font (`Anode.Render.Fonts`), following KiCad's placement rules,
 and emitted by `SceneBuilder` as ordinary stroke segments. Both backends, hit-testing and net highlighting
 therefore handle text with no special path; the Skia system-font text was removed.
 This raises the Jetson scene from 446k to 1.03M primitives: OpenGL median 5.2 ms, p95 10.2 ms, 31.5 MB of buffers.

@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Anode.Workbench.ViewModels"
+             x:Class="Anode.Workbench.Views.DockStackView"
+             x:DataType="vm:DockStackViewModel">
+  <!-- Stack = tab header + body + collapse. Separated from neighbours by a line (DockColumn), not a frame. -->
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" Height="30" Margin="12,6,12,0" ColumnDefinitions="*,Auto">
+      <ItemsControl ItemsSource="{Binding Tabs}" VerticalAlignment="Center">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <StackPanel Orientation="Horizontal" Spacing="10" />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:PanelTabViewModel">
+            <Button Classes="stackTab" Classes.active="{Binding IsActive}" Content="{Binding Title}" Command="{Binding ActivateCommand}">
+              <Button.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="{Binding SendToRailLabel}" Command="{Binding SendToRailCommand}" />
+                </ContextMenu>
+              </Button.ContextMenu>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+      <Button Grid.Column="1" Classes="flat" Width="18" Height="18" HorizontalContentAlignment="Center"
+              Command="{Binding ToggleCollapsedCommand}" ToolTip.Tip="{Binding CollapseTip}">
+        <TextBlock Classes="mono faint" FontSize="10" Text="{Binding ChevronText}" />
+      </Button>
+    </Grid>
+    <ContentControl Content="{Binding Content}" Margin="12,4,12,10" IsVisible="{Binding !IsCollapsed}" />
+  </DockPanel>
+</UserControl>

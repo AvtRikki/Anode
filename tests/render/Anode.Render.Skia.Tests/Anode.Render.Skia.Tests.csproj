@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\render\Anode.Render.Skia\Anode.Render.Skia.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Translations, read by JsonTextCatalog.FromAssembly. -->
+    <EmbeddedResource Include="i18n\*.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="AvaloniaUI.DiagnosticsSupport" Version="2.2.3">
+      <IncludeAssets Condition="'$(Configuration)' != 'Debug'">None</IncludeAssets>
+      <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Anode.Sdk\Anode.Sdk.csproj" />
+    <!-- Built before the shell, then copied into plugins/; the shell does not reference its assemblies. -->
+    <ProjectReference Include="..\..\plugins\Anode.Plugin.Pcb\Anode.Plugin.Pcb.csproj" ReferenceOutputAssembly="false" Private="false" />
+    <ProjectReference Include="..\..\plugins\Anode.Plugin.Schematic\Anode.Plugin.Schematic.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <Target Name="CopyPlugins" AfterTargets="Build">
+    <ItemGroup>
+      <PcbPluginFiles Include="$(MSBuildThisFileDirectory)..\..\plugins\Anode.Plugin.Pcb\bin\$(Configuration)\$(TargetFramework)\**\*" />
+      <SchematicPluginFiles Include="$(MSBuildThisFileDirectory)..\..\plugins\Anode.Plugin.Schematic\bin\$(Configuration)\$(TargetFramework)\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(PcbPluginFiles)" DestinationFolder="$(OutDir)plugins\pcb\%(RecursiveDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(SchematicPluginFiles)" DestinationFolder="$(OutDir)plugins\schematic\%(RecursiveDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

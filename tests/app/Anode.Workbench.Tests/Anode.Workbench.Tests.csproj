@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\app\Anode.Workbench\Anode.Workbench.csproj" />
+    <!-- Built so the plugin tests can load it from its own output folder. -->
+    <ProjectReference Include="..\..\..\src\plugins\Anode.Plugin.Pcb\Anode.Plugin.Pcb.csproj" ReferenceOutputAssembly="false" Private="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" Version="12.1.2" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,455 @@
+using System.Numerics;
+using Anode.Geometry;
+using Anode.Kicad;
+using Anode.Render.Fonts;
+
+namespace Anode.Render;
+
+public static class SceneBuilder
+{
+    /// <summary>Converts a board into per-layer primitives. Safe to run on a background thread.</summary>
+    public static BoardScene Build(Board board)
+    {
+        var bounds = board.ComputeBounds();
+        var scene = new BoardScene(board, bounds.IsEmpty ? Vector2L.Zero : bounds.Center);
+        var builder = new Builder(scene);
+
+        // Board.Items yields graphics and zones first, so tracks, pads and vias draw on top of fills.
+        foreach (var item in board.Items)
+        {
+            builder.AddTopLevel(item);
+        }
+
+        if (!bounds.IsEmpty)
+        {
+            var min = scene.ToScene(new Vector2D(bounds.MinX, bounds.MinY));
+            var max = scene.ToScene(new Vector2D(bounds.MaxX, bounds.MaxY));
+            scene.BoardOutline = new RectD(min.X, min.Y, max.X, max.Y);
+        }
+
+        if (LayerStyle.Inks == InkSet.Print)
+        {
+            AddBoardBody(scene);
+        }
+
+        scene.Commit();
+        return scene;
+    }
+
+    /// <summary>
+    /// The sheet the board is printed on: the area inside <c>Edge.Cuts</c>, filled under every other layer so copper
+    /// reads as ink on a board and not as paint on the desk. Built from the already tessellated outline segments, so
+    /// arcs and rounded corners come along; a board whose outline is not closed simply gets no body.
+    /// </summary>
+    private static void AddBoardBody(BoardScene scene)
+    {
+        if (scene.Find("Edge.Cuts") is not { Lines.Count: > 2 } edge)
+        {
+            return;
+        }
+
+        var body = scene.Layer(LayerStyle.BoardBody);
+        foreach (var loop in OutlineLoops.Build(edge.Lines))
+        {
+            body.Polygons.Add(new PolygonPrim(loop, OutlineLoops.NoOwner));
+        }
+    }
+
+    /// <summary>
+    /// Adds primitives for top-level items that were changed or restored. Remove their old primitives first with
+    /// <see cref="BoardScene.Remove"/>.
+    /// </summary>
+    public static void AddItems(BoardScene scene, IEnumerable<BoardItem> topLevelItems)
+    {
+        var builder = new Builder(scene);
+        foreach (var item in topLevelItems)
+        {
+            builder.AddTopLevel(item);
+        }
+
+        scene.Commit();
+    }
+
+    private sealed class Builder(BoardScene scene)
+    {
+        private const double Mm = Units.NmPerMm;
+
+        public void AddTopLevel(BoardItem item)
+        {
+            switch (item)
+            {
+                case Footprint footprint:
+                    AddFootprint(footprint);
+                    break;
+                case Segment segment:
+                    AddSegment(segment, scene.AddOwner(segment));
+                    break;
+                case TrackArc arc:
+                    AddArc(arc, scene.AddOwner(arc));
+                    break;
+                case Via via:
+                    AddVia(via, scene.AddOwner(via));
+                    break;
+                case Zone zone:
+                    AddZone(zone, scene.AddOwner(zone));
+                    break;
+                case Shape shape:
+                    AddShape(shape, scene.AddOwner(shape));
+                    break;
+                case Text text:
+                    AddText(text, scene.AddOwner(text));
+                    break;
+            }
+        }
+
+        private void AddFootprint(Footprint fp)
+        {
+            foreach (var shape in fp.Shapes)
+            {
+                AddShape(shape, scene.AddOwner(shape));
+            }
+
+            foreach (var zone in fp.Zones)
+            {
+                AddZone(zone, scene.AddOwner(zone));
+            }
+
+            foreach (var pad in fp.Pads)
+            {
+                AddPad(pad, scene.AddOwner(pad));
+            }
+
+            foreach (var text in fp.Texts)
+            {
+                if (!text.IsHidden && text.LayerName is not null)
+                {
+                    AddText(text, scene.AddOwner(text));
+                }
+            }
+        }
+
+        private void AddSegment(Segment segment, int owner)
+        {
+            foreach (string layer in segment.LayerNames)
+            {
+                Line(layer, segment.Start.ToDouble(), segment.End.ToDouble(), segment.Width, owner);
+            }
+        }
+
+        private void AddArc(TrackArc arc, int owner)
+        {
+            if (arc.Geometry is not { } geometry)
+            {
+                return;
+            }
+
+            var points = ArcMath.Tessellate(geometry);
+            foreach (string layer in arc.LayerNames)
+            {
+                Polyline(layer, points, arc.Width, Transform2D.Identity, false, owner);
+            }
+        }
+
+        private void AddShape(Shape shape, int owner)
+        {
+            var t = shape.ToBoard;
+            double width = shape.StrokeWidth * t.ScaleFactor;
+            foreach (string layer in Expand(shape.LayerNames))
+            {
+                switch (shape.Kind)
+                {
+                    case ShapeKind.Line:
+                        Line(layer, t.Apply(shape.Start), t.Apply(shape.End), width, owner);
+                        break;
+
+                    case ShapeKind.Rect:
+                        var s = shape.Start.ToDouble();
+                        var e = shape.End.ToDouble();
+                        Vector2D[] corners = [s, new(e.X, s.Y), e, new(s.X, e.Y)];
+                        Outline(layer, corners, width, shape.IsFilled, t, owner);
+                        break;
+
+                    case ShapeKind.Circle:
+                        var center = t.Apply(shape.Center);
+                        double radius = shape.Radius * t.ScaleFactor;
+                        if (shape.IsFilled)
+                        {
+                            Circle(layer, center, radius + width / 2, owner);
+                        }
+                        else
+                        {
+                            var ring = ArcMath.Tessellate(new Arc(center, radius, 0, 2 * Math.PI));
+                            Polyline(layer, ring, width, Transform2D.Identity, false, owner);
+                        }
+
+                        break;
+
+                    case ShapeKind.Arc:
+                        if (shape.ArcGeometry is { } arc)
+                        {
+                            Polyline(layer, ArcMath.Tessellate(arc), width, t, false, owner);
+                        }
+
+                        break;
+
+                    case ShapeKind.Polygon:
+                        var points = Array.ConvertAll(shape.Points, p => p.ToDouble());
+                        Outline(layer, points, width, shape.IsFilled, t, owner);
+                        break;
+
+                    case ShapeKind.Bezier:
+                        if (shape.Points is { Length: 4 } cp)
+                        {
+                            Polyline(layer, Bezier(cp), width, t, false, owner);
+                        }
+
+                        break;
+                }
+            }
+        }
+
+        private void AddPad(Pad pad, int owner)
+        {
+            var t = pad.ToBoard;
+            var drill = pad.Drill;
+            var offset = drill?.Offset.ToDouble() ?? Vector2D.Zero;
+            var parts = PadOutline.Build(pad, pad.Shape, pad.Size, offset).ToList();
+
+            foreach (string layer in Expand(pad.LayerNames))
+            {
+                foreach (var part in parts)
+                {
+                    switch (part)
+                    {
+                        case PadOutline.Disc d:
+                            Circle(layer, t.Apply(d.Center), d.Radius * t.ScaleFactor, owner);
+                            break;
+                        case PadOutline.Stadium st:
+                            Line(layer, t.Apply(st.A), t.Apply(st.B), st.Width * t.ScaleFactor, owner);
+                            break;
+                        case PadOutline.Polygon poly:
+                            Polygon(layer, poly.Points, t, owner);
+                            break;
+                    }
+                }
+
+                if (pad.Shape == PadShape.Custom)
+                {
+                    foreach (var primitive in pad.Primitives)
+                    {
+                        AddPrimitive(layer, primitive, owner);
+                    }
+                }
+            }
+
+            if (drill is { } hole && hole.Size.X > 0)
+            {
+                string holeLayer = pad.Type == PadType.NonPlatedThroughHole ? LayerStyle.NonPlatedHoles : LayerStyle.PlatedHoles;
+                if (hole.IsOval && hole.Size.X != hole.Size.Y)
+                {
+                    foreach (var part in PadOutline.Build(pad, PadShape.Oval, hole.Size, Vector2D.Zero))
+                    {
+                        if (part is PadOutline.Stadium st)
+                        {
+                            Line(holeLayer, t.Apply(st.A), t.Apply(st.B), st.Width * t.ScaleFactor, owner);
+                        }
+                        else if (part is PadOutline.Disc d)
+                        {
+                            Circle(holeLayer, t.Apply(d.Center), d.Radius * t.ScaleFactor, owner);
+                        }
+                    }
+                }
+                else
+                {
+                    Circle(holeLayer, t.Apply(Vector2D.Zero), hole.Size.X / 2.0 * t.ScaleFactor, owner);
+                }
+            }
+        }
+
+        private void AddVia(Via via, int owner)
+        {
+            var layers = via.LayerNames;
+            var center = via.Position.ToDouble();
+            IEnumerable<string> copper = layers.Count == 2
+                ? scene.Board.Layers.CopperSpan(layers[0], layers[1]).Select(l => l.Name)
+                : Expand(layers);
+
+            foreach (string layer in copper)
+            {
+                Circle(layer, center, via.Size / 2.0, owner);
+            }
+
+            if (via.Drill > 0)
+            {
+                Circle(LayerStyle.PlatedHoles, center, via.Drill / 2.0, owner);
+            }
+        }
+
+        private void AddZone(Zone zone, int owner)
+        {
+            foreach (var fill in zone.FilledPolygons)
+            {
+                if (fill.Points.Length >= 3)
+                {
+                    Polygon(fill.LayerName, Array.ConvertAll(fill.Points, p => p.ToDouble()), Transform2D.Identity, owner);
+                }
+            }
+        }
+
+        private void AddText(Text text, int owner)
+        {
+            string value = text.DisplayValue;
+            if (text.LayerName is not { } layerName || string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            var size = text.Size;
+            double scale = text.ToBoard.ScaleFactor;
+            var style = new StrokeTextStyle(
+                size.X * scale,
+                size.Y * scale,
+                text.PenWidth * scale,
+                text.HorizontalJustify switch { "left" => TextHAlign.Left, "right" => TextHAlign.Right, _ => TextHAlign.Center },
+                text.VerticalJustify switch { "top" => TextVAlign.Top, "bottom" => TextVAlign.Bottom, _ => TextVAlign.Center },
+                text.DrawAngle,
+                text.IsMirrored,
+                text.IsItalic,
+                text.LineSpacing);
+
+            // Text becomes ordinary stroked segments, so every backend, hit-testing and highlighting handle it.
+            var layer = scene.Layer(layerName);
+            float width = (float)(style.PenWidth / Mm);
+            StrokeTextLayout.Layout(StrokeFont.Default, value, text.BoardPosition.ToDouble(), style,
+                (a, b) => AddLine(layer, scene.ToScene(a), scene.ToScene(b), width, owner));
+        }
+
+        private void Line(string layer, Vector2D a, Vector2D b, double widthNm, int owner) =>
+            AddLine(scene.Layer(layer), scene.ToScene(a), scene.ToScene(b), (float)(widthNm / Mm), owner);
+
+        private void AddLine(LayerGeometry layer, Vector2 a, Vector2 b, float width, int owner)
+        {
+            layer.Lines.Add(new LinePrim(a, b, width, owner));
+            float h = width / 2;
+            scene.GrowOwner(owner, new RectD(Math.Min(a.X, b.X) - h, Math.Min(a.Y, b.Y) - h, Math.Max(a.X, b.X) + h, Math.Max(a.Y, b.Y) + h));
+        }
+
+        private void Circle(string layer, Vector2D center, double radiusNm, int owner)
+        {
+            var c = scene.ToScene(center);
+            float r = (float)(radiusNm / Mm);
+            scene.Layer(layer).Circles.Add(new CirclePrim(c, r, owner));
+            scene.GrowOwner(owner, new RectD(c.X - r, c.Y - r, c.X + r, c.Y + r));
+        }
+
+        private void Polygon(string layer, Vector2D[] points, Transform2D t, int owner)
+        {
+            var scenePoints = new Vector2[points.Length];
+            for (int i = 0; i < points.Length; i++)
+            {
+                scenePoints[i] = scene.ToScene(t.Apply(points[i]));
+            }
+
+            var polygon = new PolygonPrim(scenePoints, owner);
+            scene.Layer(layer).Polygons.Add(polygon);
+            scene.GrowOwner(owner, polygon.Bounds);
+        }
+
+        private void Polyline(string layer, IReadOnlyList<Vector2D> points, double widthNm, Transform2D t, bool closed, int owner)
+        {
+            var geometry = scene.Layer(layer);
+            float w = (float)(widthNm / Mm);
+            int n = points.Count;
+            for (int i = 1; i < n + (closed ? 1 : 0); i++)
+            {
+                AddLine(geometry, scene.ToScene(t.Apply(points[i - 1])), scene.ToScene(t.Apply(points[i % n])), w, owner);
+            }
+        }
+
+        private void Outline(string layer, Vector2D[] points, double widthNm, bool filled, Transform2D t, int owner)
+        {
+            if (filled && points.Length >= 3)
+            {
+                Polygon(layer, points, t, owner);
+            }
+
+            if (widthNm > 0 || !filled)
+            {
+                Polyline(layer, points, widthNm, t, closed: true, owner);
+            }
+        }
+
+        private void AddPrimitive(string layer, Shape primitive, int owner)
+        {
+            var t = primitive.ToBoard;
+            double width = primitive.StrokeWidth * t.ScaleFactor;
+            switch (primitive.Kind)
+            {
+                case ShapeKind.Polygon:
+                    // Pad primitives are filled unless explicitly marked otherwise.
+                    var pts = Array.ConvertAll(primitive.Points, p => p.ToDouble());
+                    bool filled = primitive.Node.Find("fill") is null || primitive.IsFilled;
+                    Outline(layer, pts, width, filled, t, owner);
+                    break;
+                case ShapeKind.Circle when primitive.Node.Find("fill") is null || primitive.IsFilled:
+                    Circle(layer, t.Apply(primitive.Center), primitive.Radius * t.ScaleFactor + width / 2, owner);
+                    break;
+                default:
+                    AddShapeOnLayer(primitive, layer, owner);
+                    break;
+            }
+        }
+
+        private void AddShapeOnLayer(Shape shape, string layer, int owner)
+        {
+            var t = shape.ToBoard;
+            double width = shape.StrokeWidth * t.ScaleFactor;
+            switch (shape.Kind)
+            {
+                case ShapeKind.Line:
+                    Line(layer, t.Apply(shape.Start), t.Apply(shape.End), width, owner);
+                    break;
+                case ShapeKind.Arc when shape.ArcGeometry is { } arc:
+                    Polyline(layer, ArcMath.Tessellate(arc), width, t, false, owner);
+                    break;
+                case ShapeKind.Rect:
+                    var s = shape.Start.ToDouble();
+                    var e = shape.End.ToDouble();
+                    Outline(layer, [s, new(e.X, s.Y), e, new(s.X, e.Y)], width, shape.IsFilled, t, owner);
+                    break;
+                case ShapeKind.Circle:
+                    var ring = ArcMath.Tessellate(new Arc(shape.Center.ToDouble(), shape.Radius, 0, 2 * Math.PI));
+                    Polyline(layer, ring, width, t, false, owner);
+                    break;
+            }
+        }
+
+        private IEnumerable<string> Expand(IReadOnlyList<string> layerNames)
+        {
+            foreach (var name in layerNames)
+            {
+                foreach (var expanded in scene.Board.Layers.Expand(name))
+                {
+                    yield return expanded;
+                }
+            }
+        }
+
+        private static Vector2D[] Bezier(Vector2L[] cp)
+        {
+            const int steps = 24;
+            var p0 = cp[0].ToDouble();
+            var p1 = cp[1].ToDouble();
+            var p2 = cp[2].ToDouble();
+            var p3 = cp[3].ToDouble();
+            var result = new Vector2D[steps + 1];
+            for (int i = 0; i <= steps; i++)
+            {
+                double u = (double)i / steps, v = 1 - u;
+                result[i] = p0 * (v * v * v) + p1 * (3 * v * v * u) + p2 * (3 * v * u * u) + p3 * (u * u * u);
+            }
+
+            return result;
+        }
+    }
+}

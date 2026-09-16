@@ -1,0 +1,97 @@
+{
+  "scope": { "board": "board" },
+  "pcb": {
+    "document": { "label": "KiCad board", "untitled": "board" },
+    "panel": { "layers": "Layers", "layers.rail": "La" },
+    "layers": {
+      "empty": "Layers appear once a board is open",
+      "all": "All layers",
+      "fewer": "Main layers"
+    },
+    "command": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "delete": "Delete selection",
+      "move": "Move selection",
+      "rotate": "Rotate by 90°",
+      "fit": "Fit board to window",
+      "flip": "View from below",
+      "highlightNet": "Net highlight"
+    },
+    "summary": { "board": "board · {0} {1}" },
+    "layer": { "one": "layer", "other": "layers" },
+    "net": { "one": "net", "other": "nets" },
+    "status": {
+      "cursor": "X {0} Y {1} {2}",
+      "selected": "selected: {0}",
+      "net": "net: {0}",
+      "checks": "checks: {0}"
+    },
+    "issue": {
+      "oldFormat": { "title": "Old format", "detail": "The file is older than KiCad 8; saving may change its structure." },
+      "newFormat": { "title": "Newer format", "detail": "The board comes from a newer KiCad; unknown fields are preserved as they are." },
+      "version": "version {0}",
+      "unrouted": { "title": "Unrouted" }
+    },
+    "selection": { "multi": "{0} objects", "group": "group selection" },
+    "item": {
+      "footprint": "Footprint",
+      "pad": "pad",
+      "track": "Track",
+      "arc": "Track arc",
+      "via": "Via",
+      "zone": "Zone",
+      "ruleArea": "Rule area",
+      "graphic": "Graphic · {0}",
+      "text": "Text",
+      "textField": "Text · {0}",
+      "other": "Object"
+    },
+    "shape": {
+      "line": "line",
+      "rect": "rectangle",
+      "circle": "circle",
+      "arc": "arc",
+      "polygon": "polygon",
+      "bezier": "curve",
+      "unsupported": "unsupported"
+    },
+    "side": { "top": "top", "bottom": "bottom" },
+    "value": { "yes": "yes", "no": "no", "none": "—", "component": "component" },
+    "units": { "mm": "mm" },
+    "property": {
+      "reference": "Reference",
+      "value": "Value",
+      "library": "Library",
+      "position": "Position",
+      "angle": "Angle",
+      "side": "Side",
+      "pads": "Pads",
+      "component": "Component",
+      "number": "Number",
+      "type": "Type",
+      "shape": "Shape",
+      "size": "Size",
+      "drill": "Drill",
+      "layers": "Layers",
+      "layer": "Layer",
+      "net": "Net",
+      "start": "Start",
+      "middle": "Middle",
+      "end": "End",
+      "width": "Width",
+      "length": "Length",
+      "diameter": "Diameter",
+      "name": "Name",
+      "polygons": "Polygons",
+      "kind": "Kind",
+      "owner": "Owner",
+      "stroke": "Stroke",
+      "filled": "Filled",
+      "text": "Text",
+      "height": "Height",
+      "uuid": "UUID"
+    },
+    "log": { "loaded": "{0}: {1} footprints, {2} primitives.", "activated": "{0} {1}: .kicad_pcb, layers panel." }
+  }
+}

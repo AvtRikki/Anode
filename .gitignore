@@ -9,3 +9,6 @@ TestResults/
 BenchmarkDotNet.Artifacts/
 test-data/
 test-output/
+
+# Design exports: kept next to the repo, not in it
+Design.pdf

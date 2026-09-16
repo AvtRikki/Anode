@@ -1,0 +1,9 @@
+{
+  "id": "anode.schematic",
+  "name": "KiCad schematic",
+  "version": "0.1.0",
+  "assembly": "Anode.Plugin.Schematic.dll",
+  "entryType": "Anode.Plugin.Schematic.SchematicPlugin",
+  "contractVersion": 1,
+  "description": "Viewing .kicad_sch sheets: symbols, wires, labels, hierarchy."
+}

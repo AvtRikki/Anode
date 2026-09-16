@@ -1,0 +1,380 @@
+using Anode.Geometry;
+using Anode.Kicad;
+using Anode.Kicad.Editing;
+using Anode.Render;
+
+namespace Anode.Editing;
+
+/// <summary>An in-progress move: the moved items' primitives are drawn with <see cref="PreviewTransform"/> until committed.</summary>
+public sealed class MoveOperation
+{
+    internal MoveOperation(IReadOnlyList<BoardItem> items, IReadOnlyList<LayerGeometry> preview, Vector2L anchorNm, Vector2D startCursorNm)
+    {
+        Items = items;
+        Preview = preview;
+        AnchorNm = anchorNm;
+        StartCursorNm = startCursorNm;
+    }
+
+    public IReadOnlyList<BoardItem> Items { get; }
+
+    /// <summary>Primitives of the moved items, removed from the scene for the duration of the move.</summary>
+    public IReadOnlyList<LayerGeometry> Preview { get; }
+
+    /// <summary>Point of the grabbed item that snaps to the grid.</summary>
+    public Vector2L AnchorNm { get; }
+
+    public Vector2D StartCursorNm { get; }
+
+    public Vector2L Delta { get; internal set; }
+
+    /// <summary>Degrees, counter-clockwise on screen, about the anchor.</summary>
+    public double Rotation { get; internal set; }
+
+    /// <summary>Scene-space (mm) transform for <see cref="Preview"/>.</summary>
+    public Transform2D PreviewTransform { get; internal set; } = Transform2D.Identity;
+}
+
+/// <summary>
+/// Editing session for one board: selection, moves, rotation, deletion and undo, keeping the scene in sync.
+/// UI-agnostic; coordinates passed in are scene millimetres.
+/// </summary>
+public sealed class BoardEditor
+{
+    private readonly List<BoardItem> _selection = [];
+
+    public BoardEditor(BoardScene scene)
+    {
+        Scene = scene;
+    }
+
+    public BoardScene Scene { get; }
+
+    public Board Board => Scene.Board;
+
+    public UndoStack History { get; } = new();
+
+    /// <summary>Grid step for move snapping; 0 disables snapping.</summary>
+    public long GridNm { get; set; } = 100_000;
+
+    /// <summary>Triangulate polygons of rebuilt items right away (needed by the OpenGL backend).</summary>
+    public bool TriangulateChanges { get; set; }
+
+    public IReadOnlyList<BoardItem> Selection => _selection;
+
+    /// <summary>Scene owners of the selected items. A new set instance is published on every change.</summary>
+    public IReadOnlySet<int> SelectedOwners { get; private set; } = new HashSet<int>();
+
+    /// <summary>The primitive owner last clicked, used to pick a net to highlight.</summary>
+    public int FocusOwner { get; private set; } = -1;
+
+    public MoveOperation? Move { get; private set; }
+
+    /// <summary>Net of the clicked pad, track or via when exactly one item is selected.</summary>
+    public Net? FocusNet =>
+        _selection.Count == 1 && Scene.IsLive(FocusOwner) && ReferenceEquals(Scene.TopLevelOf(FocusOwner), _selection[0])
+            ? Scene.OwnerNet(FocusOwner) is { IsUnconnected: false } net ? net : null
+            : null;
+
+    public event Action? SelectionChanged;
+
+    /// <summary>Scene primitives changed (edit, undo, move started or ended).</summary>
+    public event Action? SceneChanged;
+
+    public bool IsSelected(BoardItem item) => _selection.Contains(item);
+
+    /// <summary>Selects the top-level item of <paramref name="owner"/>; with <paramref name="toggle"/> adds or removes it.</summary>
+    public void Click(int owner, bool toggle)
+    {
+        if (!Scene.IsLive(owner))
+        {
+            if (!toggle)
+            {
+                SetSelection([]);
+            }
+
+            return;
+        }
+
+        var top = Scene.TopLevelOf(owner);
+        FocusOwner = owner;
+        if (!toggle)
+        {
+            _selection.Clear();
+            _selection.Add(top);
+        }
+        else if (!_selection.Remove(top))
+        {
+            _selection.Add(top);
+        }
+
+        PublishSelection();
+    }
+
+    public void SetSelection(IEnumerable<BoardItem> items)
+    {
+        _selection.Clear();
+        foreach (var item in items)
+        {
+            if (!_selection.Contains(item))
+            {
+                _selection.Add(item);
+            }
+        }
+
+        PublishSelection();
+    }
+
+    /// <summary>
+    /// Selects items inside <paramref name="box"/> (scene mm): fully enclosed ones, or with
+    /// <paramref name="crossing"/> everything the box touches.
+    /// </summary>
+    public void SelectInBox(RectD box, bool crossing, bool toggle)
+    {
+        if (!toggle)
+        {
+            _selection.Clear();
+        }
+
+        var candidates = new List<BoardItem>();
+        foreach (var top in Scene.TopLevelItems)
+        {
+            var bounds = Scene.BoundsOf(top);
+            bool hit = crossing
+                ? box.Intersects(bounds)
+                : !bounds.IsEmpty && box.Contains(bounds.MinX, bounds.MinY) && box.Contains(bounds.MaxX, bounds.MaxY);
+
+            if (hit)
+            {
+                candidates.Add(top);
+            }
+        }
+
+        // Bounds only narrow crossing selection down; an outline's bounds cover the whole board.
+        IEnumerable<BoardItem> hits = crossing
+            ? candidates.Where(SelectionGeometry.Touching(Scene, box, candidates).Contains)
+            : candidates;
+
+        foreach (var top in hits)
+        {
+            if (toggle && _selection.Remove(top))
+            {
+                continue;
+            }
+
+            _selection.Add(top);
+        }
+
+        FocusOwner = -1;
+        PublishSelection();
+    }
+
+    /// <summary>Starts moving the movable part of the selection, grabbing <paramref name="grabbed"/> if it is selected.</summary>
+    public bool BeginMove(BoardItem? grabbed, Vector2D cursorScene)
+    {
+        if (Move is not null)
+        {
+            return false;
+        }
+
+        var items = _selection.Where(BoardEdits.CanTransform).ToList();
+        if (items.Count == 0)
+        {
+            return false;
+        }
+
+        var anchorItem = grabbed is not null && items.Contains(grabbed) ? grabbed : items[0];
+        var preview = Scene.Remove(items, collect: true);
+        Move = new MoveOperation(items, preview, BoardEdits.Anchor(anchorItem), Scene.ToBoardNm(cursorScene));
+        SceneChanged?.Invoke();
+        return true;
+    }
+
+    public void UpdateMove(Vector2D cursorScene)
+    {
+        if (Move is not { } move)
+        {
+            return;
+        }
+
+        var cursor = Scene.ToBoardNm(cursorScene);
+        var raw = new Vector2L((long)Math.Round(cursor.X - move.StartCursorNm.X), (long)Math.Round(cursor.Y - move.StartCursorNm.Y));
+        move.Delta = Snap(move.AnchorNm + raw) - move.AnchorNm;
+        UpdatePreviewTransform(move);
+    }
+
+    public void CommitMove()
+    {
+        if (Move is not { } move)
+        {
+            return;
+        }
+
+        Move = null;
+        if (move.Delta == Vector2L.Zero && move.Rotation == 0)
+        {
+            AddToScene(move.Items);
+            return;
+        }
+
+        var (items, anchor, rotation, delta) = (move.Items, move.AnchorNm, move.Rotation, move.Delta);
+        var command = new ModifyItemsCommand(rotation == 0 ? "Move" : "Move and rotate", items, () =>
+        {
+            foreach (var item in items)
+            {
+                BoardEdits.Transform(item, anchor, rotation, delta);
+            }
+        });
+
+        Run(command, removedFromScene: true);
+    }
+
+    public void CancelMove()
+    {
+        if (Move is not { } move)
+        {
+            return;
+        }
+
+        Move = null;
+        AddToScene(move.Items);
+    }
+
+    /// <summary>Rotates the selection (or the move in progress) counter-clockwise by <paramref name="degrees"/>.</summary>
+    public void Rotate(double degrees)
+    {
+        if (Move is { } move)
+        {
+            move.Rotation = KiCadNumber.Normalize360(move.Rotation + degrees);
+            UpdatePreviewTransform(move);
+            return;
+        }
+
+        var items = _selection.Where(BoardEdits.CanTransform).ToList();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var pivot = items.Count == 1 ? BoardEdits.Anchor(items[0]) : SelectionCenter(items);
+        Run(new ModifyItemsCommand("Rotate", items, () =>
+        {
+            foreach (var item in items)
+            {
+                BoardEdits.Transform(item, pivot, degrees, default);
+            }
+        }));
+    }
+
+    public void DeleteSelection()
+    {
+        if (Move is not null || _selection.Count == 0)
+        {
+            return;
+        }
+
+        var items = _selection.ToList();
+        _selection.Clear();
+        Run(new DeleteItemsCommand(Board, items));
+    }
+
+    public void Undo()
+    {
+        CancelMove();
+        if (History.Undo() is { } command)
+        {
+            Refresh(command.Affected);
+        }
+    }
+
+    public void Redo()
+    {
+        CancelMove();
+        if (History.Redo() is { } command)
+        {
+            Refresh(command.Affected);
+        }
+    }
+
+    public void Save(string path)
+    {
+        Board.Save(path);
+        History.MarkSaved();
+    }
+
+    public Vector2L Snap(Vector2L point) =>
+        GridNm <= 0 ? point : new Vector2L(SnapValue(point.X), SnapValue(point.Y));
+
+    private long SnapValue(long value) => (long)Math.Round((double)value / GridNm, MidpointRounding.AwayFromZero) * GridNm;
+
+    private Vector2L SelectionCenter(IEnumerable<BoardItem> items)
+    {
+        var bounds = RectD.Empty;
+        foreach (var item in items)
+        {
+            bounds = bounds.Union(Scene.BoundsOf(item));
+        }
+
+        var center = Scene.ToBoardNm(new Vector2D((bounds.MinX + bounds.MaxX) / 2, (bounds.MinY + bounds.MaxY) / 2));
+        return Snap(center.Round());
+    }
+
+    private void UpdatePreviewTransform(MoveOperation move)
+    {
+        var anchor = Scene.ToSceneMm(move.AnchorNm.ToDouble());
+        double dx = (double)move.Delta.X / Units.NmPerMm;
+        double dy = (double)move.Delta.Y / Units.NmPerMm;
+        move.PreviewTransform = Transform2D.Translation(-anchor.X, -anchor.Y)
+            .Then(KiCadTransforms.Rotation(move.Rotation))
+            .Then(Transform2D.Translation(anchor.X + dx, anchor.Y + dy));
+    }
+
+    private void Run(IBoardCommand command, bool removedFromScene = false)
+    {
+        if (!removedFromScene)
+        {
+            Scene.Remove(command.Affected);
+        }
+
+        try
+        {
+            History.Execute(command);
+        }
+        finally
+        {
+            AddToScene(command.Affected.Where(i => i.IsAttached));
+            PublishSelection();
+        }
+    }
+
+    private void Refresh(IReadOnlyList<BoardItem> items)
+    {
+        Scene.Remove(items);
+        AddToScene(items.Where(i => i.IsAttached));
+        PublishSelection();
+    }
+
+    private void AddToScene(IEnumerable<BoardItem> items)
+    {
+        SceneBuilder.AddItems(Scene, items);
+        if (TriangulateChanges)
+        {
+            SceneTriangulator.Triangulate(Scene);
+        }
+
+        SceneChanged?.Invoke();
+    }
+
+    private void PublishSelection()
+    {
+        _selection.RemoveAll(item => !item.IsAttached);
+        var owners = new HashSet<int>();
+        foreach (var item in _selection)
+        {
+            owners.UnionWith(Scene.OwnersOf(item));
+        }
+
+        SelectedOwners = owners;
+        SelectionChanged?.Invoke();
+    }
+}

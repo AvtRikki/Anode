@@ -1,0 +1,72 @@
+{
+  "scope": { "schematic": "схема" },
+  "sch": {
+    "document": { "label": "Схема KiCad", "untitled": "схема" },
+    "panel": { "sheets": "Листы", "sheets.rail": "Ли" },
+    "sheets": {
+      "empty": "Листы появятся, когда откроется схема",
+      "root": "Корневой лист",
+      "children": "Дочерние листы",
+      "missing": "файл не найден"
+    },
+    "command": {
+      "fit": "Вписать лист в окно",
+      "openSheet": "Открыть дочерний лист"
+    },
+    "summary": { "sheet": "схема · {0}" },
+    "symbol": { "one": "компонент", "few": "компонента", "many": "компонентов" },
+    "status": {
+      "cursor": "X {0} Y {1} {2}",
+      "symbols": "{0} {1}",
+      "selected": "выделено: {0}"
+    },
+    "issue": {
+      "oldFormat": { "title": "Старый формат", "detail": "Файл старше KiCad 8; чтение может отличаться." },
+      "newFormat": { "title": "Формат новее известного", "detail": "Лист из более новой версии KiCad; неизвестные поля сохраняются без изменений." },
+      "version": "версия {0}",
+      "noDefinition": { "title": "Компонент без описания", "detail": "{0}" },
+      "definitions": "{0} из {1}"
+    },
+    "selection": { "multi": "{0} объекта" },
+    "item": {
+      "symbol": "Компонент",
+      "wire": "Провод",
+      "bus": "Шина",
+      "junction": "Соединение",
+      "noConnect": "Не подключено",
+      "label": "Метка",
+      "globalLabel": "Глобальная метка",
+      "hierarchicalLabel": "Иерархическая метка",
+      "netclassFlag": "Класс цепи",
+      "text": "Текст",
+      "sheet": "Лист",
+      "graphic": "Графика",
+      "other": "Объект"
+    },
+    "property": {
+      "reference": "Обозначение",
+      "value": "Значение",
+      "library": "Библиотека",
+      "footprint": "Посадочное место",
+      "unit": "Секция",
+      "position": "Позиция",
+      "angle": "Угол",
+      "mirror": "Зеркало",
+      "dnp": "Не устанавливать",
+      "pins": "Выводов",
+      "name": "Имя",
+      "file": "Файл",
+      "size": "Размер",
+      "text": "Текст",
+      "shape": "Форма",
+      "length": "Длина",
+      "uuid": "UUID"
+    },
+    "value": { "yes": "да", "no": "нет", "none": "—" },
+    "units": { "mm": "мм" },
+    "log": {
+      "loaded": "{0}: {1} компонентов, {2} примитивов.",
+      "activated": "{0} {1}: .kicad_sch, панель листов."
+    }
+  }
+}

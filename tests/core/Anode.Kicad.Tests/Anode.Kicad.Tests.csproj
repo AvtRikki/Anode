@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\core\Anode.Kicad\Anode.Kicad.csproj" />
+  </ItemGroup>
+
+</Project>

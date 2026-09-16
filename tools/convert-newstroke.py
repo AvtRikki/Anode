@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extracts KiCad's newstroke glyph table into src/Ecad.Rendering/Fonts/newstroke.txt.gz.
+"""Extracts KiCad's newstroke glyph table into src/render/Anode.Render/Fonts/newstroke.txt.gz.
 
 Each line of the output is one glyph in Hershey encoding; line N is code point U+0020 + N.
 Source: common/newstroke_font.cpp from the KiCad repository at a pinned commit
@@ -16,7 +16,7 @@ import urllib.request
 COMMIT = "a46f62841996fbc9edac9b9daef348651a1b1496"
 URL = f"https://gitlab.com/kicad/code/kicad/-/raw/{COMMIT}/common/newstroke_font.cpp"
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "src", "Ecad.Rendering", "Fonts", "newstroke.txt.gz")
+OUT = os.path.join(ROOT, "src", "render", "Anode.Render", "Fonts", "newstroke.txt.gz")
 
 LITERAL = re.compile(r'^\s*"((?:[^"\\]|\\.)*)"\s*,?\s*(?:/\*.*\*/)?\s*$')
 
