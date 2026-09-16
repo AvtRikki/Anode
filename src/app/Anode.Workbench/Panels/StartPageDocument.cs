@@ -42,7 +42,7 @@ internal sealed class StartPageView : ContentControl
 
         var header = new DockPanel();
         var brand = new TextBlock { FontSize = 26, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Bottom };
-        brand.Inlines = [new Avalonia.Controls.Documents.Run("Kicad"), Accent("·"), new Avalonia.Controls.Documents.Run("One")];
+        brand.Inlines = [new Avalonia.Controls.Documents.Run("An"), Accent("o"), new Avalonia.Controls.Documents.Run("de")];
         header.Children.Add(brand);
         var date = Ui.Mono($"0.1 · {DateTime.Now.ToString("dddd, d MMMM", Tr.Culture)}", "dim");
         date.Margin = new Thickness(12, 0, 0, 4);
@@ -104,6 +104,13 @@ internal sealed class StartPageView : ContentControl
         var hint = Ui.Mono("⌘K");
         DockPanel.SetDock(hint, Dock.Right);
         searchLine.Children.Add(hint);
+        if (Icons.Draw(Icons.Search, 13) is { } searchIcon)
+        {
+            DockPanel.SetDock(searchIcon, Dock.Left);
+            searchIcon.Margin = new Thickness(0, 0, 8, 0);
+            searchLine.Children.Add(searchIcon);
+        }
+
         searchLine.Children.Add(Ui.Text(Tr.T("shell.search.placeholder")));
         search.Content = searchLine;
         search.Click += (_, _) => _shell.OpenPalette();

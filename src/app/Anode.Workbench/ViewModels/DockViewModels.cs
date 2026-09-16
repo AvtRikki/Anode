@@ -102,7 +102,13 @@ public sealed partial class DockStackViewModel : ObservableObject
 /// <summary>A panel stored in the icon rail. Single click shows it over the canvas; double click pins it as a dock.</summary>
 public sealed partial class RailItemViewModel(PanelDescriptor descriptor, ShellViewModel shell) : ObservableObject
 {
+    private Control? _icon;
+
     public PanelDescriptor Descriptor { get; } = descriptor;
+
+    public bool HasIcon => Icons.Has(Descriptor.IconKey);
+
+    public Control? Icon => _icon ??= Icons.Draw(Descriptor.IconKey);
 
     public string Label => Descriptor.RailLabel.Length > 0
         ? Descriptor.RailLabel

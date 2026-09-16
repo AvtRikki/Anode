@@ -31,6 +31,9 @@ public interface IDocumentRegistry
 /// <summary>One open tab. One tab is one document.</summary>
 public interface IDocument : INotifyPropertyChanged, IDisposable
 {
+    /// <summary>Id of the <see cref="IDocumentType"/> that opened this document; null for documents without one.</summary>
+    string? DocumentTypeId { get; }
+
     /// <summary>Tab text, usually the file name.</summary>
     string Title { get; }
 
@@ -95,6 +98,8 @@ public abstract class DocumentBase : IDocument
     private Control? _view;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public virtual string? DocumentTypeId => null;
 
     public abstract string Title { get; }
 

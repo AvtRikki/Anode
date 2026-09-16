@@ -1,5 +1,5 @@
 <!--
-  Kicad·One theme (docs/design/kicad-one-ui-kit.md, ECAD IDE mockups 1a–2d).
+  Anode theme (docs/design/kicad-one-ui-kit.md, ECAD IDE mockups 1a–2d).
   Chrome paints change with the theme; drawing inks never do. Magenta means "your decision is needed",
   cyan means "clickable / selected" — never decorative.
 -->
@@ -216,6 +216,121 @@
   </Style>
   <Style Selector="Button.docTab.active">
     <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <!-- Window buttons we draw ourselves: the system ones cannot be centred in a tall bar, so the bar owns them. -->
+  <Style Selector="Button.windowButton">
+    <Setter Property="Width" Value="12" />
+    <Setter Property="Height" Value="12" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Foreground" Value="#00000000" />
+  </Style>
+  <Style Selector="Button.windowButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="CornerRadius" Value="6" />
+  </Style>
+  <Style Selector="Button.windowButton.close /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#ff5f57" />
+  </Style>
+  <Style Selector="Button.windowButton.minimise /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#febc2e" />
+  </Style>
+  <Style Selector="Button.windowButton.zoom /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#28c840" />
+  </Style>
+  <!-- Out of focus the whole set goes grey, as macOS does. -->
+  <Style Selector="StackPanel.inactive Button.windowButton /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+  </Style>
+  <!-- The marks appear when the pointer is over the group, not over one light. -->
+  <Style Selector="StackPanel#WindowButtons Path">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="StackPanel#WindowButtons.hover Path">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- Dock toggles: dim when the dock is down, lit on the raised fill when it is up. -->
+  <Style Selector="Button.dockToggle">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="26" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextFaint}" />
+  </Style>
+  <Style Selector="Button.dockToggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.dockToggle.on /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Active}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+
+  <!-- Title bar chips: a label until the pointer arrives, a control once it does. -->
+  <Style Selector="Button.titleChip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Padding" Value="8,4" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+  </Style>
+  <Style Selector="Button.titleChip:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.Line}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.titleChip ContentControl.chevron">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Button.titleChip:pointerover ContentControl.chevron">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Border.branchChip">
+    <Setter Property="Padding" Value="4,3" />
+    <!-- A Border has no foreground of its own; the inherited one is what the branch icon picks up. -->
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+
+  <!-- Close and pin sit inside the tab: visible on the active tab and under the pointer, inert otherwise. -->
+  <Style Selector="Button.tabClose, Button.tabPin">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+  <Style Selector="Button.docTab:pointerover Button.tabClose, Button.docTab.active Button.tabClose, Button.tabPin">
+    <Setter Property="Opacity" Value="1" />
+    <Setter Property="IsHitTestVisible" Value="True" />
+  </Style>
+  <Style Selector="Button.tabClose:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.tabPin:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="Button.docTab.pinned">
+    <Setter Property="FontStyle" Value="Italic" />
   </Style>
 
   <!-- Stack tabs: 12 px, active 600 with a 2 px accent underline. -->

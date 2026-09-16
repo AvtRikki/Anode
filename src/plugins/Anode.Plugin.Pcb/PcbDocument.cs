@@ -11,7 +11,10 @@ namespace Anode.Plugin.Pcb;
 /// <summary>Opens <c>.kicad_pcb</c> files as document tabs.</summary>
 public sealed class PcbDocumentType(ILog log) : IDocumentType
 {
-    public string Id => "anode.pcb";
+    /// <summary>Panels and documents refer to the type by this id.</summary>
+    public const string TypeId = "anode.pcb";
+
+    public string Id => TypeId;
 
     public string Label => Tr.T("pcb.document.label");
 
@@ -59,6 +62,8 @@ public sealed class PcbDocument : DocumentBase
     }
 
     public BoardScene Scene { get; }
+
+    public override string? DocumentTypeId => PcbDocumentType.TypeId;
 
     public override string Title => Path.GetFileName(FilePath ?? Tr.T("pcb.document.untitled"));
 

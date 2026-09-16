@@ -109,7 +109,7 @@ public sealed class RecentProjectsStore(string? filePath = null)
 public static class AppPaths
 {
     public static string DataDirectory { get; } =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Kicad-One");
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Anode");
 }
 
 /// <summary>User choices that outlive a session. Today: the interface language.</summary>

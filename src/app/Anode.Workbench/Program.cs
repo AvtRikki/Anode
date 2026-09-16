@@ -19,7 +19,7 @@ internal static class Program
         catch (InvalidOperationException ex) when (OperatingSystem.IsMacOS() && ex.Message.Contains("RenderTimer", StringComparison.Ordinal))
         {
             // CVDisplayLink cannot be created without an active display (lid closed, no external monitor, locked session).
-            Console.Error.WriteLine("Kicad·One could not start rendering: no active display is available.");
+            Console.Error.WriteLine("Anode could not start rendering: no active display is available.");
             Console.Error.WriteLine("Open the laptop lid or connect a monitor and launch again.");
             Console.Error.WriteLine($"({ex.Message})");
             return 2;

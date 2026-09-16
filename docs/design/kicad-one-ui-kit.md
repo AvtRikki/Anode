@@ -181,16 +181,18 @@ What the workbench does today, and where it knowingly differs from the kit.
 
 | Kit | Implementation |
 |---|---|
-| Chrome tokens, both themes | `src/app/Anode.Workbench/Themes/KicadOne.axaml`, keys in `src/app/Anode.Sdk/ThemeKeys.cs`; dark is the default |
+| Chrome tokens, both themes | `src/app/Anode.Workbench/Themes/Anode.axaml`, keys in `src/app/Anode.Sdk/ThemeKeys.cs`; dark is the default |
 | Drawing inks | `LayerStyle.Inks = InkSet.Print` (`src/render/Anode.Render/LayerStyle.cs`): six inks, inner copper one grey |
 | Light canvas | The desk is `#e9e6e5` in both themes; copper is drawn at 85 %/77 % so a pour does not bury silk |
 | Dot grid | Dots at the grid crossings in both renderers; the spacing follows the zoom (mm), not a fixed 14 px |
 | Board body in `ink.sheet` | Filled from the `Edge.Cuts` loops (`OutlineLoops`), under every layer; inner cut-outs are not punched out yet |
-| Phosphor duotone icons | Not yet: the rail uses short text labels |
+| Phosphor duotone icons | Own pack instead: `Anode.Sdk.Icons` draws line art on a 16×16 grid, a 1.3 px stroke over a 20 % fill — two tones, no assets, no third-party licence. Plugins add their own with `Icons.Register` |
 | No menu bar | Matches the mockups: every action is in the command palette; the project chip holds open / start page / language |
 | Languages | English by default, Russian included; catalogs per assembly, switched from the palette (`Tr`, `i18n/*.json`) |
+| Panels by domain | A panel declares the document types it belongs to (`PanelDescriptor.DocumentTypes`); the workbench re-plans the docks when the active tab changes, so layers show with a board and the sheet hierarchy with a schematic |
 | Two domains | PCB and schematic are separate plugins; the schematic sheet is drawn with the same inks — dark strokes on the sheet, cyan for labels and buses |
-| Own title bar | The window's client area is extended into the decorations, so the 44 px bar from 2a *is* the title bar |
+| Own title bar | The client area is extended into the decorations, so the kit's 44 px bar *is* the title bar. macOS keeps its window buttons in a band of its own (28 pt) whatever height the window claims, so the title bar view is grown to 44 and the buttons are centred in it through the Objective-C runtime (`MacTitleBar`), the way VS Code and the JetBrains IDEs do it; re-applied on resize and full screen |
+| Project switcher | A label until the pointer arrives, then a frame and a chevron (Rider's implicit combobox). Hidden entirely while no project is open; the version control branch sits next to it, read from `.git` |
 | Four dock places, rail overflow | `DockPlanner` (2 left stacks, 3 right, one bottom stack), rail slide-over with pin on double click |
 | Command palette | 560 wide, 76 from the top, fuzzy ranking in `CommandMatcher` |
 | SyncBanner | One banner at a time, shown over the canvas, dismissed by hand |

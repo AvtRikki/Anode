@@ -7,9 +7,19 @@
     "show": "Show"
   },
   "command": {
-    "shell": { "palette": "Command palette" },
-    "file": { "open": "Open…", "save": "Save", "saveAs": "Save as…" },
-    "doc": { "close": "Close tab" },
+    "shell": {
+      "palette": "Command palette"
+    },
+    "file": {
+      "open": "Open…",
+      "save": "Save",
+      "saveAs": "Save as…"
+    },
+    "doc": {
+      "close": "Close tab",
+      "closeOthers": "Close other tabs",
+      "pin": "Pin tab"
+    },
     "view": {
       "split": "Split window / merge",
       "leftDock": "Left dock",
@@ -37,31 +47,60 @@
       "emptyTitle": "No project open",
       "emptyHint": "Open a KiCad board — its folder becomes the project.",
       "files": "Files",
-      "count": "{0} files · {1}"
+      "count": "{0} files · {1}",
+      "branch": "Branch"
     },
-    "inspector": { "empty": "Select an object on the canvas" },
+    "inspector": {
+      "empty": "Select an object on the canvas"
+    },
     "issues": {
       "none": "Checks found nothing, or have not run yet",
       "noDocument": "No active document"
     },
-    "console": { "info": "info", "warning": "warning", "error": "error" },
-    "search": { "placeholder": "Project, component, command…" },
+    "console": {
+      "info": "info",
+      "warning": "warning",
+      "error": "error"
+    },
+    "search": {
+      "placeholder": "Project, component, command…"
+    },
     "palette": {
       "placeholder": "Command, component, net…",
       "empty": "Nothing found",
       "footer": "↑↓ select   ⏎ run   Esc close",
       "beta": "beta"
     },
-    "hint": { "leftDock": "⌥1 left dock", "rightDock": "⌥2 right", "bottomDock": "⌥3 bottom" },
-    "rail": { "label": "RAIL", "toRail": "Send to rail", "more": "Panels in the rail" },
-    "slideOver": { "pin": "Pin", "pinHint": "Make it a dock (or double click the rail icon)" },
-    "stack": { "collapse": "Collapse / expand" },
+    "hint": {
+      "leftDock": "Left dock (⌥1)",
+      "rightDock": "Right dock (⌥2)",
+      "bottomDock": "Bottom dock (⌥3)"
+    },
+    "rail": {
+      "toRail": "Send to rail",
+      "more": "Panels in the rail"
+    },
+    "slideOver": {
+      "pin": "Pin",
+      "pinHint": "Make it a dock (or double click the rail icon)"
+    },
+    "stack": {
+      "collapse": "Collapse / expand"
+    },
     "tabs": {
       "emptyTitle": "No open documents",
       "emptyHint": "⌘O open · ⌘K palette · drop a file",
-      "close": "Close (⌘W)"
+      "close": "Close tab",
+      "closeOthers": "Close other tabs",
+      "pin": "Pin tab",
+      "unpin": "Unpin tab",
+      "pinned": "Pinned",
+      "pinHint": "Pin: the tab keeps its place and cannot be closed by accident",
+      "closeHint": "Close (⌘W)"
     },
-    "status": { "busy": "opening…" },
+    "status": {
+      "busy": "opening…"
+    },
     "start": {
       "title": "Start",
       "open": "Open…",
@@ -89,7 +128,9 @@
       "discard": "Don't save",
       "cancel": "Cancel"
     },
-    "banner": { "noPlugin": "No plugin opens {0}" },
+    "banner": {
+      "noPlugin": "No plugin opens {0}"
+    },
     "log": {
       "noPlugin": "No plugin for {0} files ({1}).",
       "opened": "{0} opened ({1}).",

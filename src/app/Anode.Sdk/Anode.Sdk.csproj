@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <Description>Plugin SDK for the Kicad·One workbench: documents, panels, commands and workbench services.</Description>
+    <Description>Plugin SDK for the Anode workbench: documents, panels, commands and workbench services.</Description>
   </PropertyGroup>
 
   <ItemGroup>

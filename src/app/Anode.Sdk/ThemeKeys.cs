@@ -4,7 +4,7 @@ using Avalonia.Controls;
 namespace Anode.Sdk;
 
 /// <summary>
-/// Resource keys of the Kicad·One theme (docs/design/kicad-one-ui-kit.md). Chrome keys change with the theme;
+/// Resource keys of the Anode theme (docs/design/kicad-one-ui-kit.md). Chrome keys change with the theme;
 /// ink keys never do. Plugins bind to these instead of hard-coding colours.
 /// </summary>
 public static class ThemeKeys

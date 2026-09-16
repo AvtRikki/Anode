@@ -2,7 +2,7 @@
 
 A desktop ECAD application in C# / .NET 10 and Avalonia 12, built on the KiCad file formats.
 
-The application is a **plugin platform**: a workbench (Kicad·One) that knows about documents, docks, commands and
+The application is a **plugin platform**: a workbench (Anode) that knows about documents, docks, commands and
 themes, and domain plugins that bring the actual editors. Two plugins exist today: **PCB** (`.kicad_pcb`, viewing and
 basic editing) and **schematic** (`.kicad_sch`, viewing), for KiCad 8, 9 and 10. Files are round-tripped losslessly:
 opening and saving without edits reproduces the original bytes.
@@ -22,7 +22,7 @@ opening and saving without edits reproduces the original bytes.
 | `src/render/Anode.Render.OpenGl` | OpenGL renderer, the default |
 | `src/render/Anode.Render.Avalonia` | The Skia and OpenGL surfaces the plugins draw their canvases on |
 | **app** — the workbench and what plugins may use | |
-| `src/app/Anode.Sdk` | Plugin SDK: `IPlugin`, commands, panels, documents, translations, theme keys, UI kit helpers |
+| `src/app/Anode.Sdk` | Plugin SDK: `IPlugin`, commands, panels, documents, translations, theme keys, the icon pack and UI kit helpers |
 | `src/app/Anode.Workbench` | The workbench: title bar, docks and icon rail, document tabs and split, command palette, status bar |
 | **plugins** — one domain each | |
 | `src/plugins/Anode.Plugin.Pcb` | PCB: `.kicad_pcb` documents, board canvas, layers panel, board commands |

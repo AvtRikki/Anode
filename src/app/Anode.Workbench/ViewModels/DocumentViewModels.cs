@@ -27,14 +27,48 @@ public sealed partial class DocumentTabViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial bool IsActive { get; set; }
 
+    /// <summary>A pinned tab keeps its place at the front and shows the pin instead of the close button.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PinLabel))]
+    public partial bool IsPinned { get; set; }
+
+    public string CloseLabel => Tr.T("shell.tabs.close");
+
+    public string CloseHint => Tr.T("shell.tabs.closeHint");
+
+    public string CloseOthersLabel => Tr.T("shell.tabs.closeOthers");
+
+    public string PinLabel => Tr.T(IsPinned ? "shell.tabs.unpin" : "shell.tabs.pin");
+
+    public string PinHint => Tr.T("shell.tabs.pinHint");
+
+    public Control? CloseIcon => Icons.Draw(Icons.Close, 11, 1.4);
+
+    public Control? PinIcon => Icons.Draw(Icons.Pin, 11, 1.2);
+
     [RelayCommand]
     private void Activate() => Pane.Shell.ActivateTab(this);
 
     [RelayCommand]
     private Task Close() => Pane.Shell.CloseTabAsync(this);
 
+    [RelayCommand]
+    private Task CloseOthers() => Pane.Shell.CloseOthersAsync(this);
+
+    [RelayCommand]
+    private void TogglePin() => Pane.Shell.SetPinned(this, !IsPinned);
+
     /// <summary>The document's title text changed without the document changing, e.g. after a language switch.</summary>
-    public void RaiseTitle() => OnPropertyChanged(nameof(Title));
+    public void RaiseTitle() =>
+        OnPropertiesChanged(nameof(Title), nameof(CloseLabel), nameof(CloseHint), nameof(CloseOthersLabel), nameof(PinLabel), nameof(PinHint));
+
+    private void OnPropertiesChanged(params string[] names)
+    {
+        foreach (string name in names)
+        {
+            OnPropertyChanged(name);
+        }
+    }
 
     public void Dispose() => Document.PropertyChanged -= OnDocumentChanged;
 

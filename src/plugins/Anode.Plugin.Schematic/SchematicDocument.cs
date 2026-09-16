@@ -10,7 +10,10 @@ namespace Anode.Plugin.Schematic;
 /// <summary>Opens <c>.kicad_sch</c> files as document tabs.</summary>
 public sealed class SchematicDocumentType(ILog log) : IDocumentType
 {
-    public string Id => "anode.schematic";
+    /// <summary>Panels and documents refer to the type by this id.</summary>
+    public const string TypeId = "anode.schematic";
+
+    public string Id => TypeId;
 
     public string Label => Tr.T("sch.document.label");
 
@@ -54,6 +57,8 @@ public sealed class SchematicDocument : DocumentBase
     public Anode.Kicad.Schematic Sheet { get; }
 
     public SchematicScene Scene { get; }
+
+    public override string? DocumentTypeId => SchematicDocumentType.TypeId;
 
     public override string Title => Path.GetFileName(FilePath ?? Tr.T("sch.document.untitled"));
 

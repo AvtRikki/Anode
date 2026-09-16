@@ -44,6 +44,24 @@ public static class ShellContributions
                 CanExecute = () => shell.ActivePane.ActiveTab is not null,
                 Execute = () => _ = shell.ActivePane.ActiveTab is { } tab ? shell.CloseTabAsync(tab) : Task.CompletedTask,
             },
+            new("doc.closeOthers", "command.doc.closeOthers")
+            {
+                ScopeKey = "scope.window",
+                CanExecute = () => shell.ActivePane.Tabs.Count(t => !t.IsPinned) > (shell.ActivePane.ActiveTab is { IsPinned: false } ? 1 : 0),
+                Execute = () => _ = shell.ActivePane.ActiveTab is { } tab ? shell.CloseOthersAsync(tab) : Task.CompletedTask,
+            },
+            new("doc.pin", "command.doc.pin")
+            {
+                ScopeKey = "scope.window",
+                CanExecute = () => shell.ActivePane.ActiveTab is not null,
+                Execute = () =>
+                {
+                    if (shell.ActivePane.ActiveTab is { } tab)
+                    {
+                        shell.SetPinned(tab, !tab.IsPinned);
+                    }
+                },
+            },
             new("view.split", "command.view.split")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌘\\", Gesture = new KeyGesture(Key.OemPipe, command),
@@ -85,19 +103,19 @@ public static class ShellContributions
 
         shell.Panels.Register(new PanelDescriptor("shell.project", "panel.project", DockSide.Left, _ => new ProjectPanel(shell))
         {
-            RailLabelKey = "panel.project.rail", Group = "project", Order = 0,
+            IconKey = Icons.Folder, RailLabelKey = "panel.project.rail", Group = "project", Order = 0,
         });
         shell.Panels.Register(new PanelDescriptor("shell.inspector", "panel.inspector", DockSide.Right, _ => new InspectorPanel(shell))
         {
-            RailLabelKey = "panel.inspector.rail", Group = "inspect", Order = 0,
+            IconKey = Icons.Inspector, RailLabelKey = "panel.inspector.rail", Group = "inspect", Order = 0,
         });
         shell.Panels.Register(new PanelDescriptor("shell.issues", "panel.issues", DockSide.Bottom, _ => new IssuesPanel(shell))
         {
-            RailLabelKey = "panel.issues.rail", Order = 0,
+            IconKey = Icons.Checks, RailLabelKey = "panel.issues.rail", Order = 0,
         });
         shell.Panels.Register(new PanelDescriptor("shell.console", "panel.console", DockSide.Bottom, _ => new ConsolePanel(shell.Log))
         {
-            RailLabelKey = "panel.console.rail", Order = 10,
+            IconKey = Icons.Console, RailLabelKey = "panel.console.rail", Order = 10,
         });
     }
 

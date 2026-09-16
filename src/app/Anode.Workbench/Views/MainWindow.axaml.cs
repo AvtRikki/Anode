@@ -3,7 +3,13 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
+
+// Shapes.Path and System.IO.Path collide under implicit usings.
+using GlyphPath = Avalonia.Controls.Shapes.Path;
+using Avalonia.Layout;
 using Avalonia.Platform.Storage;
+using Avalonia.Reactive;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Anode.Sdk;
@@ -26,17 +32,80 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
         PaletteInput.AddHandler(KeyDownEvent, OnPaletteKeyDown, RoutingStrategies.Tunnel);
 
-        // The workbench draws its own title bar, so the traffic lights need room on macOS.
-        if (OperatingSystem.IsMacOS())
-        {
-            TitleBarContent.Margin = new Thickness(78, 0, 14, 0);
-        }
+        // Icons are drawn, not resources, so the ones outside data templates are set here.
+        RailMore.Content = Icons.Draw(Icons.Plus, 14);
+        SearchIcon.Content = Icons.Draw(Icons.Search, 13);
+        ProjectChevron.Content = Icons.Draw(Icons.ChevronDown, 10);
+        BranchIcon.Content = Icons.Draw(Icons.Branch, 12);
+        ToggleLeftDock.Content = Icons.Draw(Icons.DockLeft, 15);
+        ToggleRightDock.Content = Icons.Draw(Icons.DockRight, 15);
+        ToggleBottomDock.Content = Icons.Draw(Icons.DockBottom, 15);
+
+        SetUpWindowButtons();
+
+
+        // macOS reveals the marks when the pointer is over the group, not over one light. A class carries that, so
+        // it can be asserted in a test rather than only seen.
+        WindowButtons.PointerEntered += (_, _) => WindowButtons.Classes.Set("hover", true);
+        WindowButtons.PointerExited += (_, _) => WindowButtons.Classes.Set("hover", false);
+
+        // Out of focus the lights go grey, the way macOS greys its own.
+        this.GetObservable(IsActiveProperty).Subscribe(new AnonymousObserver<bool>(active => WindowButtons.Classes.Set("inactive", !active)));
 
         LeftSplitter.DragCompleted += (_, _) => StoreDockSizes();
         RightSplitter.DragCompleted += (_, _) => StoreDockSizes();
         BottomSplitter.DragCompleted += (_, _) => StoreDockSizes();
         Closing += OnClosing;
+
+        // The band changes with full screen and between displays, so follow it rather than reading it once.
+
     }
+
+    /// <summary>
+    /// Who draws the window buttons. macOS keeps its own in a band of its own height and lays them out with
+    /// constraints, so they cannot be centred in a taller bar — the window drops the system title bar and the
+    /// workbench draws the three lights itself, which puts them on the same line as everything else by construction.
+    /// Elsewhere the system title bar is left alone and sits above our content.
+    /// </summary>
+    private void SetUpWindowButtons()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            ExtendClientAreaToDecorationsHint = false;
+            return;
+        }
+
+        WindowDecorations = WindowDecorations.BorderOnly;
+        WindowButtons.IsVisible = true;
+
+        // The marks the system draws: a cross, a bar, and since Big Sur two triangles for zoom. Their opacity is
+        // left to the theme — a local value would outrank the style that reveals them under the pointer.
+        Glyph(0, "M4 4 L8 8 M8 4 L4 8", filled: false);
+        Glyph(1, "M3.2 6 H8.8", filled: false);
+        Glyph(2, "M3.3 3.3 H6.5 L3.3 6.5 Z M8.7 8.7 H5.5 L8.7 5.5 Z", filled: true);
+
+        void Glyph(int index, string data, bool filled)
+        {
+            var ink = new SolidColorBrush(Color.FromArgb(0x99, 0, 0, 0));
+            ((Button)WindowButtons.Children[index]).Content = new GlyphPath
+            {
+                Data = Geometry.Parse(data),
+                Fill = filled ? ink : null,
+                Stroke = filled ? null : ink,
+                StrokeThickness = filled ? 0 : 1.15,
+                StrokeLineCap = PenLineCap.Round,
+                Width = 12,
+                Height = 12,
+            };
+        }
+    }
+
+    private void OnWindowClose(object? sender, RoutedEventArgs e) => Close();
+
+    private void OnWindowMinimise(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnWindowZoom(object? sender, RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -266,6 +335,15 @@ public partial class MainWindow : Window
     }
 
     private void OnSearchClick(object? sender, RoutedEventArgs e) => _shell?.OpenPalette();
+
+    /// <summary>The dock toggles run the same commands as ⌥1, ⌥2 and ⌥3.</summary>
+    private void OnToggleDock(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string id })
+        {
+            _shell?.Commands.TryExecute(id);
+        }
+    }
 
     /// <summary>Dragging the workbench title bar moves the window, as the native one would.</summary>
     private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)

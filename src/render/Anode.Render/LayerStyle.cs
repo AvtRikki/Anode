@@ -40,7 +40,7 @@ public static class LayerStyle
     }
 
     /// <summary>
-    /// Print inks on a light sheet (the Kicad·One kit): the drawing reads as an impression, not as neon on black.
+    /// Print inks on a light sheet (the Anode kit): the drawing reads as an impression, not as neon on black.
     /// <see cref="InkSet.Classic"/> keeps KiCad's dark palette for comparison.
     /// </summary>
     public static InkSet Inks { get; set; } = InkSet.Print;

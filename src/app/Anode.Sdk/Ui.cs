@@ -7,7 +7,7 @@ using Avalonia.Media;
 namespace Anode.Sdk;
 
 /// <summary>
-/// Building blocks of the Kicad·One kit for code-built views, so plugin panels look like the workbench. They rely on
+/// Building blocks of the Anode kit for code-built views, so plugin panels look like the workbench. They rely on
 /// the style classes of the workbench theme: <c>mono</c>, <c>dim</c>, <c>faint</c>, <c>overline</c>, <c>field</c>,
 /// <c>tag</c> with <c>accent</c>/<c>alert</c>/<c>neutral</c>/<c>outline</c>.
 /// </summary>

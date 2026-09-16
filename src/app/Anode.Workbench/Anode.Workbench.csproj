@@ -15,6 +15,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Workbench internals stay internal; the tests are the one assembly allowed to look. -->
+    <InternalsVisibleTo Include="Anode.Workbench.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.2" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.2" />
     <PackageReference Include="Avalonia.Skia" Version="12.1.2" />

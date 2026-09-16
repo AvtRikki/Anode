@@ -28,7 +28,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public const double MinRightDock = 240;
     public const double MaxRightDock = 360;
 
-    private static readonly PluginManifest ShellManifest = new("anode.workbench", "Kicad·One", "0.1", "Anode.Workbench.dll", typeof(ShellViewModel).FullName!, PlatformContract.Version);
+    private static readonly PluginManifest ShellManifest = new("anode.workbench", "Anode", "0.1", "Anode.Workbench.dll", typeof(ShellViewModel).FullName!, PlatformContract.Version);
 
     private readonly Dictionary<string, Control> _panelContent = [];
     private readonly Dictionary<string, (string? Active, bool Collapsed)> _stackState = [];
@@ -61,6 +61,8 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         };
 
         Panels.Changed += Relayout;
+        // Panels follow the document: a board brings its layers, a sheet brings its hierarchy.
+        ActiveDocumentChanged += Relayout;
         Tr.Changed += OnLanguageChanged;
         RecentProjects = new ObservableCollection<RecentProject>(recents.Load());
     }
@@ -125,13 +127,20 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    public partial string WindowTitle { get; set; } = "Kicad·One";
+    public partial string WindowTitle { get; set; } = "Anode";
 
     [ObservableProperty]
     public partial string ProjectName { get; set; } = Tr.T("shell.project.none");
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasProject))]
     public partial string? ProjectDirectory { get; set; }
+
+    /// <summary>Branch of the version control system the project sits in, or null when it is not in one.</summary>
+    [ObservableProperty]
+    public partial string? ProjectBranch { get; set; }
+
+    public bool HasProject => ProjectDirectory is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LeftColumnWidth), nameof(IsLeftDockShown))]
@@ -375,6 +384,32 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         }
     }
 
+    /// <summary>
+    /// Pins or unpins a tab. A pinned tab moves to the front of its pane and keeps its place, which is what makes
+    /// pinning worth anything: the tab you keep coming back to stops drifting and cannot be closed by a stray click.
+    /// </summary>
+    public void SetPinned(DocumentTabViewModel tab, bool pinned)
+    {
+        tab.IsPinned = pinned;
+
+        var tabs = tab.Pane.Tabs;
+        int index = tabs.IndexOf(tab);
+        int target = tabs.Count(t => t.IsPinned && !ReferenceEquals(t, tab));
+        if (index >= 0 && target < tabs.Count && index != target)
+        {
+            tabs.Move(index, target);
+        }
+    }
+
+    /// <summary>Closes every other tab of the pane, keeping the pinned ones.</summary>
+    public async Task CloseOthersAsync(DocumentTabViewModel keep)
+    {
+        foreach (var tab in keep.Pane.Tabs.Where(t => !ReferenceEquals(t, keep) && !t.IsPinned).ToList())
+        {
+            await CloseTabAsync(tab);
+        }
+    }
+
     /// <summary>Moves the active tab into a second pane, or merges the panes back.</summary>
     public void ToggleSplit()
     {
@@ -479,7 +514,9 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     public void Relayout()
     {
-        var layout = DockPlanner.Plan(Panels.Panels, _sentToRail, _pinned);
+        string? documentType = ActiveDocument?.DocumentTypeId;
+        var applicable = Panels.Panels.Where(p => p.AppliesTo(documentType)).ToList();
+        var layout = DockPlanner.Plan(applicable, _sentToRail, _pinned);
 
         // Detach old stacks first so panel controls can be re-parented into the new ones.
         LeftStacks.Clear();
@@ -625,7 +662,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     }
 
     private void UpdateWindowTitle() =>
-        WindowTitle = ActiveDocument is { } doc ? $"{doc.Title}{(doc.IsDirty ? " •" : string.Empty)} — Kicad·One" : "Kicad·One";
+        WindowTitle = ActiveDocument is { } doc ? $"{doc.Title}{(doc.IsDirty ? " •" : string.Empty)} — Kicad·One" : "Anode";
 
     private void SetProject(string filePath)
     {
@@ -638,6 +675,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         ProjectDirectory = directory;
         string? pro = Directory.EnumerateFiles(directory, "*.kicad_pro").FirstOrDefault();
         ProjectName = Path.GetFileNameWithoutExtension(pro ?? filePath);
+        ProjectBranch = GitBranch.Of(directory);
         ProjectChanged?.Invoke();
     }
 

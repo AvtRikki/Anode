@@ -11,36 +11,56 @@
         Width="1440" Height="900" MinWidth="960" MinHeight="600"
         ExtendClientAreaToDecorationsHint="True"
         ExtendClientAreaTitleBarHeightHint="-1">
-  <!-- Kicad·One workbench (mockups 1a, 1b, 2a–2d): title bar, rail, docks, split document area, status bar;
+  <!-- Anode workbench (mockups 1a, 1b, 2a–2d): title bar, rail, docks, split document area, status bar;
        palette, slide-over and banner are overlays. Every action lives in the palette, so there is no menu bar. -->
+  <!-- The title row keeps the kit's height; its content is pinned to the system title bar band at runtime
+       (see ApplyTitleBarHeight), which is where the platform's own window buttons are centred. -->
   <Grid x:Name="Root" RowDefinitions="44,*,26">
 
     <!-- ——— Title bar (1a / 2a): brand, project, search. It *is* the window title bar: the native one is off. ——— -->
     <Border Grid.Row="0" Background="{DynamicResource Chrome.Raised}"
             PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
       <DockPanel x:Name="TitleBarContent" Margin="14,0" VerticalAlignment="Center">
+        <StackPanel x:Name="WindowButtons" DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8"
+                    VerticalAlignment="Center" Margin="6,0,18,0" IsVisible="False">
+          <Button Classes="windowButton close" Click="OnWindowClose" />
+          <Button Classes="windowButton minimise" Click="OnWindowMinimise" />
+          <Button Classes="windowButton zoom" Click="OnWindowZoom" />
+        </StackPanel>
+
         <TextBlock DockPanel.Dock="Left" Classes="brand" VerticalAlignment="Center" Margin="0,0,20,0">
-          <Run Text="Kicad" /><Run Text="·" Foreground="{DynamicResource State.Accent}" /><Run Text="One" />
+          <Run Text="An" /><Run Text="o" Foreground="{DynamicResource State.Accent}" /><Run Text="de" />
         </TextBlock>
 
-        <Button x:Name="ProjectButton" DockPanel.Dock="Left" Classes="flat" Padding="11,5"
-                Background="{DynamicResource Chrome.Bg}" BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="1" CornerRadius="2"
+        <Button x:Name="ProjectButton" DockPanel.Dock="Left" Classes="titleChip" IsVisible="{Binding HasProject}"
                 Click="OnProjectClick" ToolTip.Tip="{Binding Strings.ProjectSwitcher}">
-          <StackPanel Orientation="Horizontal" Spacing="8">
-            <TextBlock Text="{Binding ProjectName}" FontWeight="SemiBold" FontSize="12.5" />
-            <TextBlock Text="▾" Classes="faint" FontSize="10" VerticalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" Spacing="7">
+            <TextBlock Text="{Binding ProjectName}" FontWeight="SemiBold" FontSize="12.5" VerticalAlignment="Center" />
+            <ContentControl x:Name="ProjectChevron" Classes="chevron" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
 
-        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-          <TextBlock Classes="mono faint" Text="{Binding Strings.HintLeftDock}" VerticalAlignment="Center" />
-          <TextBlock Classes="mono faint" Text="{Binding Strings.HintRightDock}" VerticalAlignment="Center" />
-          <TextBlock Classes="mono faint" Text="{Binding Strings.HintBottomDock}" VerticalAlignment="Center" />
+        <Border DockPanel.Dock="Left" Classes="branchChip" Margin="2,0,0,0" ToolTip.Tip="{Binding Strings.Branch}"
+                IsVisible="{Binding ProjectBranch, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <ContentControl x:Name="BranchIcon" VerticalAlignment="Center" />
+            <TextBlock Classes="mono dim" Text="{Binding ProjectBranch}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button x:Name="ToggleLeftDock" Classes="dockToggle" Classes.on="{Binding IsLeftDockVisible}"
+                  Tag="view.leftDock" Click="OnToggleDock" ToolTip.Tip="{Binding Strings.HintLeftDock}" />
+          <Button x:Name="ToggleRightDock" Classes="dockToggle" Classes.on="{Binding IsRightDockVisible}"
+                  Tag="view.rightDock" Click="OnToggleDock" ToolTip.Tip="{Binding Strings.HintRightDock}" />
+          <Button x:Name="ToggleBottomDock" Classes="dockToggle" Classes.on="{Binding IsBottomDockVisible}"
+                  Tag="view.bottomDock" Click="OnToggleDock" ToolTip.Tip="{Binding Strings.HintBottomDock}" />
         </StackPanel>
 
         <Button Classes="searchField" Width="320" HorizontalAlignment="Right" Margin="0,0,18,0" Click="OnSearchClick">
           <DockPanel>
             <TextBlock DockPanel.Dock="Right" Classes="mono faint" Text="⌘K" VerticalAlignment="Center" />
+            <ContentControl x:Name="SearchIcon" DockPanel.Dock="Left" Margin="0,0,8,0" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Strings.SearchPlaceholder}" FontSize="12.5" VerticalAlignment="Center" />
           </DockPanel>
         </Button>
@@ -54,12 +74,6 @@
       <Border Grid.Column="0" Width="38" Background="{DynamicResource Chrome.Raised}" IsVisible="{Binding HasRail}"
               BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="0,0,1,0">
         <DockPanel Margin="0,8">
-          <LayoutTransformControl DockPanel.Dock="Bottom" HorizontalAlignment="Center" Margin="0,8,0,0">
-            <LayoutTransformControl.LayoutTransform>
-              <RotateTransform Angle="90" />
-            </LayoutTransformControl.LayoutTransform>
-            <TextBlock Classes="mono faint" FontSize="9" LetterSpacing="1" Text="{Binding Strings.RailLabel}" />
-          </LayoutTransformControl>
           <StackPanel Spacing="3">
             <ItemsControl ItemsSource="{Binding Rail}">
               <ItemsControl.ItemsPanel>
@@ -69,14 +83,19 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:RailItemViewModel">
-                  <Button Classes="railItem" Classes.open="{Binding IsOpen}" Content="{Binding Label}"
+                  <Button Classes="railItem" Classes.open="{Binding IsOpen}"
                           Command="{Binding ToggleCommand}" DoubleTapped="OnRailDoubleTapped"
-                          ToolTip.Tip="{Binding Title}" />
+                          ToolTip.Tip="{Binding Title}">
+                    <Panel>
+                      <ContentControl Content="{Binding Icon}" IsVisible="{Binding HasIcon}" />
+                      <TextBlock Text="{Binding Label}" IsVisible="{Binding !HasIcon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Panel>
+                  </Button>
                 </DataTemplate>
               </ItemsControl.ItemTemplate>
             </ItemsControl>
             <Border Width="20" Height="1" Margin="0,5" Classes="line" HorizontalAlignment="Center" />
-            <Button Classes="railItem" Content="+" HorizontalAlignment="Center" Click="OnSearchClick"
+            <Button x:Name="RailMore" Classes="railItem" HorizontalAlignment="Center" Click="OnSearchClick"
                     ToolTip.Tip="{Binding Strings.RailMore}" />
           </StackPanel>
         </DockPanel>
@@ -109,13 +128,25 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                       <DataTemplate x:DataType="vm:DocumentTabViewModel">
-                        <Button Classes="docTab" Classes.active="{Binding IsActive}" Command="{Binding ActivateCommand}"
-                                PointerReleased="OnTabPointerReleased"
-                                ToolTip.Tip="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.TabClose}">
+                        <Button Classes="docTab" Classes.active="{Binding IsActive}" Classes.pinned="{Binding IsPinned}"
+                                Command="{Binding ActivateCommand}" PointerReleased="OnTabPointerReleased"
+                                ToolTip.Tip="{Binding Document.FilePath}">
                           <StackPanel Orientation="Horizontal" Spacing="7">
                             <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
                             <Ellipse Width="5" Height="5" Fill="{DynamicResource State.Alert}" IsVisible="{Binding IsDirty}" VerticalAlignment="Center" />
+                            <Button Classes="tabPin" Content="{Binding PinIcon}" Command="{Binding TogglePinCommand}"
+                                    IsVisible="{Binding IsPinned}" ToolTip.Tip="{Binding PinLabel}" />
+                            <Button Classes="tabClose" Content="{Binding CloseIcon}" Command="{Binding CloseCommand}"
+                                    IsVisible="{Binding !IsPinned}" ToolTip.Tip="{Binding CloseHint}" />
                           </StackPanel>
+                          <Button.ContextMenu>
+                            <ContextMenu>
+                              <MenuItem Header="{Binding CloseLabel}" Command="{Binding CloseCommand}" />
+                              <MenuItem Header="{Binding CloseOthersLabel}" Command="{Binding CloseOthersCommand}" />
+                              <Separator />
+                              <MenuItem Header="{Binding PinLabel}" Command="{Binding TogglePinCommand}" ToolTip.Tip="{Binding PinHint}" />
+                            </ContextMenu>
+                          </Button.ContextMenu>
                         </Button>
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>

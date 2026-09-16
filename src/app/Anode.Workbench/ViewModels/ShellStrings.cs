@@ -13,6 +13,8 @@ public sealed class ShellStrings : ObservableObject
 
     public string ProjectSwitcher => Tr.T("shell.project.switcher");
 
+    public string Branch => Tr.T("shell.project.branch");
+
     public string SearchPlaceholder => Tr.T("shell.search.placeholder");
 
     public string HintLeftDock => Tr.T("shell.hint.leftDock");
@@ -20,8 +22,6 @@ public sealed class ShellStrings : ObservableObject
     public string HintRightDock => Tr.T("shell.hint.rightDock");
 
     public string HintBottomDock => Tr.T("shell.hint.bottomDock");
-
-    public string RailLabel => Tr.T("shell.rail.label");
 
     public string RailMore => Tr.T("shell.rail.more");
 
