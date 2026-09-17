@@ -265,4 +265,54 @@ public class SchematicEditorTests
         editor.Paste(new Vector2L(50_800_000, 50_800_000));
         Assert.Single(sheet.Wires);
     }
+
+    [Fact]
+    public void A_value_committed_in_the_inspector_is_one_step_of_the_history()
+    {
+        var editor = Editor(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        var label = SchNodes.Label(SchLabelKind.Local, "VCC", A);
+        editor.Apply("Place a label", [label], []);
+        byte[] placed = sheet.Document.ToBytes();
+
+        // What the inspector does when a field is written: one named step, through the same stack as everything else.
+        editor.Modify("Rename", [label], () => SchWrites.SetText(label, "+3V3"));
+
+        Assert.Equal("+3V3", label.Text);
+        Assert.NotEqual(placed, sheet.Document.ToBytes());
+
+        // One undo takes back the edit, not the placing; the second takes the file back to where it started.
+        editor.Undo();
+        Assert.Equal("VCC", label.Text);
+        Assert.Equal(placed, sheet.Document.ToBytes());
+
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void Committing_nothing_writes_nothing()
+    {
+        var editor = Editor(out _);
+
+        editor.Modify("Rename", [], () => throw new InvalidOperationException("must not run"));
+
+        Assert.False(editor.History.CanUndo);
+    }
+
+    [Fact]
+    public void An_edited_item_is_drawn_again_as_it_now_is()
+    {
+        var editor = Editor(out var sheet);
+        var label = SchNodes.Label(SchLabelKind.Local, "VCC", A);
+        editor.Apply("Place a label", [label], []);
+
+        editor.Modify("Move", [label], () => SchWrites.SetPosition(label, B));
+
+        // The scene follows the file: the item is still drawn, and drawn where it now is.
+        Assert.Contains(editor.Scene.TopLevelItems, item => ReferenceEquals(item, label));
+        Assert.Equal(B, label.Position);
+        Assert.Single(sheet.Labels);
+    }
 }
