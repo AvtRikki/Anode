@@ -84,6 +84,13 @@ public class SymbolsPanelTests
             Assert.NotNull(document);
             Dispatcher.UIThread.RunJobs();
 
+            // The components panel shares the right-hand place with the inspector, which holds it until something
+            // asks for this one — so the tab is chosen before the panel can be looked at.
+            var right = Assert.Single(shell.RightStacks);
+            Assert.Equal(["Inspector", "Components"], right.Tabs.Select(t => t.Title));
+            right.Select(right.Tabs.Single(t => t.Descriptor.Id == "sch.symbols"));
+            Dispatcher.UIThread.RunJobs();
+
             // A frame is drawn so the docks are realised and the panel is built.
             using (var frame = window.CaptureRenderedFrame())
             {

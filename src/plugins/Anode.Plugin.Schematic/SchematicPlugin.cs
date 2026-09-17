@@ -18,18 +18,19 @@ public sealed class SchematicPlugin : IPlugin
 
         context.Project.Register(new SchematicStructure());
 
-        // The parts a sheet can draw from, beside the inspector on the right.
+        // The parts a sheet can draw from. Same place as the inspector, so the two are tabs of one stack and each
+        // gets the whole right side when it is the one showing — rather than halving it between them.
         var remembered = new SymbolLibraryList(context.DataDirectory);
         context.Panels.Register(new PanelDescriptor(
             "sch.symbols",
             "sch.panel.symbols",
-            DockArea.RightBottom,
+            DockArea.RightTop,
             workbench => new SymbolsPanel(workbench, remembered))
         {
             IconKey = Icons.Component,
             RailLabelKey = "sch.panel.symbolsRail",
             DocumentTypes = [SchematicDocumentType.TypeId],
-            Order = 0,
+            Order = 10,
         });
 
         context.Log.Info(Tr.T("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
