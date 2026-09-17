@@ -139,7 +139,7 @@ public class NewProjectTests
     {
         string folder = Directory.CreateTempSubdirectory("anode-new-").FullName;
         var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
-        return (App.CreateWorkbench(PanelScopeTests.PluginsRoot, recents), folder);
+        return (ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents), folder);
     }
 
     private static T Pump<T>(Task<T> task)

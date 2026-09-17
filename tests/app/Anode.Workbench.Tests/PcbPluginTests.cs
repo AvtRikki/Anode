@@ -40,7 +40,7 @@ public class PcbPluginTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 
             var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-            var shell = App.CreateWorkbench(PluginRoot, recents);
+            var shell = ShellWindowTests.Workbench(PluginRoot, recents);
 
             // If the plugin failed to load, its reason is in the log; show it instead of an empty-collection failure.
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);

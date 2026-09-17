@@ -19,7 +19,7 @@ public class DocumentTabTests
     private static ShellViewModel Workbench()
     {
         var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-        var shell = App.CreateWorkbench(pluginsRoot: null, recents);
+        var shell = ShellWindowTests.Workbench(pluginsRoot: null, recents);
         return shell;
     }
 

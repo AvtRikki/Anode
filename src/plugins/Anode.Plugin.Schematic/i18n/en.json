@@ -67,6 +67,8 @@
       "sourceAdded": "added",
       "sourceInstalled": "installed",
       "sourceBroken": "will not read",
+      "place": "Place",
+      "armed": "Click on the sheet to place {0}. Esc puts the pointer back.",
       "filter": "Find a part\u2026",
       "add": "Add library\u2026",
       "none": "No libraries for this project",

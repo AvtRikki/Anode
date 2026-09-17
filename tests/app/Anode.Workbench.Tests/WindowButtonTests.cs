@@ -16,7 +16,7 @@ public class WindowButtonTests
     private static (MainWindow Window, IReadOnlyList<Button> Buttons) Open()
     {
         var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-        var window = new MainWindow { DataContext = App.CreateWorkbench(pluginsRoot: null, recents), Width = 1240, Height = 772 };
+        var window = new MainWindow { DataContext = ShellWindowTests.Workbench(pluginsRoot: null, recents), Width = 1240, Height = 772 };
         window.Show();
 
         var group = window.GetVisualDescendants().OfType<StackPanel>().First(p => p.Name == "WindowButtons");

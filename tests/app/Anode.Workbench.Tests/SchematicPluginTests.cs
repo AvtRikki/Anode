@@ -36,7 +36,7 @@ public class SchematicPluginTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 
             var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-            var shell = App.CreateWorkbench(PluginRoot, recents);
+            var shell = ShellWindowTests.Workbench(PluginRoot, recents);
 
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
             var type = Assert.Single(shell.DocumentTypes.Types);

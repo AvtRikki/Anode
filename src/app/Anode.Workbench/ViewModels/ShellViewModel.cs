@@ -1016,10 +1016,17 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
         public IProjectStructureRegistry Project => shell.ProjectStructure;
 
-        public string DataDirectory => AppPaths.DataDirectory;
+        public string DataDirectory => shell.DataDirectory;
 
         public ILog Log => shell.Log;
     }
+
+    /// <summary>
+    /// Where plugins keep their per-user files. The application's own folder in normal use; a test points it
+    /// somewhere of its own, so that running the suite neither reads nor writes what the person using this machine
+    /// has saved.
+    /// </summary>
+    public string DataDirectory { get; set; } = AppPaths.DataDirectory;
 
     public IPluginContext CreatePluginContext(PluginManifest manifest) => new PluginContext(manifest, this);
 }

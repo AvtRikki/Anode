@@ -44,11 +44,19 @@ public class ShellWindowTests
         }
     }, TestContext.Current.CancellationToken);
 
+    /// <summary>
+    /// A workbench whose per-user files go somewhere of their own. Tests used to share the folder the application
+    /// keeps its settings in, so one run could see libraries another had remembered — and the suite left its own
+    /// leavings on the machine.
+    /// </summary>
+    internal static ShellViewModel Workbench(string? pluginsRoot, RecentProjectsStore recents) =>
+        App.CreateWorkbench(pluginsRoot, recents, dataDirectory: Directory.CreateTempSubdirectory("anode-data-").FullName);
+
     internal static (ShellViewModel Shell, MainWindow Window) Open(ThemeVariant theme)
     {
         Application.Current!.RequestedThemeVariant = theme;
         var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-        var shell = App.CreateWorkbench(pluginsRoot: null, recents);
+        var shell = Workbench(pluginsRoot: null, recents);
         ShellContributions.ShowStartPage(shell);
         var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
         window.Show();

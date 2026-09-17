@@ -76,7 +76,7 @@ public class SymbolsPanelTests
             File.WriteAllText(sheet, Sheet);
 
             var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
-            var shell = App.CreateWorkbench(PanelScopeTests.PluginsRoot, recents);
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
             window.Show();
 
@@ -105,11 +105,24 @@ public class SymbolsPanelTests
                 .FirstOrDefault(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "R"));
             Assert.True(row is not null, "the part in the project's own library was not offered");
 
-            row!.Command?.Execute(null);
-            InvokeClick(row);
+            // Clicked with a real pointer, not by raising the event: raising it bypasses hit-testing, which is how
+            // a row that could not actually be clicked would still have passed this test.
+            var at = row!.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window);
+            Assert.True(at is not null && row.Bounds.Width > 0, $"the row has no place to click: {row.Bounds}");
+
+            window.MouseMove(at!.Value);
+            Dispatcher.UIThread.RunJobs();
+            window.MouseDown(at.Value, MouseButton.Left);
+            window.MouseUp(at.Value, MouseButton.Left);
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal("parts:R", ChosenPart(document!));
+
+            // And the panel says so, because a click that changes nothing visible reads as a click that did nothing.
+            Assert.Contains(
+                panel.GetVisualDescendants().OfType<TextBlock>(),
+                t => t.Text is { } said && said.Contains("place R", StringComparison.Ordinal));
+            Assert.Contains(row.Classes, c => c == "selected");
 
             // Then the sheet: the part is dropped where the pointer says.
             var canvas = window.GetVisualDescendants().OfType<Control>()
@@ -151,9 +164,6 @@ public class SymbolsPanelTests
     /// <summary>The document is the plugin's, which the tests do not reference: it is asked by name.</summary>
     private static string? ChosenPart(IDocument document) =>
         document.GetType().GetProperty("ChosenPart")?.GetValue(document) as string;
-
-    private static void InvokeClick(Button button) =>
-        button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
 
     private static T Pump<T>(Task<T> task)
     {

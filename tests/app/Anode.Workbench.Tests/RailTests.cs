@@ -47,7 +47,7 @@ public class RailTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 
             var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-            var shell = App.CreateWorkbench(PcbPluginTests.PluginRoot, recents);
+            var shell = ShellWindowTests.Workbench(PcbPluginTests.PluginRoot, recents);
             ShellContributions.ShowStartPage(shell);
 
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };

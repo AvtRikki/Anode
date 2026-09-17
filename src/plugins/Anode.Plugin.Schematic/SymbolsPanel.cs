@@ -26,6 +26,8 @@ internal sealed class SymbolsPanel : ContentControl
     private readonly StackPanel _rows = new() { Spacing = 1 };
     private readonly TextBlock _summary;
     private readonly Button _sources;
+    private readonly TextBlock _armed;
+    private readonly Dictionary<string, Button> _byLibId = [];
     private SymbolChooser? _chooser;
     private SymbolIndex? _index;
     private string? _shownFor;
@@ -45,6 +47,13 @@ internal sealed class SymbolsPanel : ContentControl
         _sources = Ui.TagButton(Tr.T("sch.symbols.sources"), "outline", ShowSources);
         _sources.HorizontalAlignment = HorizontalAlignment.Right;
 
+        // Nothing told the reader that a part was on the pointer, so a click on a row looked like nothing at all.
+        _armed = Ui.Text(string.Empty, "accentText");
+        _armed.FontSize = 11.5;
+        _armed.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
+        _armed.TextTrimming = Avalonia.Media.TextTrimming.None;
+        _armed.IsVisible = false;
+
         var add = Ui.TagButton(Tr.T("sch.symbols.add"), "outline", () => _ = AddLibraryAsync());
         add.HorizontalAlignment = HorizontalAlignment.Left;
 
@@ -61,6 +70,7 @@ internal sealed class SymbolsPanel : ContentControl
                     Children =
                     {
                         _filter,
+                        _armed,
                         new DockPanel
                         {
                             LastChildFill = false,
@@ -83,6 +93,9 @@ internal sealed class SymbolsPanel : ContentControl
         };
 
         workbench.ActiveDocumentChanged += Rebuild;
+
+        // Cheap: only the marks and the hint, never the list — a rebuild here would undo the caret in the filter.
+        workbench.ActiveDocumentStateChanged += MarkChosen;
         Tr.Changed += Retranslate;
         Rebuild();
     }
@@ -165,10 +178,15 @@ internal sealed class SymbolsPanel : ContentControl
             return;
         }
 
+        _byLibId.Clear();
         foreach (var choice in chooser.Results)
         {
-            _rows.Children.Add(Row(choice));
+            var row = Row(choice);
+            _byLibId[choice.LibId] = row;
+            _rows.Children.Add(row);
         }
+
+        MarkChosen();
 
         // The limit is ours, not the library's: saying "5 of 200" would read as though 200 parts existed.
         _summary.Text = chooser.Results.Count >= chooser.Limit
@@ -246,7 +264,24 @@ internal sealed class SymbolsPanel : ContentControl
     private static StringComparison PathComparison =>
         OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-    private Control Row(SymbolChoice choice)
+    /// <summary>Shows which part is on the pointer: the row wears it, and a line says what to do next.</summary>
+    private void MarkChosen()
+    {
+        string? chosen = Sheet?.ChosenPart;
+
+        foreach (var (libId, row) in _byLibId)
+        {
+            row.Classes.Set("selected", string.Equals(libId, chosen, StringComparison.Ordinal));
+        }
+
+        _armed.IsVisible = chosen is not null;
+        if (chosen is not null)
+        {
+            _armed.Text = Tr.T("sch.symbols.armed", chosen[(chosen.IndexOf(':', StringComparison.Ordinal) + 1)..]);
+        }
+    }
+
+    private Button Row(SymbolChoice choice)
     {
         var lines = new StackPanel { Spacing = 1 };
         lines.Children.Add(Ui.Text(choice.Name, "strong"));
@@ -266,6 +301,11 @@ internal sealed class SymbolsPanel : ContentControl
         button.Padding = new Thickness(11, 6);
         button.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
         ToolTip.SetTip(button, choice.LibId);
+
+        var place = new MenuItem { Header = Tr.T("sch.symbols.place") };
+        place.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
+        button.ContextMenu = new ContextMenu { ItemsSource = new[] { place } };
+
         return button;
     }
 

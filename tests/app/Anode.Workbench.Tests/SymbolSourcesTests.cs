@@ -65,7 +65,7 @@ public class SymbolSourcesTests
             File.WriteAllText(sheet, Sheet);
 
             var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
-            var shell = App.CreateWorkbench(PanelScopeTests.PluginsRoot, recents);
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
             window.Show();
 

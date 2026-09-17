@@ -53,12 +53,21 @@ public partial class App : Application
     /// Creates the workbench, registers its own translations and contributions, and activates every plugin found
     /// under <paramref name="pluginsRoot"/>.
     /// </summary>
-    public static ShellViewModel CreateWorkbench(string? pluginsRoot, RecentProjectsStore recents, SettingsStore? settings = null)
+    public static ShellViewModel CreateWorkbench(
+        string? pluginsRoot,
+        RecentProjectsStore recents,
+        SettingsStore? settings = null,
+        string? dataDirectory = null)
     {
         Tr.Register(JsonTextCatalog.FromAssembly(Assembly.GetExecutingAssembly()));
 
         var log = new LogService();
         var shell = new ShellViewModel(log, recents, settings);
+        if (dataDirectory is { Length: > 0 })
+        {
+            shell.DataDirectory = dataDirectory;
+        }
+
         ShellContributions.Register(shell);
 
         if (pluginsRoot is not null)

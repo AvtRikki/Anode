@@ -64,7 +64,7 @@ public class MainMenuTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 
             var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-            var shell = App.CreateWorkbench(PanelScopeTests.PluginsRoot, recents);
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
             window.Show();
 

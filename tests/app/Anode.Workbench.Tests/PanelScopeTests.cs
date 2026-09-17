@@ -39,7 +39,7 @@ public class PanelScopeTests
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
 
             var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-recents-{Guid.NewGuid():N}.json"));
-            var shell = App.CreateWorkbench(PluginsRoot, recents);
+            var shell = ShellWindowTests.Workbench(PluginsRoot, recents);
 
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
             Assert.Equal(["anode.pcb", "anode.schematic"], shell.DocumentTypes.Types.Select(t => t.Id).Order());
