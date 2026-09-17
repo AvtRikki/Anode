@@ -11,6 +11,8 @@
       "palette": "Command palette"
     },
     "file": {
+      "newProject": "New project…",
+      "newSheet": "New sheet…",
       "open": "Open…",
       "save": "Save",
       "saveAs": "Save as…"
@@ -49,6 +51,11 @@
       "files": "Files",
       "count": "{0} files · {1}",
       "branch": "Branch",
+      "newName": "Untitled project",
+      "newSheetName": "sheet",
+      "created": "{0}: a new project.",
+      "createFailed": "Could not create the project: {0}",
+      "noCreator": "No plugin can create a document.",
       "view": { "design": "Design" },
       "section": {
         "schematic": "Schematic",

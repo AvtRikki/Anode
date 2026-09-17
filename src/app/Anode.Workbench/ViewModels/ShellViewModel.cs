@@ -255,6 +255,12 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     public Func<IDocument, Task<string?>>? PickSavePath { get; set; }
 
+    /// <summary>Asks the window where to put a file that does not exist yet: name, extension, dialog title, folder.</summary>
+    public Func<string, string, string, string?, Task<string?>>? PickNewFile { get; set; }
+
+    /// <summary>The type that can start a file from nothing; null when no plugin offers one.</summary>
+    public IDocumentType? CreatableType => DocumentTypes.Types.FirstOrDefault(t => t.CanCreate);
+
     // ——— IWorkbench ———
 
     public IReadOnlyList<IDocument> Documents => [.. Panes.SelectMany(p => p.Tabs).Select(t => t.Document)];
@@ -279,6 +285,94 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
             OnPropertyChanged();
         }
+    }
+
+    /// <summary>
+    /// A project from nothing: a folder with a KiCad project file and one empty document in it, opened straight
+    /// away. Which document that is belongs to the plugins — the shell asks for the first type that can create one.
+    /// Passing <paramref name="path"/> skips the dialog.
+    /// </summary>
+    public async Task<IDocument?> NewProjectAsync(string? path = null)
+    {
+        if (CreatableType is not { } type)
+        {
+            Log.Warn(Tr.T("shell.project.noCreator"));
+            return null;
+        }
+
+        path ??= PickNewFile is { } pick
+            ? await pick(Tr.T("shell.project.newName"), ".kicad_pro", "command.file.newProject", ProjectDirectory)
+            : null;
+
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            string full = Path.GetFullPath(path);
+            string directory = Path.GetDirectoryName(full) ?? throw new IOException(full);
+            string name = Path.GetFileNameWithoutExtension(full);
+            Directory.CreateDirectory(directory);
+
+            await File.WriteAllTextAsync(Path.Combine(directory, name + ".kicad_pro"), ProjectFile(name));
+
+            string document = Path.Combine(directory, name + type.Extensions[0]);
+            await type.CreateAsync(document, CancellationToken.None);
+
+            OpenProject(directory);
+            Log.Info(Tr.T("shell.project.created", name));
+            return await OpenAsync(document);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            Log.Error(Tr.T("shell.project.createFailed", ex.Message), ex);
+            ShowBanner(new Banner(Tr.T("shell.project.createFailed", ex.Message)));
+            return null;
+        }
+    }
+
+    /// <summary>Adds another empty document to the open project and opens it.</summary>
+    public async Task<IDocument?> NewSheetAsync(string? path = null)
+    {
+        if (CreatableType is not { } type)
+        {
+            Log.Warn(Tr.T("shell.project.noCreator"));
+            return null;
+        }
+
+        path ??= PickNewFile is { } pick
+            ? await pick(Tr.T("shell.project.newSheetName"), type.Extensions[0], "command.file.newSheet", ProjectDirectory)
+            : null;
+
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            await type.CreateAsync(Path.GetFullPath(path), CancellationToken.None);
+            ProjectChanged?.Invoke();
+            return await OpenAsync(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            Log.Error(Tr.T("shell.project.createFailed", ex.Message), ex);
+            ShowBanner(new Banner(Tr.T("shell.project.createFailed", ex.Message)));
+            return null;
+        }
+    }
+
+    /// <summary>Switches the workbench to a project folder: the tree, the title chip and the branch follow it.</summary>
+    public void OpenProject(string directory)
+    {
+        ProjectDirectory = directory;
+        string? project = SafeProjectFile(directory);
+        ProjectName = Path.GetFileNameWithoutExtension(project ?? directory);
+        ProjectBranch = GitBranch.Of(directory);
+        ProjectChanged?.Invoke();
     }
 
     public async Task<IDocument?> OpenAsync(string path)
@@ -838,6 +932,32 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     private void UpdateWindowTitle() =>
         WindowTitle = ActiveDocument is { } doc ? $"{doc.Title}{(doc.IsDirty ? " •" : string.Empty)} — Kicad·One" : "Anode";
+
+    /// <summary>
+    /// A KiCad project file with only what names the project. KiCad fills in every setting it does not find, and we
+    /// never read this file ourselves — here the folder is what makes a project.
+    /// </summary>
+    private static string ProjectFile(string name) =>
+        "{\n" +
+        "  \"meta\": {\n" +
+        $"    \"filename\": \"{name}.kicad_pro\",\n" +
+        "    \"version\": 3\n" +
+        "  },\n" +
+        "  \"sheets\": [],\n" +
+        "  \"text_variables\": {}\n" +
+        "}\n";
+
+    private static string? SafeProjectFile(string directory)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(directory, "*.kicad_pro").FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 
     private void SetProject(string filePath)
     {

@@ -128,6 +128,7 @@ public partial class MainWindow : Window
             _shell.ConfirmUnsaved = ConfirmUnsavedAsync;
             _shell.PickFileToOpen = PickFileToOpenAsync;
             _shell.PickSavePath = PickSavePathAsync;
+            _shell.PickNewFile = PickNewFileAsync;
             ApplyDockSizes();
         }
     }
@@ -471,6 +472,25 @@ public partial class MainWindow : Window
             Title = Tr.T("command.file.saveAs"),
             SuggestedFileName = document.FilePath is { } path ? Path.GetFileName(path) : document.Title,
             DefaultExtension = extension?.TrimStart('.'),
+            ShowOverwritePrompt = true,
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    /// <summary>Where to put a file that does not exist yet: a new project, a new sheet.</summary>
+    private async Task<string?> PickNewFileAsync(string suggestedName, string extension, string titleKey, string? startDirectory)
+    {
+        var start = startDirectory is { Length: > 0 } directory
+            ? await StorageProvider.TryGetFolderFromPathAsync(directory)
+            : null;
+
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = Tr.T(titleKey),
+            SuggestedFileName = suggestedName,
+            SuggestedStartLocation = start,
+            DefaultExtension = extension.TrimStart('.'),
             ShowOverwritePrompt = true,
         });
 

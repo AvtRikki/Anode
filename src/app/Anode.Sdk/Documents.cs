@@ -17,6 +17,16 @@ public interface IDocumentType
 
     /// <summary>Loads the file. Called off the UI thread; create UI lazily in <see cref="IDocument.View"/>.</summary>
     Task<IDocument> OpenAsync(string path, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Whether this type can start a file from nothing — "New sheet", "New board". The workbench offers it in the
+    /// palette and on the start page; a type that only reads files leaves this alone.
+    /// </summary>
+    bool CanCreate => false;
+
+    /// <summary>Writes an empty document at <paramref name="path"/>. Called off the UI thread.</summary>
+    Task CreateAsync(string path, CancellationToken cancellationToken) =>
+        throw new NotSupportedException($"{Id} cannot create files.");
 }
 
 public interface IDocumentRegistry

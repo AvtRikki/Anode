@@ -65,6 +65,7 @@
     "value": { "yes": "yes", "no": "no", "none": "—" },
     "units": { "mm": "mm" },
     "log": {
+      "created": "{0}: a new sheet.",
       "loaded": "{0}: {1} symbols, {2} primitives.",
       "activated": "{0} {1}: .kicad_sch, sheet hierarchy."
     }

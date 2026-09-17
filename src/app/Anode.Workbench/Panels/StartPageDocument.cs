@@ -49,6 +49,7 @@ internal sealed class StartPageView : ContentControl
         date.VerticalAlignment = VerticalAlignment.Bottom;
         header.Children.Add(date);
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Right };
+        actions.Children.Add(Ui.TagButton(Tr.T("command.file.newProject"), "outline", () => _shell.Commands.TryExecute("file.newProject")));
         actions.Children.Add(Ui.TagButton(Tr.T("shell.start.open"), "accent", () => _shell.Commands.TryExecute("file.open")));
         header.Children.Add(actions);
         page.Children.Add(header);

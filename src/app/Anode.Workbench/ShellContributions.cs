@@ -21,6 +21,18 @@ public static class ShellContributions
                 ScopeKey = "scope.window", ShortcutText = "⌘K", Gesture = new KeyGesture(Key.K, command),
                 Execute = shell.OpenPalette,
             },
+            new("file.newProject", "command.file.newProject")
+            {
+                ScopeKey = "scope.file", ShortcutText = "⌘⇧N", Gesture = new KeyGesture(Key.N, command | KeyModifiers.Shift),
+                CanExecute = () => shell.CreatableType is not null,
+                Execute = () => _ = shell.NewProjectAsync(),
+            },
+            new("file.newSheet", "command.file.newSheet")
+            {
+                ScopeKey = "scope.file", ShortcutText = "⌘N", Gesture = new KeyGesture(Key.N, command),
+                CanExecute = () => shell.HasProject && shell.CreatableType is not null,
+                Execute = () => _ = shell.NewSheetAsync(),
+            },
             new("file.open", "command.file.open")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘O", Gesture = new KeyGesture(Key.O, command),

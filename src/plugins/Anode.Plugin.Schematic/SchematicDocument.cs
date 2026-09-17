@@ -20,6 +20,37 @@ public sealed class SchematicDocumentType(ILog log) : IDocumentType
 
     public IReadOnlyList<string> Extensions { get; } = [".kicad_sch"];
 
+    public bool CanCreate => true;
+
+    /// <summary>
+    /// A new sheet: the header KiCad writes and empty paper. It is parsed back before it is written, because the
+    /// cheapest proof that we wrote a sheet is that we can read it.
+    /// </summary>
+    public Task CreateAsync(string path, CancellationToken cancellationToken) => Task.Run(
+        () =>
+        {
+            string text =
+                "(kicad_sch\n" +
+                $"\t(version {KiCadFormat.KiCad10})\n" +
+                "\t(generator \"anode\")\n" +
+                "\t(generator_version \"0.1\")\n" +
+                $"\t(uuid \"{Guid.NewGuid():D}\")\n" +
+                "\t(paper \"A4\")\n" +
+                "\t(lib_symbols)\n" +
+                "\t(sheet_instances\n" +
+                "\t\t(path \"/\"\n" +
+                "\t\t\t(page \"1\")\n" +
+                "\t\t)\n" +
+                "\t)\n" +
+                "\t(embedded_fonts no)\n" +
+                ")\n";
+
+            _ = Anode.Kicad.Schematic.Parse(text);
+            File.WriteAllText(path, text);
+            log.Info(Tr.T("sch.log.created", Path.GetFileName(path)));
+        },
+        cancellationToken);
+
     public Task<IDocument> OpenAsync(string path, CancellationToken cancellationToken) => Task.Run(
         () =>
         {
