@@ -18,6 +18,18 @@
       "flip": "View from below",
       "highlightNet": "Net highlight"
     },
+    "pad": {
+      "one": "pad",
+      "other": "pads"
+    },
+    "block": {
+      "connectionsOf": "Connections · {0}",
+      "identity": "Identification",
+      "geometry": "Geometry",
+      "electrics": "Electrics",
+      "rules": "Rules and figures",
+      "checks": "Checks"
+    },
     "summary": { "board": "board · {0} {1}" },
     "layer": { "one": "layer", "other": "layers" },
     "net": { "one": "net", "other": "nets" },

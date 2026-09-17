@@ -27,8 +27,26 @@ public interface IWorkbench
 
     void DismissBanner(Banner banner);
 
+    /// <summary>
+    /// Asks the inspector to put the caret in the first value that can be changed — KiCad's E. The panel listens for
+    /// this the way the panels listen for a change of language, so a document can ask for it without knowing which
+    /// panel is up or where it is docked.
+    /// </summary>
+    void FocusInspector() => InspectorFocus.Request();
+
     /// <summary>Interface chrome theme. The drawing sheet stays light in both.</summary>
     ThemeVariant Theme { get; set; }
 
     ILog Log { get; }
+}
+
+/// <summary>
+/// The request behind <see cref="IWorkbench.FocusInspector"/>. A document raises it; whichever inspector is showing
+/// answers. Nothing is passed with it: the panel already knows what is selected.
+/// </summary>
+public static class InspectorFocus
+{
+    public static event Action? Requested;
+
+    public static void Request() => Requested?.Invoke();
 }

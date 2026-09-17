@@ -1,6 +1,7 @@
 using System.Globalization;
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Schematic;
@@ -8,25 +9,213 @@ namespace Anode.Plugin.Schematic;
 /// <summary>Turns the selected sheet item into inspector rows.</summary>
 internal static class SchItemProperties
 {
+    /// <summary>
+    /// The three lines above the blocks: what the object is called, the kind as a chip beside it, and — filled in by
+    /// the document, which is the one that knows — where it lives. An object with no name of its own puts its kind on
+    /// the first line and lets the chip carry a count or a sort.
+    /// </summary>
     public static (string Title, string? Subtitle, string? Tag) Header(SchItem item) => item switch
     {
-        SymbolInstance symbol => (symbol.Reference ?? symbol.LibId, symbol.Value, symbol.IsDnp ? Tr.T("sch.property.dnp") : null),
-        SchWire wire => (Tr.T(wire.IsBus ? "sch.item.bus" : "sch.item.wire"), Length(wire), null),
-        SchBusEntry => (Tr.T("sch.item.bus"), null, null),
+        SymbolInstance symbol => (symbol.Reference ?? symbol.LibId, null, Tr.T("sch.item.symbol")),
+        SchWire wire => (Tr.T(wire.IsBus ? "sch.item.bus" : "sch.item.wire"), null, Length(wire)),
+        SchBusEntry => (Tr.T("sch.item.busEntry"), null, null),
         SchJunction => (Tr.T("sch.item.junction"), null, null),
         SchNoConnect => (Tr.T("sch.item.noConnect"), null, null),
-        SchLabel label => (label.Text, Tr.T(label.Kind switch
+        SchLabel label => (label.Text, null, Tr.T(label.Kind switch
         {
             SchLabelKind.Global => "sch.item.globalLabel",
             SchLabelKind.Hierarchical => "sch.item.hierarchicalLabel",
             SchLabelKind.NetClassFlag => "sch.item.netclassFlag",
             _ => "sch.item.label",
-        }), null),
-        SchText text => (Tr.T("sch.item.text"), Shorten(text.Text), null),
-        SchSheet sheet => (sheet.SheetName ?? Tr.T("sch.item.sheet"), sheet.SheetFile, null),
-        SchGraphic graphic => (Tr.T("sch.item.graphic"), graphic.Kind.ToString().ToLowerInvariant(), null),
+        })),
+        SchText text => (Shorten(text.Text), null, Tr.T("sch.item.text")),
+        SchSheet sheet => (sheet.SheetName ?? Tr.T("sch.item.sheet"), null, Tr.T("sch.item.sheet")),
+        SchGraphic graphic => (Tr.T("sch.item.graphic"), null, graphic.Kind.ToString().ToLowerInvariant()),
         _ => (Tr.T("sch.item.other"), null, null),
     };
+
+    /// <summary>
+    /// The inspector proper: named blocks in a fixed order, of which each kind has only some. A row that carries a
+    /// <c>Commit</c> can be written; the rest are computed and stay bare.
+    ///
+    /// Two of the design's blocks are missing here on purpose. Electrics and class rules describe a net, and a sheet
+    /// has no notion of a net until connectivity is built — so rather than show empty headings, the blocks that
+    /// cannot yet be filled are left out.
+    /// </summary>
+    /// <param name="edit">Applies a change as one undoable step: a name for the history, and what to do.</param>
+    public static IEnumerable<InspectorBlock> Blocks(SchItem item, Action<string, Action> edit)
+    {
+        switch (item)
+        {
+            case SymbolInstance symbol:
+                yield return new InspectorBlock(Tr.T("sch.block.identity"),
+                [
+                    Writable("reference", symbol.Reference ?? None, v => edit(Name("reference"), () => SchWrites.SetField(symbol, "Reference", v))),
+                    Writable("value", symbol.Value ?? None, v => edit(Name("value"), () => SchWrites.SetField(symbol, "Value", v))),
+                    Computed("library", symbol.LibId),
+                    .. symbol.Footprint is { Length: > 0 } footprint
+                        ? new[] { Writable("footprint", footprint, v => edit(Name("footprint"), () => SchWrites.SetField(symbol, "Footprint", v))) }
+                        : [],
+                ]);
+
+                yield return Geometry(item, edit);
+
+                if (symbol.Definition?.PinsOf(symbol.Unit, symbol.BodyStyle).ToList() is { Count: > 0 } pins)
+                {
+                    yield return new InspectorBlock(
+                        Tr.T("sch.block.connectionsOf", $"{pins.Count} {Tr.Plural("sch.pin", pins.Count)}"),
+                        [.. pins.Select(pin => new InspectorRow(pin.Number, pin.Name))])
+                    {
+                        IsConnections = true,
+                    };
+                }
+
+                break;
+
+            case SchSheet sheet:
+                yield return new InspectorBlock(Tr.T("sch.block.identity"),
+                [
+                    Writable("name", sheet.SheetName ?? None, v => edit(Name("name"), () => SchWrites.SetField(sheet, "Sheetname", v))),
+                    Writable("file", sheet.SheetFile ?? None, v => edit(Name("file"), () => SchWrites.SetField(sheet, "Sheetfile", v))),
+                ]);
+
+                yield return new InspectorBlock(Tr.T("sch.block.geometry"),
+                [
+                    Position(item, edit),
+                    Computed("size", Pair(sheet.Size, " × ")),
+                ]);
+
+                if (sheet.Pins.Count > 0)
+                {
+                    yield return new InspectorBlock(
+                        Tr.T("sch.block.connectionsOf", $"{sheet.Pins.Count} {Tr.Plural("sch.pin", sheet.Pins.Count)}"),
+                        [.. sheet.Pins.Select(pin => new InspectorRow(string.Empty, pin.Name) { Trailing = Shape(pin.Shape) })])
+                    {
+                        IsConnections = true,
+                    };
+                }
+
+                break;
+
+            case SchLabel label:
+                yield return new InspectorBlock(Tr.T("sch.block.identity"),
+                [
+                    Writable("text", label.Text, v => edit(Name("text"), () => SchWrites.SetText(label, v))),
+                    .. label.Kind is SchLabelKind.Global or SchLabelKind.Hierarchical
+                        ? new[] { Computed("shape", Shape(label.Shape)) }
+                        : [],
+                ]);
+
+                yield return Geometry(item, edit);
+                break;
+
+            case SchText text:
+                yield return new InspectorBlock(Tr.T("sch.block.identity"),
+                [
+                    Writable("text", text.Text, v => edit(Name("text"), () => SchWrites.SetText(text, v))),
+                ]);
+
+                yield return Geometry(item, edit);
+                break;
+
+            case SchWire wire:
+                var points = wire.Points;
+                if (points.Length > 0)
+                {
+                    yield return new InspectorBlock(Tr.T("sch.block.geometry"),
+                    [
+                        Computed("position", Pair(points[0])),
+                        Computed("size", Pair(points[^1])),
+                        Computed("length", Mm((long)Total(points))),
+                    ]);
+                }
+
+                break;
+
+            case SchGraphic graphic:
+                yield return new InspectorBlock(Tr.T("sch.block.geometry"),
+                [
+                    Computed("shape", graphic.Kind.ToString().ToLowerInvariant()),
+                    Computed("position", Pair(graphic.Kind == SchShapeKind.Circle ? graphic.Center : graphic.Start)),
+                ]);
+
+                break;
+
+            case SchJunction junction:
+                yield return new InspectorBlock(Tr.T("sch.block.geometry"),
+                [
+                    Position(item, edit),
+                    Computed("size", Mm(junction.Diameter)),
+                ]);
+
+                break;
+
+            default:
+                yield return Geometry(item, edit);
+                break;
+        }
+    }
+
+    /// <summary>Where the item sits, and which way it faces — the one block almost everything on a sheet has.</summary>
+    private static InspectorBlock Geometry(SchItem item, Action<string, Action> edit) =>
+        new(Tr.T("sch.block.geometry"),
+        [
+            Position(item, edit),
+            Writable("angle", Deg(item.Angle), v =>
+            {
+                if (ParseAngle(v) is { } degrees)
+                {
+                    edit(Name("angle"), () => SchWrites.SetAngle(item, degrees));
+                }
+            }),
+        ]);
+
+    private static InspectorRow Position(SchItem item, Action<string, Action> edit) =>
+        Writable("position", Pair(item.Position), v =>
+        {
+            if (ParsePoint(v) is { } at)
+            {
+                edit(Name("position"), () => SchWrites.SetPosition(item, at));
+            }
+        });
+
+    private static InspectorRow Writable(string nameKey, string value, Action<string> commit) =>
+        new(Name(nameKey), value) { Commit = commit };
+
+    private static InspectorRow Computed(string nameKey, string value) => new(Name(nameKey), value);
+
+    private static string Name(string nameKey) => Tr.T($"sch.property.{nameKey}");
+
+    /// <summary>
+    /// A pair of millimetres as the inspector writes it: "148.59 / 105.41". No unit is appended — a pair is always
+    /// millimetres, and the suffix only cost the panel the width it needed to show the second number.
+    /// </summary>
+    private static string Pair(Vector2L p, string separator = " / ") =>
+        $"{Units.NmToMm(p.X).ToString("0.###", CultureInfo.InvariantCulture)}{separator}"
+        + $"{Units.NmToMm(p.Y).ToString("0.###", CultureInfo.InvariantCulture)}";
+
+    /// <summary>The direction written on a label or a sheet pin, in the reader's language.</summary>
+    private static string Shape(string shape) => Tr.T($"sch.shape.{shape}");
+
+    /// <summary>"127.0 / 88.9", "127, 88.9" or "127 88.9" — millimetres, however they were typed.</summary>
+    private static Vector2L? ParsePoint(string text)
+    {
+        var parts = text.Replace('/', ' ').Replace(',', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var numbers = parts.Where(part => double.TryParse(part, NumberStyles.Float, CultureInfo.InvariantCulture, out _)).ToList();
+        if (numbers.Count < 2)
+        {
+            return null;
+        }
+
+        return new Vector2L(
+            Units.MmToNm(double.Parse(numbers[0], CultureInfo.InvariantCulture)),
+            Units.MmToNm(double.Parse(numbers[1], CultureInfo.InvariantCulture)));
+    }
+
+    private static double? ParseAngle(string text) =>
+        double.TryParse(text.Replace("°", string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double degrees)
+            ? degrees
+            : null;
 
     public static IEnumerable<PropertyItem> For(SchItem item)
     {

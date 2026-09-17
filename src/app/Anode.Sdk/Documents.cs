@@ -110,12 +110,60 @@ public sealed record ToolDescriptor(string Id, string TitleKey, string IconKey)
 public sealed record StatusField(string Text, bool AlignEnd = false, bool IsAlert = false);
 
 /// <param name="Title">Large heading, e.g. the reference "U3".</param>
-/// <param name="Subtitle">E.g. "Регулятор · SOT-23-3".</param>
-/// <param name="Tag">Optional tag next to the title, e.g. "В наличии".</param>
-public sealed record SelectionInfo(string Title, string? Subtitle, IReadOnlyList<PropertyItem> Properties, string? Tag = null);
+/// <param name="Subtitle">Where the object lives, e.g. "Power.sch · лист 2 из 4".</param>
+/// <param name="Tag">The kind, shown as a chip beside the title: "Символ", "Дорожка".</param>
+public sealed record SelectionInfo(string Title, string? Subtitle, IReadOnlyList<PropertyItem> Properties, string? Tag = null)
+{
+    /// <summary>
+    /// The inspector proper: named blocks in a fixed order, of which a type has only some. Empty means the document
+    /// has not been taught the blocks yet and the flat <see cref="Properties"/> list is shown instead.
+    /// </summary>
+    public IReadOnlyList<InspectorBlock> Blocks { get; init; } = [];
+
+    /// <summary>What can be done to this object, shown as tags in the panel's footer.</summary>
+    public IReadOnlyList<InspectorAction> Actions { get; init; } = [];
+}
 
 /// <param name="IsSection">A section overline ("ВЫВОДЫ") instead of a name/value row.</param>
 public sealed record PropertyItem(string Name, string Value, bool IsSection = false);
+
+/// <summary>
+/// One block of the inspector — identification, geometry, connections, checks. The order is the document's; the
+/// panel draws them separated by a hairline, never boxed.
+/// </summary>
+public sealed record InspectorBlock(string Title, IReadOnlyList<InspectorRow> Rows)
+{
+    /// <summary>A block that exists only because a rule is broken: the second accent, and a marker on every row.</summary>
+    public bool IsAlert { get; init; }
+
+    /// <summary>
+    /// Rows are connections rather than values: a number, a name, and what it reaches pushed to the right. The
+    /// block's own title carries the count ("Связи · 3 вывода").
+    /// </summary>
+    public bool IsConnections { get; init; }
+}
+
+/// <summary>
+/// One line of a block. A row that can be written has <see cref="Commit"/>; the panel gives it the field fill, which
+/// is how the eye tells what can be changed from what was computed. Units belong in the value, not the name.
+/// </summary>
+public sealed record InspectorRow(string Name, string Value)
+{
+    /// <summary>Applies a new value, as one undoable step. Null for a value that is derived and cannot be set.</summary>
+    public Action<string>? Commit { get; init; }
+
+    /// <summary>Right-hand side of a connection row: the net it reaches, or the direction of a sheet pin.</summary>
+    public string? Trailing { get; init; }
+
+    /// <summary>The row says something is unresolved — an unnamed net, a missing library — and reads in the accent.</summary>
+    public bool IsUnresolved { get; init; }
+}
+
+/// <param name="IsPrimary">The one action that answers the block above it; the rest are outlined.</param>
+public sealed record InspectorAction(string Label, Action Run)
+{
+    public bool IsPrimary { get; init; }
+}
 
 public enum IssueSeverity
 {

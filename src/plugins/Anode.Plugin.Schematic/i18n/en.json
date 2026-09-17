@@ -43,8 +43,32 @@
       "rotateCw": "Rotate clockwise",
       "mirror": "Mirror horizontally",
       "mirrorVertical": "Mirror vertically",
+      "properties": "Properties",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
+    },
+    "shape": {
+      "input": "input",
+      "output": "output",
+      "bidirectional": "bidirectional",
+      "tri_state": "tri-state",
+      "passive": "passive"
+    },
+    "block": {
+      "identity": "Identification",
+      "geometry": "Geometry",
+      "connections": "Connections",
+      "connectionsOf": "Connections · {0}",
+      "checks": "Checks"
+    },
+    "action": {
+      "editSymbol": "Edit symbol",
+      "openSheet": "Open sheet",
+      "editPins": "Edit pins"
+    },
+    "pin": {
+      "one": "pin",
+      "other": "pins"
     },
     "summary": { "sheet": "schematic · {0}" },
     "symbol": { "one": "symbol", "other": "symbols" },
@@ -62,6 +86,8 @@
     },
     "selection": { "multi": "{0} objects" },
     "item": {
+      "symbol": "Symbol",
+      "busEntry": "Bus entry",
       "symbol": "Symbol",
       "wire": "Wire",
       "bus": "Bus",

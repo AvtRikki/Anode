@@ -15,45 +15,208 @@ public sealed class InspectorPanel : ContentControl
 {
     private readonly IWorkbench _workbench;
 
+    /// <summary>The boxes of the current selection, in the order they are drawn: E puts the caret in the first.</summary>
+    private readonly List<TextBox> _editable = [];
+
     public InspectorPanel(IWorkbench workbench)
     {
         _workbench = workbench;
         workbench.ActiveDocumentChanged += Render;
         workbench.ActiveDocumentStateChanged += Render;
         Tr.Changed += Render;
+        InspectorFocus.Requested += FocusFirstEditable;
         Render();
+    }
+
+    private void FocusFirstEditable()
+    {
+        if (_editable.FirstOrDefault() is { } box)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
     }
 
     private void Render()
     {
+        _editable.Clear();
         if (_workbench.ActiveDocument?.Selection is not { } selection)
         {
             Content = Ui.Text(Tr.T("shell.inspector.empty"), "dim");
             return;
         }
 
-        var root = new StackPanel { Spacing = 12 };
-        var header = new DockPanel { LastChildFill = false };
-        var title = Ui.Text(selection.Title, "title");
-        title.Margin = new Thickness(0, 0, 8, 0);
-        header.Children.Add(title);
-        if (selection.Subtitle is { } subtitle)
+        var root = new StackPanel();
+        root.Children.Add(Header(selection));
+
+        if (selection.Blocks.Count > 0)
         {
-            var sub = Ui.Text(subtitle, "dim");
-            sub.FontSize = 12;
-            header.Children.Add(sub);
+            bool first = true;
+            foreach (var block in selection.Blocks)
+            {
+                root.Children.Add(Block(block, first));
+                first = false;
+            }
+        }
+        else
+        {
+            // A document that has not been taught the blocks yet still shows what it knows.
+            root.Children.Add(new Border { Padding = new Thickness(11, 10), Child = Ui.PropertyGrid(selection.Properties) });
         }
 
+        if (selection.Actions.Count > 0)
+        {
+            root.Children.Add(Footer(selection.Actions));
+        }
+
+        Content = new ScrollViewer { Content = root };
+    }
+
+    /// <summary>Three lines on the raised fill: what it is called, what kind it is, and where it lives.</summary>
+    private static Control Header(SelectionInfo selection)
+    {
+        var lines = new StackPanel { Spacing = 5 };
+
+        var name = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        name.Children.Add(Ui.Text(selection.Title, "title"));
         if (selection.Tag is { } tag)
         {
-            var tagView = Ui.Tag(tag, "accent");
-            DockPanel.SetDock(tagView, Dock.Right);
-            header.Children.Add(tagView);
+            name.Children.Add(new Border
+            {
+                Padding = new Thickness(6, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = Ui.Mono(tag, "dim"),
+            }.WithResource(Border.BackgroundProperty, ThemeKeys.ChromeBg));
         }
 
-        root.Children.Add(header);
-        root.Children.Add(Ui.PropertyGrid(selection.Properties));
-        Content = new ScrollViewer { Content = root };
+        lines.Children.Add(name);
+
+        if (selection.Subtitle is { } subtitle)
+        {
+            var where = Ui.Text(subtitle, "dim");
+            where.FontSize = 11.5;
+            lines.Children.Add(where);
+        }
+
+        return new Border { Padding = new Thickness(11, 9), Child = lines }
+            .WithResource(Border.BackgroundProperty, ThemeKeys.ChromeRaised);
+    }
+
+    /// <summary>One block. A line divides it from the one above — never a frame, and never a card.</summary>
+    private Control Block(InspectorBlock block, bool first)
+    {
+        var rows = new StackPanel { Spacing = 7 };
+
+        // Every block names itself in the quiet ink; only a block that reports a broken rule takes the second accent.
+        var title = Ui.Overline(block.Title, block.IsAlert);
+        if (!block.IsAlert)
+        {
+            title.Classes.Add("quiet");
+        }
+
+        rows.Children.Add(title);
+
+        if (block.IsAlert)
+        {
+            foreach (var row in block.Rows)
+            {
+                rows.Children.Add(Complaint(row));
+            }
+        }
+        else if (block.IsConnections)
+        {
+            var list = new StackPanel { Spacing = 3 };
+            foreach (var row in block.Rows)
+            {
+                list.Children.Add(Ui.ConnectionRow(row.Name, row.Value, row.Trailing, row.IsUnresolved));
+            }
+
+            rows.Children.Add(list);
+        }
+        else
+        {
+            rows.Children.Add(Values(block.Rows));
+        }
+
+        var border = new Border
+        {
+            Padding = new Thickness(11, 10),
+            BorderThickness = new Thickness(0, first ? 0 : 1, 0, 0),
+            Child = rows,
+        };
+
+        return first ? border : border.WithResource(Border.BorderBrushProperty, ThemeKeys.ChromeLine);
+    }
+
+    /// <summary>Names in a fixed column, values beside them; a value that can be written wears the field fill.</summary>
+    private Grid Values(IReadOnlyList<InspectorRow> rows)
+    {
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("90,*"), RowSpacing = 5, ColumnSpacing = 10 };
+        for (int i = 0; i < rows.Count; i++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+            var label = Ui.Text(rows[i].Name, "dim");
+            label.FontSize = 12.5;
+            Grid.SetRow(label, i);
+            grid.Children.Add(label);
+
+            Control value;
+            if (rows[i].Commit is { } commit)
+            {
+                var box = Ui.EditableField(rows[i].Value, commit);
+                _editable.Add(box);
+                value = box;
+            }
+            else
+            {
+                value = Ui.Mono(rows[i].Value, rows[i].IsUnresolved ? "accentText" : "value");
+            }
+
+            Grid.SetRow(value, i);
+            Grid.SetColumn(value, 1);
+            grid.Children.Add(value);
+        }
+
+        return grid;
+    }
+
+    /// <summary>A broken rule, in the same words the bottom dock uses.</summary>
+    private static Control Complaint(InspectorRow row)
+    {
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        line.Children.Add(new Border
+        {
+            Width = 7,
+            Height = 7,
+            Margin = new Thickness(0, 4, 0, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            Classes = { "issueMarker", "error" },
+        });
+
+        var text = Ui.Text(row.Value);
+        text.FontSize = 12.5;
+        text.TextWrapping = TextWrapping.Wrap;
+        text.TextTrimming = TextTrimming.None;
+        line.Children.Add(text);
+        return line;
+    }
+
+    /// <summary>What can be done to the object. Everything modal leaves the panel through here.</summary>
+    private static Control Footer(IReadOnlyList<InspectorAction> actions)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        foreach (var action in actions)
+        {
+            row.Children.Add(Ui.TagButton(action.Label, action.IsPrimary ? "accent" : "outline", action.Run));
+        }
+
+        return new Border
+        {
+            Padding = new Thickness(11, 10),
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Child = row,
+        }.WithResource(Border.BorderBrushProperty, ThemeKeys.ChromeLine);
     }
 }
 

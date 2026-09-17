@@ -158,7 +158,14 @@ public sealed class SchematicDocument : DocumentBase
             }
 
             var (title, subtitle, tag) = SchItemProperties.Header(item);
-            return new SelectionInfo(title, subtitle, [.. SchItemProperties.For(item)], tag);
+
+            // Where it lives is the document's to say, not the item's: the item has never heard of a file.
+            subtitle ??= Path.GetFileName(FilePath);
+            return new SelectionInfo(title, subtitle, [.. SchItemProperties.For(item)], tag)
+            {
+                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate))],
+                Actions = Actions(item),
+            };
         }
     }
 
@@ -198,6 +205,26 @@ public sealed class SchematicDocument : DocumentBase
             ],
         },
     ];
+
+    /// <summary>What can be done to the selected item, shown in the inspector's footer.</summary>
+    private IReadOnlyList<InspectorAction> Actions(SchItem item) => item switch
+    {
+        SchSheet sheet when sheet.SheetFile is { Length: > 0 } file =>
+            [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(file))],
+        _ => [],
+    };
+
+    /// <summary>Opens a child sheet as its own tab, beside this one.</summary>
+    private void OpenSheet(string file)
+    {
+        if (_context is not { } context || FilePath is not { } path)
+        {
+            return;
+        }
+
+        string target = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, file);
+        _ = context.Workbench.OpenAsync(target);
+    }
 
     /// <summary>The shape button wears the kind it would draw.</summary>
     private static string ShapeIcon(string tool) => tool switch
@@ -428,6 +455,14 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 100,
                 Execute = () => UseTool("sch.tool.circle"),
+            },
+            new("sch.properties", "sch.command.properties")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "E", MenuKey = "menu.edit", MenuOrder = 60,
+                CanExecute = () => _editor.Selection.Count == 1,
+
+                // The values live in the inspector, so E puts the caret in the first one that can be written.
+                Execute = () => context.Workbench.FocusInspector(),
             },
             new("sch.fit", "sch.command.fit")
             {

@@ -360,6 +360,20 @@ public sealed class SchematicEditor
         Run(new CompositeCommand(name, steps));
     }
 
+    /// <summary>
+    /// Changes items where they stand, as one undoable step — what the inspector commits when a field is written.
+    /// The snapshot the command takes is what makes an edit that is undone give the file back byte for byte.
+    /// </summary>
+    public void Modify(string name, IReadOnlyList<SchItem> items, Action mutate)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        Run(new ModifyNodesCommand(name, items, mutate));
+    }
+
     public void DeleteSelection()
     {
         if (Move is not null || _selection.Count == 0)

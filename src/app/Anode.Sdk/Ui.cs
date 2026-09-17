@@ -61,6 +61,66 @@ public static class Ui
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>
+    /// A value that can be written. It wears the field fill, which is what tells the eye a value can be changed at
+    /// all; a computed value is left bare. Enter commits, Esc puts back what was there, and leaving does the same as
+    /// Enter — a field that silently dropped an edit on focus loss would be worse than one that refuses it.
+    /// </summary>
+    public static TextBox EditableField(string value, Action<string> commit)
+    {
+        var box = new TextBox { Text = value, Classes = { "fieldInput" }, Tag = value };
+
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                Commit(box, commit);
+                e.Handled = true;
+            }
+            else if (e.Key == Avalonia.Input.Key.Escape)
+            {
+                box.Text = box.Tag as string ?? string.Empty;
+                e.Handled = true;
+            }
+        };
+
+        box.LostFocus += (_, _) => Commit(box, commit);
+        return box;
+    }
+
+    private static void Commit(TextBox box, Action<string> commit)
+    {
+        string written = box.Text ?? string.Empty;
+        if (written == (box.Tag as string ?? string.Empty))
+        {
+            return;
+        }
+
+        // Remembered before the call: committing rebuilds the panel, and this box may not outlive it.
+        box.Tag = written;
+        commit(written);
+    }
+
+    /// <summary>One line of a connection block: the number, what it is called, and what it reaches.</summary>
+    public static Grid ConnectionRow(string number, string name, string? reaches, bool unresolved = false)
+    {
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("20,*,Auto"), ColumnSpacing = 8 };
+        grid.Children.Add(Mono(number, "dim"));
+
+        var label = Mono(name);
+        Grid.SetColumn(label, 1);
+        grid.Children.Add(label);
+
+        if (reaches is not null)
+        {
+            var right = Mono(reaches, unresolved ? "accentText" : "dim");
+            Grid.SetColumn(right, 2);
+            grid.Children.Add(right);
+        }
+
+        return grid;
+    }
+
     /// <summary>Serif labels on the left (fixed width), mono values in fields; section items become overlines.</summary>
     public static Grid PropertyGrid(IEnumerable<PropertyItem> items, double labelWidth = 78)
     {

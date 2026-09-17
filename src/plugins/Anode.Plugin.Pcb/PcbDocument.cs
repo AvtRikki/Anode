@@ -139,7 +139,19 @@ public sealed class PcbDocument : DocumentBase
                 properties.AddRange(ItemProperties.For(focus));
             }
 
-            return new SelectionInfo(title, subtitle, properties, tag);
+            // Where it lives is the document's to say: the item has never heard of a file.
+            string? file = Path.GetFileName(FilePath);
+            string? where = (file, subtitle) switch
+            {
+                ({ Length: > 0 }, { Length: > 0 }) => $"{file} · {subtitle}",
+                ({ Length: > 0 }, _) => file,
+                _ => subtitle,
+            };
+
+            return new SelectionInfo(title, where, properties, tag)
+            {
+                Blocks = [.. ItemProperties.Blocks(item)],
+            };
         }
     }
 
