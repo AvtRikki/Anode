@@ -387,6 +387,17 @@
     <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
   </Style>
 
+  <!-- The floating tool bar of a document: it sits over the drawing, so it carries its own ground and shadow. -->
+  <Style Selector="Border.toolBar">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="3" />
+    <Setter Property="Margin" Value="0,12,0,0" />
+    <Setter Property="BoxShadow" Value="{DynamicResource Shadow.Sm}" />
+  </Style>
+
   <!-- Toolbar tools: 28×24, selected fills with accent. -->
   <Style Selector="Button.tool">
     <Setter Property="Width" Value="28" />

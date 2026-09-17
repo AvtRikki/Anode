@@ -74,6 +74,8 @@ public sealed class SchematicDocument : DocumentBase
     private readonly IReadOnlyList<SheetCheck> _checks;
     private readonly SchematicEditor _editor;
     private SchematicCanvas? _canvas;
+    private IPluginContext? _context;
+    private string? _tool;
     private string _cursor = string.Empty;
     private string _frame = string.Empty;
     private double _zoom;
@@ -158,6 +160,33 @@ public sealed class SchematicDocument : DocumentBase
 
     public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue())];
 
+    /// <summary>What the pointer can do on this sheet. The workbench floats these over the canvas.</summary>
+    public override IReadOnlyList<ToolDescriptor> Tools =>
+    [
+        new("sch.tool.select", "sch.tool.select", Icons.Select) { ShortcutText = "Esc", Activate = () => UseTool(null) },
+        new("sch.tool.wire", "sch.tool.wire", Icons.Wire) { ShortcutText = "W", Activate = () => UseTool("sch.tool.wire") },
+        new("sch.tool.bus", "sch.tool.bus", Icons.Bus) { ShortcutText = "B", Activate = () => UseTool("sch.tool.bus") },
+    ];
+
+    public override string? ActiveToolId => _tool;
+
+    /// <summary>Puts a tool on the pointer, or takes it off; the buttons and the canvas follow.</summary>
+    public void UseTool(string? id)
+    {
+        _tool = id;
+        if (_canvas is { } canvas)
+        {
+            canvas.Tool = id switch
+            {
+                "sch.tool.wire" => new WireTool(_editor),
+                "sch.tool.bus" => new WireTool(_editor, bus: true),
+                _ => null,
+            };
+        }
+
+        OnPropertiesChanged(nameof(ActiveToolId), nameof(StatusFields));
+    }
+
     public override Task<bool> SaveAsync(string? path = null)
     {
         _editor.Save(path ?? FilePath ?? throw new InvalidOperationException("The sheet has no path to save to."));
@@ -168,47 +197,74 @@ public sealed class SchematicDocument : DocumentBase
 
     public override void Activate(IPluginContext context)
     {
+        _context = context;
         CommandDescriptor[] commands =
         [
             new("edit.undo", "sch.command.undo")
             {
                 ScopeKey = "scope.schematic", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
+                MenuKey = "menu.edit", MenuOrder = 0,
                 CanExecute = () => _editor.History.CanUndo,
                 Execute = () => Guard(() => _editor.Undo(), context),
             },
             new("edit.redo", "sch.command.redo")
             {
                 ScopeKey = "scope.schematic", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
+                MenuKey = "menu.edit", MenuOrder = 10,
                 CanExecute = () => _editor.History.CanRedo,
                 Execute = () => Guard(() => _editor.Redo(), context),
             },
             new("edit.delete", "sch.command.delete")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "⌫",
+                ScopeKey = "scope.schematic", ShortcutText = "⌫", MenuKey = "menu.edit", MenuOrder = 20,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.DeleteSelection(), context),
             },
             new("sch.move", "sch.command.move")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "M",
+                ScopeKey = "scope.schematic", ShortcutText = "M", MenuKey = "menu.edit", MenuOrder = 30,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => _canvas?.BeginMoveWithCursor(),
             },
             new("sch.rotate", "sch.command.rotate")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "R",
+                ScopeKey = "scope.schematic", ShortcutText = "R", MenuKey = "menu.edit", MenuOrder = 40,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.Rotate(90), context),
             },
             new("sch.mirror", "sch.command.mirror")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "X",
+                ScopeKey = "scope.schematic", ShortcutText = "X", MenuKey = "menu.edit", MenuOrder = 50,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.Mirror(horizontal: true), context),
             },
+            new("sch.tool.select", "sch.tool.select")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "Esc", Gesture = new KeyGesture(Key.Escape),
+                CanExecute = () => _tool is not null || _canvas is not null,
+
+                // The first Esc ends the run in progress; with none, it puts the pointer back to selecting.
+                Execute = () =>
+                {
+                    if (_canvas?.CancelToolRun() != true)
+                    {
+                        UseTool(null);
+                    }
+                },
+            },
+            new("sch.tool.wire", "sch.command.wire")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "W", MenuKey = "menu.place", MenuOrder = 0,
+                Execute = () => UseTool("sch.tool.wire"),
+            },
+            new("sch.tool.bus", "sch.command.bus")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "B", MenuKey = "menu.place", MenuOrder = 10,
+                Execute = () => UseTool("sch.tool.bus"),
+            },
             new("sch.fit", "sch.command.fit")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "Home",
+                ScopeKey = "scope.schematic", ShortcutText = "Home", MenuKey = "menu.view", MenuOrder = 5,
                 Execute = () => _canvas?.ZoomToFit(),
             },
         ];
@@ -257,6 +313,8 @@ public sealed class SchematicDocument : DocumentBase
     protected override Control CreateView()
     {
         var canvas = new SchematicCanvas { Editor = _editor };
+        canvas.ToolCancelled += () => UseTool(null);
+        canvas.ContextMenu = SheetMenu();
         _canvas = canvas;
         canvas.CursorMoved += position =>
         {
@@ -279,6 +337,63 @@ public sealed class SchematicDocument : DocumentBase
             OnPropertyChanged(nameof(Summary));
         };
         return canvas;
+    }
+
+    /// <summary>
+    /// The sheet's own menu: the tools first, then what can be done to what is selected. The items read the command
+    /// registry as the menu opens, so they say what the document says and grey out when there is nothing to do.
+    /// </summary>
+    private ContextMenu SheetMenu()
+    {
+        var menu = new ContextMenu();
+
+        foreach (var tool in Tools)
+        {
+            var item = new MenuItem { Header = tool.Title, Icon = Icons.Draw(tool.IconKey, 14) };
+            var chosen = tool;
+            item.Click += (_, _) => chosen.Activate();
+            menu.Items.Add(item);
+        }
+
+        menu.Items.Add(new Separator());
+
+        foreach (string id in (string[])["edit.undo", "edit.redo", "sch.rotate", "sch.mirror", "edit.delete"])
+        {
+            string commandId = id;
+            var item = new MenuItem { Tag = commandId };
+            item.Click += (_, _) => _context?.Commands.TryExecute(commandId);
+            menu.Items.Add(item);
+        }
+
+        menu.Opening += (_, _) =>
+        {
+            foreach (var item in menu.Items.OfType<MenuItem>().Where(i => i.Tag is string))
+            {
+                var command = _context?.Commands.Find((string)item.Tag!);
+                item.Header = command?.Title ?? (string)item.Tag!;
+                item.InputGesture = null;
+                item.IsEnabled = command is not null && Safe(command);
+            }
+
+            foreach (var item in menu.Items.OfType<MenuItem>().Where(i => i.Tag is null))
+            {
+                item.Header = Tools.FirstOrDefault(t => t.Title == (string?)item.Header)?.Title ?? item.Header;
+            }
+        };
+
+        return menu;
+
+        static bool Safe(CommandDescriptor command)
+        {
+            try
+            {
+                return command.CanExecute();
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
     }
 
     /// <summary>The canvas draws again when the history moves; the workbench re-reads the document's state.</summary>

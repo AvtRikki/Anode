@@ -29,6 +29,16 @@ public sealed record CommandDescriptor(string Id, string TitleKey)
     /// <summary>Shown with the "бета" tag.</summary>
     public bool IsBeta { get; init; }
 
+    /// <summary>
+    /// Which main menu the command belongs to — "menu.file", "menu.edit", "menu.view", "menu.place". The menu is
+    /// built from the commands that exist at this moment, so it follows the document in front: a sheet brings its
+    /// drawing tools into Place, a board brings its own. A command without this lives in the palette only.
+    /// </summary>
+    public string? MenuKey { get; init; }
+
+    /// <summary>Order inside its menu; leave gaps so a plugin can slot items between the shell's own.</summary>
+    public int MenuOrder { get; init; }
+
     public Func<bool> CanExecute { get; init; } = static () => true;
 
     public required Action Execute { get; init; }

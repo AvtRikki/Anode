@@ -25,6 +25,7 @@ public sealed class SchematicCanvas : Panel
 
     private readonly Camera2D _camera = new();
     private readonly ISceneSurface _surface;
+    private ISchTool? _tool;
     private Gesture _gesture;
     private Point _lastPoint;
     private Point _pressPoint;
@@ -48,6 +49,15 @@ public sealed class SchematicCanvas : Panel
         control.IsHitTestVisible = false;
         Children.Add(control);
         _surface.FrameRendered += ms => FrameRendered?.Invoke(ms);
+
+        // A right drag pans the sheet; the menu belongs to a right click that stayed put, and never to a tool run.
+        ContextRequested += (_, e) =>
+        {
+            if (_tool is not null || Distance(_lastPoint, _pressPoint) > DragSlopPixels)
+            {
+                e.Handled = true;
+            }
+        };
     }
 
     private enum Gesture
@@ -66,6 +76,33 @@ public sealed class SchematicCanvas : Panel
 
     public SchematicScene? Scene => Editor?.Scene;
 
+    /// <summary>The tool the pointer drives; null means the pointer selects and moves.</summary>
+    internal ISchTool? Tool
+    {
+        get => _tool;
+        set
+        {
+            if (ReferenceEquals(_tool, value))
+            {
+                return;
+            }
+
+            if (_tool is { } previous)
+            {
+                previous.Changed -= Present;
+                _ = previous.Cancel();
+            }
+
+            _tool = value;
+            if (_tool is { } tool)
+            {
+                tool.Changed += Present;
+            }
+
+            Present();
+        }
+    }
+
     public string BackendName => _surface.BackendName;
 
     /// <summary>Zoom as a percentage of "one sheet millimetre is one pixel".</summary>
@@ -77,6 +114,9 @@ public sealed class SchematicCanvas : Panel
     public event Action<double>? FrameRendered;
 
     public event Action? ViewChanged;
+
+    /// <summary>Esc left the tool; the document puts the pointer back to selecting.</summary>
+    public event Action? ToolCancelled;
 
     public void Redraw() => Present();
 
@@ -96,6 +136,22 @@ public sealed class SchematicCanvas : Panel
         SyncViewport();
         _camera.Fit(scene.BoardOutline.IsEmpty ? scene.Bounds : scene.BoardOutline);
         Present();
+    }
+
+    /// <summary>
+    /// Ends the run the tool has in progress. False when there was none — which is how Esc knows to leave the tool
+    /// altogether rather than only end a run. The document calls this too, because Esc reaches the window first.
+    /// </summary>
+    internal bool CancelToolRun()
+    {
+        if (_tool is not { } tool)
+        {
+            return false;
+        }
+
+        bool ended = tool.Cancel();
+        Present();
+        return ended;
     }
 
     /// <summary>Starts a move from the keyboard, the way KiCad's M does: the selection follows the cursor.</summary>
@@ -193,6 +249,11 @@ public sealed class SchematicCanvas : Panel
             _gesture = Gesture.Panning;
             e.Pointer.Capture(this);
         }
+        else if (props.IsLeftButtonPressed && _tool is { } tool && Scene is { } toolScene)
+        {
+            tool.Click(toolScene.ToSheetNm(World(point.Position)).Round());
+            Present();
+        }
         else if (props.IsLeftButtonPressed)
         {
             _pressOwner = Pick(point.Position);
@@ -206,6 +267,11 @@ public sealed class SchematicCanvas : Panel
     {
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
+
+        if (_tool is { } tool && Scene is { } toolScene && _gesture != Gesture.Panning)
+        {
+            tool.Move(toolScene.ToSheetNm(World(p)).Round());
+        }
 
         switch (_gesture)
         {
@@ -291,8 +357,20 @@ public sealed class SchematicCanvas : Panel
             case Key.Home:
                 ZoomToFit();
                 break;
+            case Key.Enter or Key.Return:
+                _ = _tool?.Finish();
+                Present();
+                break;
             case Key.Escape:
-                if (_gesture == Gesture.Moving)
+                if (_tool is not null)
+                {
+                    // The first Esc ends the run; a second one puts the pointer back to selecting, as KiCad does.
+                    if (!CancelToolRun())
+                    {
+                        ToolCancelled?.Invoke();
+                    }
+                }
+                else if (_gesture == Gesture.Moving)
                 {
                     editor?.CancelMove();
                     _gesture = Gesture.None;
@@ -452,7 +530,7 @@ public sealed class SchematicCanvas : Panel
             editor.SelectedOwners,
             RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1)
         {
-            Preview = move?.Preview,
+            Preview = move?.Preview is { } moved ? moved : _tool?.Preview is { } drawn ? [drawn] : null,
             PreviewTransform = move?.PreviewTransform ?? Transform2D.Identity,
             SelectionBox = _gesture == Gesture.BoxSelecting ? SelectionBox(_lastPoint) : null,
             SelectionBoxCrossing = _gesture == Gesture.BoxSelecting && IsCrossing(_lastPoint),

@@ -6,7 +6,7 @@ namespace Anode.Sdk;
 /// <summary>Version of the plugin contracts in this assembly. Plugins declare the version they were built against.</summary>
 public static class PlatformContract
 {
-    public const int Version = 5;
+    public const int Version = 7;
 }
 
 /// <summary>Contents of a plugin's <c>plugin.json</c>.</summary>

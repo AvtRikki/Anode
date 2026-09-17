@@ -6,6 +6,12 @@
   "action": {
     "show": "Показать"
   },
+  "menu": {
+    "file": "Файл",
+    "edit": "Правка",
+    "view": "Вид",
+    "place": "Разместить"
+  },
   "command": {
     "shell": {
       "palette": "Палитра команд"
@@ -51,7 +57,7 @@
       "files": "Файлы",
       "count": "{0} файлов · {1}",
       "branch": "Ветка",
-      "newName": "Новый проект",
+      "newName": "untitled",
       "newSheetName": "лист",
       "created": "{0}: новый проект.",
       "createFailed": "Не удалось создать проект: {0}",

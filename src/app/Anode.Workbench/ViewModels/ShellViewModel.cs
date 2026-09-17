@@ -312,8 +312,14 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         try
         {
             string full = Path.GetFullPath(path);
-            string directory = Path.GetDirectoryName(full) ?? throw new IOException(full);
             string name = Path.GetFileNameWithoutExtension(full);
+            string parent = Path.GetDirectoryName(full) ?? throw new IOException(full);
+
+            // The folder is the project, so a new one gets a folder of its own named after it — unless the place the
+            // user picked is already that folder.
+            string directory = string.Equals(Path.GetFileName(parent), name, StringComparison.Ordinal)
+                ? parent
+                : Path.Combine(parent, name);
             Directory.CreateDirectory(directory);
 
             await File.WriteAllTextAsync(Path.Combine(directory, name + ".kicad_pro"), ProjectFile(name));
@@ -927,6 +933,11 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         Replace(StatusRight, fields.Where(f => f.AlignEnd));
         UpdateWindowTitle();
         RaiseHistoryState();
+        foreach (var pane in Panes)
+        {
+            pane.RaiseTools();
+        }
+
         ActiveDocumentStateChanged?.Invoke();
     }
 

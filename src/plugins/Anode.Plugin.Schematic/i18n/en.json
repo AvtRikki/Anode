@@ -3,7 +3,14 @@
   "sch": {
     "document": { "label": "KiCad schematic", "untitled": "schematic" },
     "sheets": { "missing": "file not found" },
+    "tool": {
+      "select": "Select",
+      "wire": "Wire",
+      "bus": "Bus"
+    },
     "command": {
+      "wire": "Draw a wire",
+      "bus": "Draw a bus",
       "undo": "Undo",
       "redo": "Redo",
       "delete": "Delete selection",

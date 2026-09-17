@@ -6,6 +6,12 @@
   "action": {
     "show": "Show"
   },
+  "menu": {
+    "file": "File",
+    "edit": "Edit",
+    "view": "View",
+    "place": "Place"
+  },
   "command": {
     "shell": {
       "palette": "Command palette"
@@ -51,7 +57,7 @@
       "files": "Files",
       "count": "{0} files · {1}",
       "branch": "Branch",
-      "newName": "Untitled project",
+      "newName": "untitled",
       "newSheetName": "sheet",
       "created": "{0}: a new project.",
       "createFailed": "Could not create the project: {0}",

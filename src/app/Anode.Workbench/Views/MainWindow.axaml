@@ -172,6 +172,23 @@
                 </DockPanel>
                 <Panel Background="{DynamicResource Canvas.Backdrop}">
                   <ContentControl Content="{Binding ActiveView}" />
+
+                  <!-- Tools of the document in front: they float over its canvas, not in the frame's chrome. -->
+                  <Border Classes="toolBar" IsVisible="{Binding HasTools}" HorizontalAlignment="Center" VerticalAlignment="Top">
+                    <ItemsControl ItemsSource="{Binding Tools}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal" Spacing="2" />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ToolButtonViewModel">
+                          <Button Classes="tool" Classes.selected="{Binding IsActive}" Command="{Binding UseCommand}"
+                                  ToolTip.Tip="{Binding Title}" Content="{Binding Icon}" />
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Border>
                   <StackPanel IsVisible="{Binding !HasDocument}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="6">
                     <TextBlock Text="{Binding $parent[Window].((vm:ShellViewModel)DataContext).Strings.TabsEmptyTitle}"
                                Foreground="#201e1d" FontSize="15" HorizontalAlignment="Center" />

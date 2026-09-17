@@ -286,6 +286,24 @@ public sealed class SchematicEditor
         }));
     }
 
+    /// <summary>
+    /// Puts new items on the sheet as one undoable step. The selection is left alone unless asked for: a tool that
+    /// draws should not select what it drew, or every committed leg would dim the rest of the sheet for a frame.
+    /// </summary>
+    public void Add(IReadOnlyList<SchItem> items, bool select = false)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        Run(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        if (select)
+        {
+            SetSelection(items);
+        }
+    }
+
     public void DeleteSelection()
     {
         if (Move is not null || _selection.Count == 0)

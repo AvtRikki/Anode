@@ -161,41 +161,43 @@ public sealed class PcbDocument : DocumentBase
             new("edit.undo", "pcb.command.undo")
             {
                 ScopeKey = "scope.board", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
+                MenuKey = "menu.edit", MenuOrder = 0,
                 CanExecute = () => _editor.History.CanUndo,
                 Execute = () => Guard(() => _editor.Undo(), context),
             },
             new("edit.redo", "pcb.command.redo")
             {
                 ScopeKey = "scope.board", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
+                MenuKey = "menu.edit", MenuOrder = 10,
                 CanExecute = () => _editor.History.CanRedo,
                 Execute = () => Guard(() => _editor.Redo(), context),
             },
             new("edit.delete", "pcb.command.delete")
             {
-                ScopeKey = "scope.board", ShortcutText = "⌫",
+                ScopeKey = "scope.board", ShortcutText = "⌫", MenuKey = "menu.edit", MenuOrder = 20,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.DeleteSelection(), context),
             },
             new("pcb.move", "pcb.command.move")
             {
-                ScopeKey = "scope.board", ShortcutText = "M",
+                ScopeKey = "scope.board", ShortcutText = "M", MenuKey = "menu.edit", MenuOrder = 30,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => _canvas?.BeginMoveWithCursor(),
             },
             new("pcb.rotate", "pcb.command.rotate")
             {
-                ScopeKey = "scope.board", ShortcutText = "R",
+                ScopeKey = "scope.board", ShortcutText = "R", MenuKey = "menu.edit", MenuOrder = 40,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.Rotate(90), context),
             },
             new("pcb.fit", "pcb.command.fit")
             {
-                ScopeKey = "scope.board", ShortcutText = "Home",
+                ScopeKey = "scope.board", ShortcutText = "Home", MenuKey = "menu.view", MenuOrder = 5,
                 Execute = () => _canvas?.ZoomToFit(),
             },
             new("pcb.flip", "pcb.command.flip")
             {
-                ScopeKey = "scope.board", ShortcutText = "⇧B",
+                ScopeKey = "scope.board", ShortcutText = "⇧B", MenuKey = "menu.view", MenuOrder = 6,
                 Execute = () =>
                 {
                     if (_canvas is { } canvas)

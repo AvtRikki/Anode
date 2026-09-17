@@ -61,6 +61,12 @@ public interface IDocument : INotifyPropertyChanged, IDisposable
     /// <summary>Status bar fields contributed while the document is active, left to right.</summary>
     IReadOnlyList<StatusField> StatusFields { get; }
 
+    /// <summary>Tools this document offers; empty for a document that has none.</summary>
+    IReadOnlyList<ToolDescriptor> Tools => [];
+
+    /// <summary>The tool in use, so its button reads as pressed; null when the pointer just selects.</summary>
+    string? ActiveToolId => null;
+
     /// <summary>What the inspector shows; null when nothing is selected.</summary>
     SelectionInfo? Selection { get; }
 
@@ -76,6 +82,22 @@ public interface IDocument : INotifyPropertyChanged, IDisposable
     void Activate(IPluginContext context);
 
     void Deactivate();
+}
+
+/// <summary>
+/// A tool of a document: what the pointer does on its canvas until another one takes over. The workbench draws them
+/// floating over the canvas and offers them in its context menu, so a document decides what it can do and the frame
+/// only shows it.
+/// </summary>
+/// <param name="IconKey">Name from <see cref="Icons"/>.</param>
+public sealed record ToolDescriptor(string Id, string TitleKey, string IconKey)
+{
+    public string Title => Tr.T(TitleKey);
+
+    /// <summary>Shortcut as displayed, e.g. "W". The document registers the gesture itself.</summary>
+    public string? ShortcutText { get; init; }
+
+    public required Action Activate { get; init; }
 }
 
 /// <param name="AlignEnd">Pushed to the right side of the status bar.</param>
@@ -122,6 +144,12 @@ public abstract class DocumentBase : IDocument
     public Control View => _view ??= CreateView();
 
     public virtual IReadOnlyList<StatusField> StatusFields => [];
+
+    /// <summary>Tools this document offers; a document without any leaves this empty.</summary>
+    public virtual IReadOnlyList<ToolDescriptor> Tools => [];
+
+    /// <summary>The tool in use, so its button reads as pressed.</summary>
+    public virtual string? ActiveToolId => null;
 
     public virtual SelectionInfo? Selection => null;
 

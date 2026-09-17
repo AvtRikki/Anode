@@ -1,9 +1,12 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Anode.Sdk;
 using Anode.Workbench.Services;
 using Anode.Workbench.ViewModels;
+using Anode.Workbench.Views;
 
 namespace Anode.Workbench.Tests;
 
@@ -49,6 +52,50 @@ public class NewProjectTests
                 byte[] before = File.ReadAllBytes(sheet);
                 Assert.True(Pump(document.SaveAsync()));
                 Assert.Equal(before, File.ReadAllBytes(sheet));
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        });
+    }
+
+    [Fact]
+    public Task A_project_takes_a_folder_of_its_own()
+    {
+        return ShellWindowTests.Dispatch(_ =>
+        {
+            GraphicsOptions.Renderer = RendererKind.Skia;
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+
+            var (shell, folder) = Workbench();
+            try
+            {
+                // The place the dialog returns is where the project file goes, not where its files are strewn: a
+                // project named "lamp" saved into a folder of other projects gets "lamp/" to itself.
+                var document = Pump(shell.NewProjectAsync(Path.Combine(folder, "lamp.kicad_pro")));
+
+                string directory = Path.Combine(folder, "lamp");
+                Assert.Equal(directory, shell.ProjectDirectory);
+                Assert.True(File.Exists(Path.Combine(directory, "lamp.kicad_pro")));
+                Assert.True(File.Exists(Path.Combine(directory, "lamp.kicad_sch")));
+                Assert.NotNull(document);
+
+                // Nothing was left beside the folder.
+                Assert.Empty(Directory.EnumerateFiles(folder, "*.kicad_*"));
+
+                // The project file names the project; the tree says so in its header rather than as a rule. The panel
+                // only builds its rows once it is in a window, so it is shown in one.
+                var panel = Assert.Single(shell.Panels.Panels, p => p.Id == "shell.project").CreateContent(shell);
+                var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
+                window.Show();
+                window.Content = new ContentControl { Content = panel, Width = 260, Height = 600 };
+                Dispatcher.UIThread.RunJobs();
+
+                var texts = panel.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? string.Empty).ToList();
+                Assert.Contains("SCHEMATIC", texts);
+                Assert.DoesNotContain("RULES", texts);
+                window.Close();
             }
             finally
             {

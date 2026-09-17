@@ -35,6 +35,7 @@ public static class Icons
     public const string Redo = "redo";
     public const string Delete = "delete";
     public const string Copy = "copy";
+    public const string Select = "select";
     public const string Move = "move";
     public const string Rotate = "rotate";
     public const string Mirror = "mirror";
@@ -58,6 +59,8 @@ public static class Icons
     public const string Pad = "pad";
     public const string Via = "via";
     public const string Route = "route";
+    public const string Wire = "wire";
+    public const string Bus = "bus";
 
     // ——— Workbench ———
     public const string Search = "search";
@@ -113,6 +116,9 @@ public static class Icons
         [Copy] = new(
             "M5.6 5.6 H13.2 V13.2 H5.6 Z",
             "M5.6 5.6 H13.2 V13.2 H5.6 Z M3.2 10.4 V2.8 H10.8"),
+        [Select] = new(
+            "M3.4 1.8 L3.4 12.8 L6.4 10 L8.3 13.9 L10.2 13 L8.3 9.2 L12.4 9.2 Z",
+            "M3.4 1.8 L3.4 12.8 L6.4 10 L8.3 13.9 L10.2 13 L8.3 9.2 L12.4 9.2 Z"),
         [Move] = new(
             null,
             "M8 1.8 V14.2 M1.8 8 H14.2 M8 1.8 L6.2 3.8 M8 1.8 L9.8 3.8 M8 14.2 L6.2 12.2 M8 14.2 L9.8 12.2 M1.8 8 L3.8 6.2 M1.8 8 L3.8 9.8 M14.2 8 L12.2 6.2 M14.2 8 L12.2 9.8"),
@@ -173,6 +179,14 @@ public static class Icons
         [Route] = new(
             "M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z",
             "M3.2 12.4 H6.6 L12.8 6.2 V3.6 M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z"),
+
+        // A wire runs corner to corner between two connection dots; a bus is the pair of rails a wire taps into.
+        [Wire] = new(
+            "M1.6 11.4 A1.4 1.4 0 1 1 1.6 14.2 A1.4 1.4 0 1 1 1.6 11.4 Z M12.8 1.8 A1.4 1.4 0 1 1 12.8 4.6 A1.4 1.4 0 1 1 12.8 1.8 Z",
+            "M3 12.8 H7.4 L10.4 3.2 H13.5 M1.6 11.4 A1.4 1.4 0 1 1 1.6 14.2 A1.4 1.4 0 1 1 1.6 11.4 Z M12.8 1.8 A1.4 1.4 0 1 1 12.8 4.6 A1.4 1.4 0 1 1 12.8 1.8 Z"),
+        [Bus] = new(
+            "M1.8 3.2 H14.2 V5.6 H1.8 Z",
+            "M1.8 3.2 H14.2 M1.8 5.6 H14.2 M6.2 5.6 L9.4 10.4 M9.4 10.4 H14.2"),
 
         [Search] = new(
             "M7.2 2.4 A4.4 4.4 0 1 1 7.2 11.2 A4.4 4.4 0 1 1 7.2 2.4 Z",

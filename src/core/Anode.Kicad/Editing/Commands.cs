@@ -71,6 +71,37 @@ public sealed class ModifyNodesCommand(string name, IReadOnlyList<INodeItem> ite
     }
 }
 
+/// <summary>Adds top-level items to a document; undo takes them out again, redo puts them back where they were.</summary>
+public sealed class AddNodesCommand(INodeHost host, IReadOnlyList<INodeItem> items) : IEditCommand
+{
+    private readonly List<int> _indices = [];
+
+    public string Name => items.Count == 1 ? "Add item" : $"Add {items.Count} items";
+
+    public IReadOnlyList<INodeItem> Affected => items;
+
+    public void Apply()
+    {
+        for (int i = 0; i < items.Count; i++)
+        {
+            // New items go to the end of the file, which is where KiCad appends them; redo restores the exact place.
+            host.Attach(items[i], i < _indices.Count ? _indices[i] : int.MaxValue);
+            if (i >= _indices.Count)
+            {
+                _indices.Add(items[i].Node.Parent?.IndexOf(items[i].Node) ?? 0);
+            }
+        }
+    }
+
+    public void Revert()
+    {
+        for (int i = items.Count - 1; i >= 0; i--)
+        {
+            host.Detach(items[i]);
+        }
+    }
+}
+
 /// <summary>Removes top-level items; undo puts them back at their original positions in the file.</summary>
 public sealed class DeleteNodesCommand(INodeHost host, IReadOnlyList<INodeItem> items) : IEditCommand
 {

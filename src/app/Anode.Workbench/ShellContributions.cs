@@ -19,40 +19,47 @@ public static class ShellContributions
             new("shell.palette", "command.shell.palette")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌘K", Gesture = new KeyGesture(Key.K, command),
+                MenuKey = "menu.view", MenuOrder = 60,
                 Execute = shell.OpenPalette,
             },
             new("file.newProject", "command.file.newProject")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘⇧N", Gesture = new KeyGesture(Key.N, command | KeyModifiers.Shift),
+                MenuKey = "menu.file", MenuOrder = 0,
                 CanExecute = () => shell.CreatableType is not null,
                 Execute = () => _ = shell.NewProjectAsync(),
             },
             new("file.newSheet", "command.file.newSheet")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘N", Gesture = new KeyGesture(Key.N, command),
+                MenuKey = "menu.file", MenuOrder = 10,
                 CanExecute = () => shell.HasProject && shell.CreatableType is not null,
                 Execute = () => _ = shell.NewSheetAsync(),
             },
             new("file.open", "command.file.open")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘O", Gesture = new KeyGesture(Key.O, command),
+                MenuKey = "menu.file", MenuOrder = 20,
                 Execute = () => _ = OpenPickedAsync(shell),
             },
             new("file.save", "command.file.save")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘S", Gesture = new KeyGesture(Key.S, command),
+                MenuKey = "menu.file", MenuOrder = 30,
                 CanExecute = () => shell.ActiveDocument is { CanSave: true },
                 Execute = () => _ = shell.ActiveDocument is { } doc ? shell.SaveAsync(doc) : Task.CompletedTask,
             },
             new("file.saveAs", "command.file.saveAs")
             {
                 ScopeKey = "scope.file", ShortcutText = "⌘⇧S", Gesture = new KeyGesture(Key.S, command | KeyModifiers.Shift),
+                MenuKey = "menu.file", MenuOrder = 40,
                 CanExecute = () => shell.ActiveDocument is { CanSave: true },
                 Execute = () => _ = shell.ActiveDocument is { } doc ? shell.SaveAsync(doc, askForPath: true) : Task.CompletedTask,
             },
             new("doc.close", "command.doc.close")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌘W", Gesture = new KeyGesture(Key.W, command),
+                MenuKey = "menu.file", MenuOrder = 50,
                 CanExecute = () => shell.ActivePane.ActiveTab is not null,
                 Execute = () => _ = shell.ActivePane.ActiveTab is { } tab ? shell.CloseTabAsync(tab) : Task.CompletedTask,
             },
@@ -82,26 +89,29 @@ public static class ShellContributions
             new("view.leftDock", "command.view.leftDock")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌥1", Gesture = new KeyGesture(Key.D1, KeyModifiers.Alt),
+                MenuKey = "menu.view", MenuOrder = 10,
                 Execute = () => shell.IsLeftDockVisible = !shell.IsLeftDockVisible,
             },
             new("view.rightDock", "command.view.rightDock")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌥2", Gesture = new KeyGesture(Key.D2, KeyModifiers.Alt),
+                MenuKey = "menu.view", MenuOrder = 20,
                 Execute = () => shell.IsRightDockVisible = !shell.IsRightDockVisible,
             },
             new("view.bottomDock", "command.view.bottomDock")
             {
                 ScopeKey = "scope.window", ShortcutText = "⌥3", Gesture = new KeyGesture(Key.D3, KeyModifiers.Alt),
+                MenuKey = "menu.view", MenuOrder = 30,
                 Execute = () => shell.IsBottomDockVisible = !shell.IsBottomDockVisible,
             },
             new("view.theme", "command.view.theme")
             {
-                ScopeKey = "scope.window",
+                ScopeKey = "scope.window", MenuKey = "menu.view", MenuOrder = 40,
                 Execute = () => shell.Theme = shell.Theme == ThemeVariant.Dark ? ThemeVariant.Light : ThemeVariant.Dark,
             },
             new("view.start", "command.view.start")
             {
-                ScopeKey = "scope.window",
+                ScopeKey = "scope.window", MenuKey = "menu.view", MenuOrder = 50,
                 Execute = () => ShowStartPage(shell),
             },
         ];

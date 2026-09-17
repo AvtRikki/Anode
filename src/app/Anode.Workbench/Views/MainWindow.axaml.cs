@@ -19,6 +19,8 @@ namespace Anode.Workbench.Views;
 
 public partial class MainWindow : Window
 {
+    private readonly NativeMenu _mainMenu = new();
+    private bool _menuQueued;
     private ShellViewModel? _shell;
     private bool _closeConfirmed;
 
@@ -129,6 +131,9 @@ public partial class MainWindow : Window
             _shell.PickFileToOpen = PickFileToOpenAsync;
             _shell.PickSavePath = PickSavePathAsync;
             _shell.PickNewFile = PickNewFileAsync;
+            _shell.Commands.Changed += RebuildMainMenu;
+            NativeMenu.SetMenu(this, _mainMenu);
+            RebuildMainMenu();
             ApplyDockSizes();
         }
     }
@@ -147,6 +152,41 @@ public partial class MainWindow : Window
                 Focus();
                 break;
         }
+    }
+
+    /// <summary>
+    /// The main menu is rebuilt whenever the commands change, which is what makes it follow the active document.
+    /// On macOS this is the system menu bar; elsewhere it is carried by the window's own menu, when one is shown.
+    /// </summary>
+    private void RebuildMainMenu()
+    {
+        // A document registers its commands one at a time, so the menu is filled once, after the burst has passed.
+        if (_menuQueued)
+        {
+            return;
+        }
+
+        _menuQueued = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _menuQueued = false;
+                if (_shell is not { } shell)
+                {
+                    return;
+                }
+
+                try
+                {
+                    Services.MainMenu.Fill(_mainMenu, shell.Commands);
+                }
+                catch (Exception ex)
+                {
+                    // A menu that cannot be updated must never be the reason a document fails to open.
+                    shell.Log.Warn(ex.Message);
+                }
+            },
+            DispatcherPriority.Background);
     }
 
     // ——— Dock sizes: column definitions are not bindable, so they are synced here ———
@@ -222,14 +262,18 @@ public partial class MainWindow : Window
             {
                 _shell.IsPaletteOpen = false;
                 e.Handled = true;
+                return;
             }
-            else if (_shell.SlideOver is not null)
+
+            if (_shell.SlideOver is not null)
             {
                 _shell.CloseSlideOver();
                 e.Handled = true;
+                return;
             }
 
-            return;
+            // Nothing was open, so Esc falls through to the commands: a document can put its own meaning on it, and
+            // that meaning must hold wherever the focus happens to be — a tool bar button, say.
         }
 
         if (_shell.IsPaletteOpen)

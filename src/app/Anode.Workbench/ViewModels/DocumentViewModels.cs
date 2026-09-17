@@ -97,7 +97,7 @@ public sealed partial class DocumentPaneViewModel(ShellViewModel shell) : Observ
     public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ActiveView), nameof(Summary), nameof(HasDocument))]
+    [NotifyPropertyChangedFor(nameof(ActiveView), nameof(Summary), nameof(HasDocument), nameof(Tools), nameof(HasTools))]
     public partial DocumentTabViewModel? ActiveTab { get; set; }
 
     [ObservableProperty]
@@ -108,6 +108,16 @@ public sealed partial class DocumentPaneViewModel(ShellViewModel shell) : Observ
     public string Summary => ActiveTab?.Document.Summary ?? string.Empty;
 
     public bool HasDocument => ActiveTab is not null;
+
+    /// <summary>Tools of the document in front, floating over its canvas.</summary>
+    public IReadOnlyList<ToolButtonViewModel> Tools => ActiveTab?.Document is { Tools.Count: > 0 } document
+        ? [.. document.Tools.Select(t => new ToolButtonViewModel(t, document))]
+        : [];
+
+    public bool HasTools => Tools.Count > 0;
+
+    /// <summary>The document changed tool: the buttons are rebuilt so the pressed one is right.</summary>
+    public void RaiseTools() => OnPropertyChanged(nameof(Tools));
 
     /// <summary>The right half of a split window, drawn with a separating line.</summary>
     public bool IsSecondary => Shell.Panes.IndexOf(this) > 0;
@@ -128,4 +138,22 @@ public sealed partial class DocumentPaneViewModel(ShellViewModel shell) : Observ
             newValue.IsActive = true;
         }
     }
+}
+
+/// <summary>One button of the floating tool bar.</summary>
+public sealed partial class ToolButtonViewModel(ToolDescriptor descriptor, IDocument document) : ObservableObject
+{
+    private Control? _icon;
+
+    public string Title => descriptor.ShortcutText is { Length: > 0 } key
+        ? $"{descriptor.Title} · {key}"
+        : descriptor.Title;
+
+    public Control? Icon => _icon ??= Icons.Draw(descriptor.IconKey, 16);
+
+    public bool IsActive => string.Equals(document.ActiveToolId, descriptor.Id, StringComparison.Ordinal)
+        || (document.ActiveToolId is null && descriptor.Id.EndsWith(".select", StringComparison.Ordinal));
+
+    [RelayCommand]
+    private void Use() => descriptor.Activate();
 }

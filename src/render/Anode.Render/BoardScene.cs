@@ -15,8 +15,11 @@ public sealed class LayerGeometry(string name)
 
     public bool IsCopper { get; } = LayerStyle.IsCopper(name);
 
-    /// <summary>Drawn but never picked or selected: the board body under the layers.</summary>
-    public bool IsDecoration { get; } = name == LayerStyle.BoardBody;
+    /// <summary>
+    /// Drawn but never picked, selected or dimmed: the board body under the layers, and the paper a sheet is drawn
+    /// on. Both are the ground the drawing sits on rather than part of it — dimming them makes the whole view blink.
+    /// </summary>
+    public bool IsDecoration { get; } = name is LayerStyle.BoardBody or LayerStyle.Sch.Sheet;
 
     public int DrawOrder { get; } = LayerStyle.DrawOrder(name);
 

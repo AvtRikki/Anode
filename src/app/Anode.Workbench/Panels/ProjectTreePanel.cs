@@ -22,7 +22,10 @@ public sealed class ProjectTreePanel : ContentControl
 
     private static readonly string[] BoardExtensions = [".kicad_pcb"];
     private static readonly string[] SchematicExtensions = [".kicad_sch"];
-    private static readonly string[] RuleExtensions = [".kicad_dru", ".kicad_pro", ".kicad_wks"];
+    private static readonly string[] RuleExtensions = [".kicad_dru", ".kicad_wks"];
+
+    /// <summary>The project file names the project, which the header already says; it appears under Files only.</summary>
+    private const string ProjectExtension = ".kicad_pro";
     private static readonly string[] LibraryExtensions = [".kicad_sym", ".kicad_mod"];
     private static readonly string[] LibraryTables = ["sym-lib-table", "fp-lib-table"];
     private static readonly string[] OutputExtensions = [".gbr", ".drl", ".net", ".csv", ".pos", ".zip", ".pdf", ".step", ".stp", ".wrl"];
@@ -221,6 +224,7 @@ public sealed class ProjectTreePanel : ContentControl
     private Node Schematic(string path) => new(path, System.IO.Path.GetFileNameWithoutExtension(path), Icons.Sheets)
     {
         Path = path,
+        Detail = KindTag(path),
         Children = () => Described(path),
     };
 
@@ -282,7 +286,8 @@ public sealed class ProjectTreePanel : ContentControl
     }
 
     private bool Other(string file) =>
-        !Is(file, SchematicExtensions) && !Is(file, BoardExtensions) && !Is(file, RuleExtensions)
+        Extension(file) != ProjectExtension
+        && !Is(file, SchematicExtensions) && !Is(file, BoardExtensions) && !Is(file, RuleExtensions)
         && !Is(file, LibraryExtensions) && !Is(file, OutputExtensions)
         && !LibraryTables.Contains(FileName(file), StringComparer.Ordinal) && !IsNoise(file);
 
@@ -427,11 +432,22 @@ public sealed class ProjectTreePanel : ContentControl
 
     // ——— Files on disk ———
 
-    /// <summary>A file under a section: the heading and the icon say the kind, so the name carries no extension.</summary>
+    /// <summary>
+    /// A file under a section. The name drops the extension so it survives a narrow dock, and a short tag says what
+    /// the file is — in a project whose sheet, board and project file share one name, the tag is the whole difference.
+    /// </summary>
     private static Node File(string path, string icon) => new(path, System.IO.Path.GetFileNameWithoutExtension(path), icon)
     {
         Path = path,
+        Detail = KindTag(path),
     };
+
+    /// <summary>"lamp.kicad_sch" is a "sch"; anything not of KiCad keeps its own extension.</summary>
+    private static string KindTag(string path)
+    {
+        string extension = Extension(path).TrimStart('.');
+        return extension.StartsWith("kicad_", StringComparison.Ordinal) ? extension["kicad_".Length..] : extension;
+    }
 
     /// <summary>A file in the files view: there a name is the whole name, as it is on disk.</summary>
     private static Node DiskFile(string path) => new(path, FileName(path), IconFor(path))
