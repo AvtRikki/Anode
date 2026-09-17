@@ -33,7 +33,7 @@ public partial class MainWindow : Window
         PaletteInput.AddHandler(KeyDownEvent, OnPaletteKeyDown, RoutingStrategies.Tunnel);
 
         // Icons are drawn, not resources, so the ones outside data templates are set here.
-        RailMore.Content = Icons.Draw(Icons.Plus, 14);
+        RailMore.Content = Icons.Draw(Icons.Plus, 16);
         SearchIcon.Content = Icons.Draw(Icons.Search, 13);
         ProjectChevron.Content = Icons.Draw(Icons.ChevronDown, 10);
         BranchIcon.Content = Icons.Draw(Icons.Branch, 12);

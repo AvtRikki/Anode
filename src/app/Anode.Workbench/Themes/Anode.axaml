@@ -354,16 +354,32 @@
 
   <!-- Icon rail: 26×26, mono labels; the open one fills with accent. -->
   <Style Selector="Button.railItem">
-    <Setter Property="Width" Value="26" />
-    <Setter Property="Height" Value="26" />
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="5" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="FontFamily" Value="{DynamicResource Font.Mono}" />
-    <Setter Property="FontSize" Value="10" />
+    <Setter Property="FontSize" Value="11" />
     <Setter Property="HorizontalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource Chrome.TextDim}" />
+  </Style>
+  <!-- The panel on show is marked at the edge of the rail, the way an IDE marks the tool window it is showing. -->
+  <!-- The side and the corners come from the item: the mark hugs the edge of the frame its section is on. -->
+  <Style Selector="Border.railMark">
+    <Setter Property="Width" Value="2" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource State.Accent}" />
   </Style>
   <Style Selector="Button.railItem.open /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource State.Accent}" />
     <Setter Property="Foreground" Value="{DynamicResource State.OnAccent}" />
+  </Style>
+  <!-- A docked panel on show is marked, but quietly: the accent fill belongs to what floats over the canvas. -->
+  <Style Selector="Button.railItem.active /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Active}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
   </Style>
 
   <!-- Toolbar tools: 28×24, selected fills with accent. -->

@@ -15,6 +15,27 @@
        palette, slide-over and banner are overlays. Every action lives in the palette, so there is no menu bar. -->
   <!-- The title row keeps the kit's height; its content is pinned to the system title bar band at runtime
        (see ApplyTitleBarHeight), which is where the platform's own window buttons are centred. -->
+  <Window.Resources>
+    <!-- One icon of a rail. It is a switch: it shows the panel, and pressing it again closes its section. -->
+    <DataTemplate x:Key="RailIcon" x:DataType="vm:RailItemViewModel">
+      <Panel Height="34">
+        <Border Classes="railMark" IsVisible="{Binding IsActive}"
+                HorizontalAlignment="{Binding MarkSide}" CornerRadius="{Binding MarkCorners}" />
+        <Button Classes="railItem" Classes.open="{Binding IsOpen}" Classes.active="{Binding IsActive}"
+                Command="{Binding ToggleCommand}" DoubleTapped="OnRailDoubleTapped"
+                ToolTip.Tip="{Binding Title}" ToolTip.Placement="{Binding TipSide}">
+          <Panel>
+            <ContentControl Content="{Binding Icon}" IsVisible="{Binding HasIcon}" />
+            <TextBlock Text="{Binding Label}" IsVisible="{Binding !HasIcon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Panel>
+        </Button>
+      </Panel>
+    </DataTemplate>
+    <ItemsPanelTemplate x:Key="RailColumn">
+      <StackPanel Spacing="4" />
+    </ItemsPanelTemplate>
+  </Window.Resources>
+
   <Grid x:Name="Root" RowDefinitions="44,*,26">
 
     <!-- ——— Title bar (1a / 2a): brand, project, search. It *is* the window title bar: the native one is off. ——— -->
@@ -68,35 +89,27 @@
     </Border>
 
     <!-- ——— Body: rail · left dock · documents + bottom dock · right dock ——— -->
-    <Grid x:Name="Body" Grid.Row="1" ColumnDefinitions="Auto,212,1,*,1,268">
+    <Grid x:Name="Body" Grid.Row="1" ColumnDefinitions="Auto,212,1,*,1,268,Auto">
 
       <!-- Icon rail (2b/2c): single click shows a panel over the canvas, double click pins it as a dock. -->
-      <Border Grid.Column="0" Width="38" Background="{DynamicResource Chrome.Raised}" IsVisible="{Binding HasRail}"
+      <Border Grid.Column="0" Width="46" Background="{DynamicResource Chrome.Raised}" IsVisible="{Binding HasRail}"
               BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="0,0,1,0">
-        <DockPanel Margin="0,8">
-          <StackPanel Spacing="3">
-            <ItemsControl ItemsSource="{Binding Rail}">
-              <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                  <StackPanel Spacing="3" HorizontalAlignment="Center" />
-                </ItemsPanelTemplate>
-              </ItemsControl.ItemsPanel>
-              <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:RailItemViewModel">
-                  <Button Classes="railItem" Classes.open="{Binding IsOpen}"
-                          Command="{Binding ToggleCommand}" DoubleTapped="OnRailDoubleTapped"
-                          ToolTip.Tip="{Binding Title}">
-                    <Panel>
-                      <ContentControl Content="{Binding Icon}" IsVisible="{Binding HasIcon}" />
-                      <TextBlock Text="{Binding Label}" IsVisible="{Binding !HasIcon}" HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Panel>
-                  </Button>
-                </DataTemplate>
-              </ItemsControl.ItemTemplate>
-            </ItemsControl>
-            <Border Width="20" Height="1" Margin="0,5" Classes="line" HorizontalAlignment="Center" />
+        <DockPanel Margin="0,10">
+          <!-- The icons of a place sit where its section is; the bottom dock's own icons close the group. -->
+          <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0" Spacing="4">
+            <ItemsControl ItemsSource="{Binding LeftRailBottom}"
+                          ItemsPanel="{StaticResource RailColumn}" ItemTemplate="{StaticResource RailIcon}" />
+            <Border Width="22" Height="1" Margin="0,4" Classes="line" HorizontalAlignment="Center"
+                    IsVisible="{Binding HasRailDivider}" />
+            <ItemsControl ItemsSource="{Binding BottomRail}"
+                          ItemsPanel="{StaticResource RailColumn}" ItemTemplate="{StaticResource RailIcon}" />
+          </StackPanel>
+          <StackPanel Spacing="4" VerticalAlignment="Top">
+            <ItemsControl ItemsSource="{Binding LeftRailTop}"
+                          ItemsPanel="{StaticResource RailColumn}" ItemTemplate="{StaticResource RailIcon}" />
+            <Border Width="22" Height="1" Margin="0,7" Classes="line" HorizontalAlignment="Center" />
             <Button x:Name="RailMore" Classes="railItem" HorizontalAlignment="Center" Click="OnSearchClick"
-                    ToolTip.Tip="{Binding Strings.RailMore}" />
+                    ToolTip.Tip="{Binding Strings.RailMore}" ToolTip.Placement="Right" />
           </StackPanel>
         </DockPanel>
       </Border>
@@ -196,8 +209,18 @@
                     IsVisible="{Binding IsRightDockShown}" />
       <controls:DockColumn Grid.Column="5" Stacks="{Binding RightStacks}" IsVisible="{Binding IsRightDockShown}" ClipToBounds="True" />
 
+      <Border Grid.Column="6" Width="46" Background="{DynamicResource Chrome.Raised}" IsVisible="{Binding HasRightRail}"
+              BorderBrush="{DynamicResource Chrome.Line}" BorderThickness="1,0,0,0">
+        <DockPanel Margin="0,10">
+          <ItemsControl DockPanel.Dock="Bottom" Margin="0,12,0,0" ItemsSource="{Binding RightRailBottom}"
+                        ItemsPanel="{StaticResource RailColumn}" ItemTemplate="{StaticResource RailIcon}" />
+          <ItemsControl VerticalAlignment="Top" ItemsSource="{Binding RightRailTop}"
+                        ItemsPanel="{StaticResource RailColumn}" ItemTemplate="{StaticResource RailIcon}" />
+        </DockPanel>
+      </Border>
+
       <!-- Slide-over (2d): a rail panel over the canvas edge, one at a time, leaves on Esc. -->
-      <Border Grid.Column="1" Grid.ColumnSpan="3" Width="268" HorizontalAlignment="Left" ZIndex="10"
+      <Border Grid.Column="1" Grid.ColumnSpan="5" Width="268" HorizontalAlignment="{Binding SlideOverSide}" ZIndex="10"
               IsVisible="{Binding SlideOver, Converter={x:Static ObjectConverters.IsNotNull}}"
               Background="{DynamicResource Chrome.Bg}" BoxShadow="{DynamicResource Shadow.Lg}">
         <DockPanel Margin="13,14">
@@ -207,7 +230,7 @@
                     Click="OnSlideOverPin" ToolTip.Tip="{Binding Strings.SlideOverPinHint}" />
             <TextBlock Text="{Binding SlideOver.Title, FallbackValue=''}" FontSize="15" FontWeight="SemiBold" VerticalAlignment="Center" />
           </DockPanel>
-          <ContentControl Content="{Binding SlideOverContent}" />
+          <controls:PanelHost Panel="{Binding SlideOver}" Workbench="{Binding}" />
         </DockPanel>
       </Border>
     </Grid>

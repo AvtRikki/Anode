@@ -101,19 +101,19 @@ public static class ShellContributions
 
         RegisterLanguages(shell);
 
-        shell.Panels.Register(new PanelDescriptor("shell.project", "panel.project", DockSide.Left, _ => new ProjectPanel(shell))
+        shell.Panels.Register(new PanelDescriptor("shell.project", "panel.project", DockArea.LeftTop, _ => new ProjectPanel(shell))
         {
-            IconKey = Icons.Folder, RailLabelKey = "panel.project.rail", Group = "project", Order = 0,
+            IconKey = Icons.Folder, RailLabelKey = "panel.project.rail", Order = 0,
         });
-        shell.Panels.Register(new PanelDescriptor("shell.inspector", "panel.inspector", DockSide.Right, _ => new InspectorPanel(shell))
+        shell.Panels.Register(new PanelDescriptor("shell.inspector", "panel.inspector", DockArea.RightTop, _ => new InspectorPanel(shell))
         {
-            IconKey = Icons.Inspector, RailLabelKey = "panel.inspector.rail", Group = "inspect", Order = 0,
+            IconKey = Icons.Inspector, RailLabelKey = "panel.inspector.rail", Order = 0,
         });
-        shell.Panels.Register(new PanelDescriptor("shell.issues", "panel.issues", DockSide.Bottom, _ => new IssuesPanel(shell))
+        shell.Panels.Register(new PanelDescriptor("shell.issues", "panel.issues", DockArea.Bottom, _ => new IssuesPanel(shell))
         {
             IconKey = Icons.Checks, RailLabelKey = "panel.issues.rail", Order = 0,
         });
-        shell.Panels.Register(new PanelDescriptor("shell.console", "panel.console", DockSide.Bottom, _ => new ConsolePanel(shell.Log))
+        shell.Panels.Register(new PanelDescriptor("shell.console", "panel.console", DockArea.Bottom, _ => new ConsolePanel(shell.Log))
         {
             IconKey = Icons.Console, RailLabelKey = "panel.console.rail", Order = 10,
         });

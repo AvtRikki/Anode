@@ -6,56 +6,49 @@ namespace Anode.Workbench.Tests;
 
 public class ShellServicesTests
 {
-    private static PanelDescriptor Panel(string id, DockSide side, string? group = null, int order = 0) =>
-        new(id, id, side, _ => new Border()) { Group = group, Order = order, RailLabelKey = id[..2] };
+    private static PanelDescriptor Panel(string id, DockArea area, int order = 0) =>
+        new(id, id, area, _ => new Border()) { Order = order, RailLabelKey = id[..2] };
 
     [Fact]
-    public void Panels_group_into_stacks_and_overflow_to_the_rail()
+    public void Each_place_holds_one_section_of_tabs()
     {
         PanelDescriptor[] panels =
         [
-            Panel("sheets", DockSide.Left, "nav", 0),
-            Panel("hierarchy", DockSide.Left, "nav", 1),
-            Panel("layers", DockSide.Left, "layers", 2),
-            Panel("library", DockSide.Left, order: 3),
-            Panel("inspector", DockSide.Right, "inspect", 0),
-            Panel("net", DockSide.Right, "inspect", 1),
-            Panel("rules", DockSide.Right, order: 2),
-            Panel("comments", DockSide.Right, order: 3),
-            Panel("revisions", DockSide.Right, order: 4),
-            Panel("drc", DockSide.Bottom, order: 0),
-            Panel("console", DockSide.Bottom, order: 1),
+            Panel("sheets", DockArea.LeftTop, 0),
+            Panel("hierarchy", DockArea.LeftTop, 1),
+            Panel("layers", DockArea.LeftBottom, 2),
+            Panel("inspector", DockArea.RightTop, 0),
+            Panel("net", DockArea.RightTop, 1),
+            Panel("rules", DockArea.RightBottom, 2),
+            Panel("drc", DockArea.Bottom, 0),
+            Panel("console", DockArea.Bottom, 1),
         ];
 
         var layout = DockPlanner.Plan(panels);
 
-        Assert.Equal(["nav", "layers"], layout.Left.Select(s => s.Key));
+        Assert.Equal(["LeftTop", "LeftBottom"], layout.Left.Select(s => s.Key));
         Assert.Equal(["sheets", "hierarchy"], layout.Left[0].Panels.Select(p => p.Id));
-        Assert.Equal(3, layout.Right.Count);
+        Assert.Equal(["layers"], layout.Left[1].Panels.Select(p => p.Id));
+        Assert.Equal(["RightTop", "RightBottom"], layout.Right.Select(s => s.Key));
+        Assert.Equal(["inspector", "net"], layout.Right[0].Panels.Select(p => p.Id));
         Assert.Equal(["drc", "console"], layout.Bottom!.Panels.Select(p => p.Id));
-        Assert.Equal(["library", "revisions"], layout.Rail.Select(p => p.Id).Order());
+        Assert.Empty(layout.Rail);
     }
 
     [Fact]
-    public void Pinning_a_rail_panel_pushes_the_last_stack_to_the_rail()
+    public void A_place_nobody_asked_for_has_no_section()
     {
-        PanelDescriptor[] panels =
-        [
-            Panel("project", DockSide.Left, order: 0),
-            Panel("layers", DockSide.Left, order: 1),
-            Panel("library", DockSide.Left, order: 2),
-        ];
+        var layout = DockPlanner.Plan([Panel("project", DockArea.LeftTop), Panel("console", DockArea.Bottom)]);
 
-        var layout = DockPlanner.Plan(panels, pinned: ["library"]);
-
-        Assert.Equal(["project", "library"], layout.Left.Select(s => s.Key));
-        Assert.Equal(["layers"], layout.Rail.Select(p => p.Id));
+        Assert.Equal(["LeftTop"], layout.Left.Select(s => s.Key));
+        Assert.Empty(layout.Right);
+        Assert.NotNull(layout.Bottom);
     }
 
     [Fact]
     public void Panels_sent_to_the_rail_stay_there()
     {
-        var layout = DockPlanner.Plan([Panel("project", DockSide.Left), Panel("console", DockSide.Bottom)], new HashSet<string> { "console" });
+        var layout = DockPlanner.Plan([Panel("project", DockArea.LeftTop), Panel("console", DockArea.Bottom)], new HashSet<string> { "console" });
 
         Assert.Null(layout.Bottom);
         Assert.Equal(["console"], layout.Rail.Select(p => p.Id));

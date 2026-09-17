@@ -3,19 +3,33 @@ using Avalonia.Controls;
 namespace Anode.Sdk;
 
 /// <summary>
-/// Where a panel lives. Navigation goes left, properties of the selection go right, any list of rows with coordinates
-/// goes to the bottom. A panel that fits none of these is a document tab, not a panel.
+/// Where a panel lives. Each side has two places — top and bottom — and the bottom of the window is a place of its
+/// own; a place holds one section, and the panels of that place are its tabs. Navigation goes left, properties of the
+/// selection go right, any list of rows with coordinates goes to the bottom. A panel that fits none of these is a
+/// document tab, not a panel.
 /// </summary>
-public enum DockSide
+public enum DockArea
 {
-    Left,
-    Right,
+    LeftTop,
+    LeftBottom,
+    RightTop,
+    RightBottom,
     Bottom,
+}
+
+/// <summary>Which edge of the frame a place belongs to, for rails, marks and slide-overs.</summary>
+public static class DockAreas
+{
+    public static bool IsLeft(this DockArea area) => area is DockArea.LeftTop or DockArea.LeftBottom;
+
+    public static bool IsRight(this DockArea area) => area is DockArea.RightTop or DockArea.RightBottom;
+
+    public static bool IsTop(this DockArea area) => area is DockArea.LeftTop or DockArea.RightTop;
 }
 
 /// <summary>A dockable panel. The workbench decides whether it lands in a dock stack or in the icon rail.</summary>
 /// <param name="TitleKey">Translation key of the tab header, e.g. <c>pcb.panel.layers</c>.</param>
-public sealed record PanelDescriptor(string Id, string TitleKey, DockSide Side, Func<IWorkbench, Control> CreateContent)
+public sealed record PanelDescriptor(string Id, string TitleKey, DockArea Area, Func<IWorkbench, Control> CreateContent)
 {
     /// <summary>Tab header in the active language.</summary>
     public string Title => Tr.T(TitleKey);
@@ -29,10 +43,7 @@ public sealed record PanelDescriptor(string Id, string TitleKey, DockSide Side, 
     /// <summary>Icon rail label in the active language.</summary>
     public string RailLabel => RailLabelKey.Length == 0 ? string.Empty : Tr.T(RailLabelKey);
 
-    /// <summary>Panels with the same group open as tabs of one stack ("Инспектор | Цепь").</summary>
-    public string? Group { get; init; }
-
-    /// <summary>Lower orders are placed first, so they keep their dock when space runs out.</summary>
+    /// <summary>Lower orders come first among the tabs of the place ("Инспектор | Цепь").</summary>
     public int Order { get; init; }
 
     /// <summary>

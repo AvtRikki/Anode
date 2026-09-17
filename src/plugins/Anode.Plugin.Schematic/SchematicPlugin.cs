@@ -15,11 +15,10 @@ public sealed class SchematicPlugin : IPlugin
 
         context.Documents.Register(new SchematicDocumentType(context.Log));
 
-        context.Panels.Register(new PanelDescriptor("sch.sheets", "sch.panel.sheets", DockSide.Left, workbench => new SheetsPanel(workbench))
+        context.Panels.Register(new PanelDescriptor("sch.sheets", "sch.panel.sheets", DockArea.LeftTop, workbench => new SheetsPanel(workbench))
         {
             IconKey = Icons.Sheets,
             RailLabelKey = "sch.panel.sheets.rail",
-            Group = "project",
             Order = 5,
             DocumentTypes = [SchematicDocumentType.TypeId],
         });

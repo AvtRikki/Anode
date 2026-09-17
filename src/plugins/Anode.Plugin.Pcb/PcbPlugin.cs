@@ -15,11 +15,10 @@ public sealed class PcbPlugin : IPlugin
 
         context.Documents.Register(new PcbDocumentType(context.Log));
 
-        context.Panels.Register(new PanelDescriptor("pcb.layers", "pcb.panel.layers", DockSide.Left, workbench => new LayersPanel(workbench))
+        context.Panels.Register(new PanelDescriptor("pcb.layers", "pcb.panel.layers", DockArea.LeftBottom, workbench => new LayersPanel(workbench))
         {
             IconKey = Icons.Layers,
             RailLabelKey = "pcb.panel.layers.rail",
-            Group = "layers",
             Order = 10,
             DocumentTypes = [PcbDocumentType.TypeId],
         });

@@ -107,7 +107,10 @@ public class ShellWindowTests
 
         shell.SendToRail("shell.project");
         Assert.Empty(shell.LeftStacks);
-        var item = Assert.Single(shell.Rail);
+
+        // The rail lists the left side either way; what changes is whether the panel has a dock.
+        var item = Assert.Single(shell.Rail, r => r.Descriptor.Id == "shell.project");
+        Assert.False(item.IsDocked);
 
         item.ToggleCommand.Execute(null);
         Assert.Equal("shell.project", shell.SlideOver?.Id);
@@ -115,8 +118,8 @@ public class ShellWindowTests
 
         item.PinCommand.Execute(null);
         Assert.Null(shell.SlideOver);
-        Assert.Empty(shell.Rail);
         Assert.Single(shell.LeftStacks);
+        Assert.True(Assert.Single(shell.Rail, r => r.Descriptor.Id == "shell.project").IsDocked);
         window.Close();
     });
 

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Anode.Workbench.ViewModels"
+             xmlns:controls="using:Anode.Workbench.Controls"
              x:Class="Anode.Workbench.Views.DockStackView"
              x:DataType="vm:DockStackViewModel">
   <!-- Stack = tab header + body + collapse. Separated from neighbours by a line (DockColumn), not a frame. -->
@@ -29,6 +30,7 @@
         <TextBlock Classes="mono faint" FontSize="10" Text="{Binding ChevronText}" />
       </Button>
     </Grid>
-    <ContentControl Content="{Binding Content}" Margin="12,4,12,10" IsVisible="{Binding !IsCollapsed}" />
+    <controls:PanelHost Panel="{Binding ActivePanel}" Workbench="{Binding $parent[Window].((vm:ShellViewModel)DataContext)}"
+                        Margin="12,4,12,10" IsVisible="{Binding !IsCollapsed}" />
   </DockPanel>
 </UserControl>

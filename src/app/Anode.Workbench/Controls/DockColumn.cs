@@ -61,13 +61,19 @@ public sealed class DockColumn : Grid
         }
 
         int row = 0;
-        for (int i = 0; i < Stacks.Count; i++)
+        int shown = 0;
+        foreach (var stack in Stacks)
         {
-            var stack = Stacks[i];
             _observed.Add(stack);
             stack.PropertyChanged += OnStackChanged;
 
-            if (i > 0)
+            // A closed section leaves nothing behind: no header, no line. Its icon in the rail is the way back.
+            if (stack.IsCollapsed)
+            {
+                continue;
+            }
+
+            if (shown++ > 0)
             {
                 RowDefinitions.Add(new RowDefinition(1, GridUnitType.Pixel));
                 var line = new Border { Classes = { "line" } };
@@ -75,7 +81,7 @@ public sealed class DockColumn : Grid
                 Children.Add(line);
             }
 
-            RowDefinitions.Add(new RowDefinition(stack.IsCollapsed ? GridLength.Auto : GridLength.Star));
+            RowDefinitions.Add(new RowDefinition(GridLength.Star));
             var view = new DockStackView { DataContext = stack, VerticalAlignment = VerticalAlignment.Stretch };
             SetRow(view, row++);
             Children.Add(view);
@@ -84,16 +90,9 @@ public sealed class DockColumn : Grid
 
     private void OnStackChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(DockStackViewModel.IsCollapsed) || sender is not DockStackViewModel stack)
+        if (e.PropertyName == nameof(DockStackViewModel.IsCollapsed))
         {
-            return;
-        }
-
-        int index = _observed.IndexOf(stack);
-        int row = index * 2;
-        if (row < RowDefinitions.Count)
-        {
-            RowDefinitions[row].Height = stack.IsCollapsed ? GridLength.Auto : GridLength.Star;
+            Rebuild();
         }
     }
 }

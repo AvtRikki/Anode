@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Anode.Sdk;
@@ -31,9 +32,10 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     private static readonly PluginManifest ShellManifest = new("anode.workbench", "Anode", "0.1", "Anode.Workbench.dll", typeof(ShellViewModel).FullName!, PlatformContract.Version);
 
     private readonly Dictionary<string, Control> _panelContent = [];
+    private readonly Dictionary<string, Controls.PanelHost> _panelHosts = [];
+    private readonly List<Controls.PanelHost> _liveHosts = [];
     private readonly Dictionary<string, (string? Active, bool Collapsed)> _stackState = [];
     private readonly HashSet<string> _sentToRail = [];
-    private readonly List<string> _pinned = [];
     private readonly RecentProjectsStore _recents;
     private readonly SettingsStore? _settings;
     private DocumentPaneViewModel _activePane;
@@ -100,10 +102,30 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     [ObservableProperty]
     public partial DockStackViewModel? BottomStack { get; set; }
 
-    public ObservableCollection<RailItemViewModel> Rail { get; } = [];
+    /// <summary>The icons of each place, in the rail of its own side: top place at the top, bottom place at the bottom.</summary>
+    public ObservableCollection<RailItemViewModel> LeftRailTop { get; } = [];
 
-    /// <summary>The rail is part of the frame (mockup 2c): it stays even when every panel is docked.</summary>
+    public ObservableCollection<RailItemViewModel> LeftRailBottom { get; } = [];
+
+    public ObservableCollection<RailItemViewModel> RightRailTop { get; } = [];
+
+    public ObservableCollection<RailItemViewModel> RightRailBottom { get; } = [];
+
+    /// <summary>The bottom dock is run from the left rail: its icons stand at the foot of it, below the left place.</summary>
+    public ObservableCollection<RailItemViewModel> BottomRail { get; } = [];
+
+    /// <summary>Every icon of the rails, for lookups.</summary>
+    public IEnumerable<RailItemViewModel> Rail =>
+        LeftRailTop.Concat(LeftRailBottom).Concat(BottomRail).Concat(RightRailTop).Concat(RightRailBottom);
+
+    /// <summary>The foot of the left rail holds two groups; they are told apart by a line only when both are there.</summary>
+    public bool HasRailDivider => LeftRailBottom.Count > 0 && BottomRail.Count > 0;
+
+    /// <summary>The left rail is part of the frame (mockup 2c): it stays even when every panel is docked.</summary>
     public bool HasRail => true;
+
+    /// <summary>The right rail appears only when the right places hold something.</summary>
+    public bool HasRightRail => RightRailTop.Count > 0 || RightRailBottom.Count > 0;
 
     public ObservableCollection<RecentProject> RecentProjects { get; }
 
@@ -112,10 +134,12 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public ObservableCollection<StatusField> StatusRight { get; } = [];
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SlideOverSide))]
     public partial PanelDescriptor? SlideOver { get; set; }
 
-    [ObservableProperty]
-    public partial Control? SlideOverContent { get; set; }
+    /// <summary>A slid-over panel hugs the edge its dock would be on.</summary>
+    public HorizontalAlignment SlideOverSide =>
+        SlideOver is { } panel && panel.Area.IsRight() ? HorizontalAlignment.Right : HorizontalAlignment.Left;
 
     [ObservableProperty]
     public partial Banner? CurrentBanner { get; set; }
@@ -154,11 +178,12 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     [NotifyPropertyChangedFor(nameof(BottomRowHeight), nameof(IsBottomDockShown))]
     public partial bool IsBottomDockVisible { get; set; } = true;
 
-    public bool IsLeftDockShown => IsLeftDockVisible && LeftStacks.Count > 0;
+    // A closed section is not a dock: the column goes with the last open section, and the rail icon is the way back.
+    public bool IsLeftDockShown => IsLeftDockVisible && LeftStacks.Any(s => !s.IsCollapsed);
 
-    public bool IsRightDockShown => IsRightDockVisible && RightStacks.Count > 0;
+    public bool IsRightDockShown => IsRightDockVisible && RightStacks.Any(s => !s.IsCollapsed);
 
-    public bool IsBottomDockShown => IsBottomDockVisible && BottomStack is not null;
+    public bool IsBottomDockShown => IsBottomDockVisible && BottomStack is { IsCollapsed: false };
 
     public GridLength LeftColumnWidth
     {
@@ -455,7 +480,11 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     // ——— Docks and rail ———
 
-    public Control PanelContent(PanelDescriptor descriptor)
+    /// <summary>
+    /// Hands a panel's view to <paramref name="host"/> and takes it off whoever held it before. One view, one host:
+    /// a container that has been replaced must not be able to put the view back and give it a second parent.
+    /// </summary>
+    public Control ClaimPanel(PanelDescriptor descriptor, Controls.PanelHost host)
     {
         if (!_panelContent.TryGetValue(descriptor.Id, out var control))
         {
@@ -463,15 +492,42 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             _panelContent[descriptor.Id] = control;
         }
 
-        // The same panel moves between a dock stack and the slide-over; the previous host must let go of it first.
-        return Controls.ControlHost.Detach(control)!;
+        if (!_liveHosts.Contains(host))
+        {
+            _liveHosts.Add(host);
+        }
+
+        if (_panelHosts.TryGetValue(descriptor.Id, out var previous) && !ReferenceEquals(previous, host))
+        {
+            previous.Revoke();
+        }
+
+        _panelHosts[descriptor.Id] = host;
+        return control;
+    }
+
+    /// <summary>True while some host shows this panel: a host that lost it waits for the place to be free again.</summary>
+    public bool IsPanelShown(string panelId) => _panelHosts.ContainsKey(panelId);
+
+    /// <summary>A host leaving the tree gives up its claims; a panel freed this way goes back to a host that wants it.</summary>
+    public void ReleasePanels(Controls.PanelHost host)
+    {
+        foreach (string id in _panelHosts.Where(p => ReferenceEquals(p.Value, host)).Select(p => p.Key).ToList())
+        {
+            _panelHosts.Remove(id);
+        }
+
+        _liveHosts.Remove(host);
+        foreach (var other in _liveHosts.ToList())
+        {
+            other.Reclaim();
+        }
     }
 
     public void RememberStack(string key, string? activeId, bool collapsed) => _stackState[key] = (activeId, collapsed);
 
     public void SendToRail(string panelId)
     {
-        _pinned.Remove(panelId);
         _sentToRail.Add(panelId);
         Relayout();
     }
@@ -480,9 +536,63 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     {
         CloseSlideOver();
         _sentToRail.Remove(panelId);
-        _pinned.Remove(panelId);
-        _pinned.Add(panelId);
         Relayout();
+    }
+
+    /// <summary>All sections of the frame, in reading order.</summary>
+    public IEnumerable<DockStackViewModel> Stacks =>
+        LeftStacks.Concat(RightStacks).Concat(BottomStack is { } bottom ? [bottom] : Array.Empty<DockStackViewModel>());
+
+    /// <summary>
+    /// The rail icon is a switch, not a button: it brings its panel to the front of its section, and pressing it
+    /// again — on the panel already on show — closes the section. A panel with no dock of its own slides over the
+    /// canvas instead, and closes the same way.
+    /// </summary>
+    public void ShowPanel(string panelId)
+    {
+        foreach (var stack in Stacks)
+        {
+            if (stack.Tabs.FirstOrDefault(t => t.Descriptor.Id == panelId) is { } tab)
+            {
+                CloseSlideOver();
+                if (!stack.IsCollapsed && ReferenceEquals(stack.ActiveTab, tab))
+                {
+                    stack.IsCollapsed = true;
+                }
+                else
+                {
+                    stack.Select(tab);
+                }
+
+                RefreshRailState();
+                return;
+            }
+        }
+
+        if (Panels.Panels.FirstOrDefault(p => p.Id == panelId) is { } descriptor)
+        {
+            ToggleSlideOver(descriptor);
+        }
+    }
+
+    /// <summary>A section opened or closed: the columns of the frame follow it.</summary>
+    public void RaiseDockVisibility()
+    {
+        OnPropertyChanged(nameof(IsLeftDockShown));
+        OnPropertyChanged(nameof(IsRightDockShown));
+        OnPropertyChanged(nameof(IsBottomDockShown));
+        OnPropertyChanged(nameof(LeftColumnWidth));
+        OnPropertyChanged(nameof(RightColumnWidth));
+        OnPropertyChanged(nameof(BottomRowHeight));
+    }
+
+    /// <summary>Marks the rail icons whose panels are the ones currently on show in their stack.</summary>
+    public void RefreshRailState()
+    {
+        foreach (var item in Rail)
+        {
+            item.IsActive = Stacks.Any(s => !s.IsCollapsed && s.ActiveTab?.Descriptor.Id == item.Descriptor.Id);
+        }
     }
 
     public void ToggleSlideOver(PanelDescriptor descriptor)
@@ -493,9 +603,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             return;
         }
 
-        SlideOverContent = null;
         SlideOver = descriptor;
-        SlideOverContent = PanelContent(descriptor);
         foreach (var item in Rail)
         {
             item.IsOpen = item.Descriptor.Id == descriptor.Id;
@@ -504,7 +612,6 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     public void CloseSlideOver()
     {
-        SlideOverContent = null;
         SlideOver = null;
         foreach (var item in Rail)
         {
@@ -516,7 +623,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     {
         string? documentType = ActiveDocument?.DocumentTypeId;
         var applicable = Panels.Panels.Where(p => p.AppliesTo(documentType)).ToList();
-        var layout = DockPlanner.Plan(applicable, _sentToRail, _pinned);
+        var layout = DockPlanner.Plan(applicable, _sentToRail);
 
         // Detach old stacks first so panel controls can be re-parented into the new ones.
         LeftStacks.Clear();
@@ -540,19 +647,41 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             CloseSlideOver();
         }
 
-        Rail.Clear();
-        foreach (var panel in layout.Rail)
+        // Each rail lists the panels of its own side — docked or not — so a closed section is one click from coming
+        // back. The bottom dock has no rail of its own, so its icons join the foot of the left one.
+        var docked = layout.Left.Concat(layout.Right).Concat(layout.Bottom is { } b ? [b] : Array.Empty<DockStack>())
+            .SelectMany(s => s.Panels).ToHashSet();
+
+        LeftRailTop.Clear();
+        LeftRailBottom.Clear();
+        BottomRail.Clear();
+        RightRailTop.Clear();
+        RightRailBottom.Clear();
+
+        foreach (var panel in applicable)
         {
-            Rail.Add(new RailItemViewModel(panel, this) { IsOpen = SlideOver?.Id == panel.Id });
+            var rail = panel.Area switch
+            {
+                DockArea.LeftTop => LeftRailTop,
+                DockArea.LeftBottom => LeftRailBottom,
+                DockArea.RightTop => RightRailTop,
+                DockArea.RightBottom => RightRailBottom,
+                _ => BottomRail,
+            };
+
+            rail.Add(new RailItemViewModel(panel, this)
+            {
+                IsOpen = SlideOver?.Id == panel.Id,
+                IsDocked = docked.Contains(panel),
+            });
         }
 
+        RefreshRailState();
+
         OnPropertyChanged(nameof(HasRail));
-        OnPropertyChanged(nameof(LeftColumnWidth));
-        OnPropertyChanged(nameof(RightColumnWidth));
-        OnPropertyChanged(nameof(BottomRowHeight));
-        OnPropertyChanged(nameof(IsLeftDockShown));
-        OnPropertyChanged(nameof(IsRightDockShown));
-        OnPropertyChanged(nameof(IsBottomDockShown));
+        OnPropertyChanged(nameof(HasRightRail));
+        OnPropertyChanged(nameof(HasRailDivider));
+        RaiseDockVisibility();
     }
 
     // ——— Language ———
