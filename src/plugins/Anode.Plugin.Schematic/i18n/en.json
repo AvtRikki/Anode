@@ -68,7 +68,8 @@
       "hint": "Put a .kicad_sym beside the project, or add one.",
       "added": "Added library {0}",
       "known": "The project already has that library",
-      "count": "{0} of {1}"
+      "count": "{0} found",
+      "capped": "first {0}"
     },
     "block": {
       "identity": "Identification",

@@ -145,7 +145,10 @@ internal sealed class SymbolsPanel : ContentControl
             _rows.Children.Add(Row(choice));
         }
 
-        _summary.Text = Tr.T("sch.symbols.count", chooser.Results.Count, chooser.Limit);
+        // The limit is ours, not the library's: saying "5 of 200" would read as though 200 parts existed.
+        _summary.Text = chooser.Results.Count >= chooser.Limit
+            ? Tr.T("sch.symbols.capped", chooser.Limit)
+            : Tr.T("sch.symbols.count", chooser.Results.Count);
     }
 
     private Control Row(SymbolChoice choice)
