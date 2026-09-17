@@ -77,13 +77,15 @@ public class MainMenuTests
             Assert.Equal(
                 [
                     "Draw a wire", "Draw a bus", "Place a label", "Place a global label",
-                    "Place a hierarchical label", "Place a no-connect", "Place a bus entry",
-                    "Place text", "Draw a line", "Draw a rectangle", "Draw a circle",
+                    "Place a hierarchical label", "Place a no-connect", "Place a junction",
+                    "Place a bus entry", "Place text", "Draw a line", "Draw a rectangle", "Draw a circle",
                 ],
                 Items(menu, "Place"));
 
-            // Edit opens with the history, in the order the document asked for.
-            Assert.Equal(["Undo", "Redo"], Items(menu, "Edit").Take(2));
+            // Edit opens with the history, then the clipboard, in the order the document asked for.
+            Assert.Equal(
+                ["Undo", "Redo", "Cut", "Copy", "Paste", "Duplicate", "Delete selection"],
+                Items(menu, "Edit").Take(7));
 
             // Closing the sheet takes its menus with it.
             Pump(shell.CloseTabAsync(shell.ActivePane.Tabs[0]).ContinueWith(t => true, TaskScheduler.Default));

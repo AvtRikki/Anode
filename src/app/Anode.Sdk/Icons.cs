@@ -62,6 +62,7 @@ public static class Icons
     public const string Wire = "wire";
     public const string Label = "label";
     public const string NoConnect = "no-connect";
+    public const string Junction = "junction";
     public const string BusEntry = "bus-entry";
     public const string Text = "text";
     public const string Line = "line";
@@ -209,6 +210,9 @@ public static class Icons
         [NoConnect] = new(
             null,
             "M3.6 3.6 L12.4 12.4 M12.4 3.6 L3.6 12.4"),
+        [Junction] = new(
+            "M8 6.2 A1.8 1.8 0 1 1 8 9.8 A1.8 1.8 0 1 1 8 6.2 Z",
+            "M2.2 8 H13.8 M8 2.2 V8 M8 6.2 A1.8 1.8 0 1 1 8 9.8 A1.8 1.8 0 1 1 8 6.2 Z"),
         [BusEntry] = new(
             null,
             "M1.8 3.4 H14.2 M10.6 5.2 L6.2 9.6 M6.2 9.6 H1.8"),

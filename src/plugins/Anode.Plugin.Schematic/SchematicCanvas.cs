@@ -244,6 +244,15 @@ public sealed class SchematicCanvas : Panel
         }
     }
 
+    /// <summary>Pastes where the pointer is, as KiCad does: the clipboard lands under the cursor, not where it was cut.</summary>
+    public void PasteAtCursor()
+    {
+        if (Editor is { } editor && Scene is { } scene)
+        {
+            editor.Paste(scene.ToSheetNm(World(_lastPoint)).Round());
+        }
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);

@@ -145,6 +145,25 @@ public sealed class Schematic : INodeHost
             .Concat(_junctions).Concat(_noConnects).Concat(_labels).Concat(_texts);
 
     /// <summary>
+    /// Types one top-level list of a sheet the way loading does. Null for the header lists that are not drawn items
+    /// — the version, the title block, the library. A copied item is typed through here, so a clone is the same kind
+    /// of thing as what it was copied from, decided in one place rather than two.
+    /// </summary>
+    public SchItem? Wrap(SList node) => node.Head switch
+    {
+        "symbol" => new SymbolInstance(node, this),
+        "wire" or "bus" => new SchWire(node),
+        "bus_entry" => new SchBusEntry(node),
+        "junction" => new SchJunction(node),
+        "no_connect" => new SchNoConnect(node),
+        "label" or "global_label" or "hierarchical_label" or "netclass_flag" => new SchLabel(node),
+        "text" or "text_box" => new SchText(node),
+        "sheet" => new SchSheet(node),
+        var head when SchGraphic.IsGraphicHead(head) => new SchGraphic(node),
+        _ => null,
+    };
+
+    /// <summary>
     /// Removes a top-level item from the sheet and returns its index among the root's children, which
     /// <see cref="Attach"/> uses to put it back exactly where it was.
     /// </summary>

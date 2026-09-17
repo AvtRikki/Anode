@@ -376,6 +376,108 @@ public sealed class SchematicEditor
         Run(new DeleteNodesCommand(Sheet, stale.Count == 0 ? items : [.. items, .. stale]));
     }
 
+    /// <summary>
+    /// Puts a copy of the selection on the clipboard. What is stored is already a copy, so what happens to the
+    /// original afterwards — moved, edited, deleted — does not reach into what will be pasted.
+    /// </summary>
+    public void Copy()
+    {
+        if (_selection.Count > 0)
+        {
+            SchClipboard.Put(_selection);
+        }
+    }
+
+    /// <summary>Copy, then delete: one step in the history, because it was one keystroke.</summary>
+    public void Cut()
+    {
+        if (_selection.Count == 0)
+        {
+            return;
+        }
+
+        Copy();
+        DeleteSelection();
+    }
+
+    /// <summary>
+    /// A copy of the selection, one grid square down and to the right so it can be seen, and selected in place of
+    /// the original — which is what makes the usual next gesture, dragging it somewhere, work straight away.
+    /// </summary>
+    public void Duplicate()
+    {
+        if (Move is not null || _selection.Count == 0)
+        {
+            return;
+        }
+
+        long step = GridNm > 0 ? GridNm : 1_270_000;
+        var copies = new List<SchItem>();
+        foreach (var item in _selection)
+        {
+            if (SchClone.Of(Sheet, item) is { } copy)
+            {
+                if (SchEdits.CanTransform(copy))
+                {
+                    SchEdits.Transform(copy, SchEdits.Anchor(copy), 0, new Vector2L(step, step));
+                }
+
+                copies.Add(copy);
+            }
+        }
+
+        Place(copies);
+    }
+
+    /// <summary>Whether there is anything to paste. A clipboard outlives the sheet it was filled from.</summary>
+    public bool CanPaste => SchClipboard.HasContent;
+
+    /// <summary>
+    /// Pastes the clipboard so that the top-left of what was copied lands on <paramref name="at"/>, snapped to the
+    /// grid. The group keeps its own shape: what was copied together stays together.
+    /// </summary>
+    public void Paste(Vector2L at)
+    {
+        if (Move is not null)
+        {
+            return;
+        }
+
+        var copies = new List<SchItem>();
+        foreach (var node in SchClipboard.Content)
+        {
+            if (SchClone.Of(Sheet, node) is { } copy)
+            {
+                copies.Add(copy);
+            }
+        }
+
+        var movable = copies.Where(SchEdits.CanTransform).ToList();
+        if (movable.Count > 0)
+        {
+            var origin = movable.Select(SchEdits.Anchor).Aggregate((a, b) => new Vector2L(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)));
+            var delta = Snap(at) - origin;
+            foreach (var copy in movable)
+            {
+                SchEdits.Transform(copy, SchEdits.Anchor(copy), 0, delta);
+            }
+        }
+
+        Place(copies);
+    }
+
+    /// <summary>What duplicate and paste both end with: the new items on the sheet, and selected.</summary>
+    private void Place(IReadOnlyList<SchItem> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        Run(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        SetSelection(items);
+    }
+
     public void Undo()
     {
         CancelMove();

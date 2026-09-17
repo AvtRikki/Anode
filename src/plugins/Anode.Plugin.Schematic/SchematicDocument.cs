@@ -184,6 +184,7 @@ public sealed class SchematicDocument : DocumentBase
             ],
         },
         new("sch.tool.noConnect", "sch.tool.noConnect", Icons.NoConnect) { ShortcutText = "Q", Activate = () => UseTool("sch.tool.noConnect") },
+        new("sch.tool.junction", "sch.tool.junction", Icons.Junction) { ShortcutText = "J", Activate = () => UseTool("sch.tool.junction") },
         new("sch.tool.busEntry", "sch.tool.busEntry", Icons.BusEntry) { Activate = () => UseTool("sch.tool.busEntry") },
         new("sch.tool.text", "sch.tool.text", Icons.Text) { ShortcutText = "T", Activate = () => UseTool("sch.tool.text") },
         new(_shapeTool, _shapeTool, ShapeIcon(_shapeTool))
@@ -254,6 +255,7 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.rectangle" => new ShapeTool(_editor, "sch.tool.rectangle", SchShapeKind.Rectangle),
                 "sch.tool.circle" => new ShapeTool(_editor, "sch.tool.circle", SchShapeKind.Circle),
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
+                "sch.tool.junction" => new PlaceTool(_editor, "sch.tool.junction", SchNodes.Junction, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
                 _ => null,
             };
@@ -289,6 +291,34 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _editor.History.CanRedo,
                 Execute = () => Guard(() => _editor.Redo(), context),
             },
+            new("edit.cut", "sch.command.cut")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘X", Gesture = Shortcut(Key.X),
+                MenuKey = "menu.edit", MenuOrder = 12,
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Cut(), context),
+            },
+            new("edit.copy", "sch.command.copy")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘C", Gesture = Shortcut(Key.C),
+                MenuKey = "menu.edit", MenuOrder = 14,
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Copy(), context),
+            },
+            new("edit.paste", "sch.command.paste")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘V", Gesture = Shortcut(Key.V),
+                MenuKey = "menu.edit", MenuOrder = 16,
+                CanExecute = () => _editor.CanPaste,
+                Execute = () => Guard(() => _canvas?.PasteAtCursor(), context),
+            },
+            new("edit.duplicate", "sch.command.duplicate")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘D", Gesture = Shortcut(Key.D),
+                MenuKey = "menu.edit", MenuOrder = 18,
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Duplicate(), context),
+            },
             new("edit.delete", "sch.command.delete")
             {
                 ScopeKey = "scope.schematic", ShortcutText = "⌫", MenuKey = "menu.edit", MenuOrder = 20,
@@ -312,6 +342,18 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", ShortcutText = "X", MenuKey = "menu.edit", MenuOrder = 50,
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.Mirror(horizontal: true), context),
+            },
+            new("sch.rotateCw", "sch.command.rotateCw")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⇧R", MenuKey = "menu.edit", MenuOrder = 45,
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Rotate(-90), context),
+            },
+            new("sch.mirrorVertical", "sch.command.mirrorVertical")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "Y", MenuKey = "menu.edit", MenuOrder = 55,
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Mirror(horizontal: false), context),
             },
             new("sch.tool.select", "sch.tool.select")
             {
@@ -356,6 +398,11 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", ShortcutText = "Q", MenuKey = "menu.place", MenuOrder = 50,
                 Execute = () => UseTool("sch.tool.noConnect"),
+            },
+            new("sch.tool.junction", "sch.command.junction")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "J", MenuKey = "menu.place", MenuOrder = 55,
+                Execute = () => UseTool("sch.tool.junction"),
             },
             new("sch.tool.busEntry", "sch.command.busEntry")
             {
@@ -477,7 +524,8 @@ public sealed class SchematicDocument : DocumentBase
 
         menu.Items.Add(new Separator());
 
-        foreach (string id in (string[])["edit.undo", "edit.redo", "sch.rotate", "sch.mirror", "edit.delete"])
+        foreach (string id in (string[])
+            ["edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.duplicate", "sch.rotate", "sch.mirror", "edit.delete"])
         {
             string commandId = id;
             var item = new MenuItem { Tag = commandId };

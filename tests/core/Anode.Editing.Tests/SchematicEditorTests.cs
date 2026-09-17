@@ -199,4 +199,70 @@ public class SchematicEditorTests
         editor.Undo();
         Assert.Equal(original, sheet.Document.ToBytes());
     }
+
+    [Fact]
+    public void A_duplicate_is_a_second_item_with_an_identity_of_its_own()
+    {
+        var editor = Editor(out var sheet);
+        var original = sheet.Wires.Single();
+        editor.SetSelection([original]);
+
+        editor.Duplicate();
+
+        Assert.Equal(2, sheet.Wires.Count);
+        var copy = Assert.IsType<SchWire>(Assert.Single(editor.Selection));
+        Assert.NotSame(original, copy);
+
+        // A uuid names one item in one file. A copy that kept it would be a second item claiming to be the first.
+        Assert.NotEqual(original.Uuid, copy.Uuid);
+
+        // One grid square down and to the right, so the copy can be seen and taken hold of.
+        Assert.Equal(original.Points[0] + new Vector2L(1_270_000, 1_270_000), copy.Points[0]);
+
+        editor.Undo();
+        Assert.Single(sheet.Wires);
+    }
+
+    [Fact]
+    public void What_was_copied_can_be_pasted_where_it_is_asked_for_and_again_after_that()
+    {
+        var editor = Editor(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+        editor.SetSelection([sheet.Wires.Single()]);
+
+        editor.Copy();
+        Assert.True(editor.CanPaste);
+
+        var at = new Vector2L(101_600_000, 76_200_000);
+        editor.Paste(at);
+
+        Assert.Equal(2, sheet.Wires.Count);
+        var pasted = Assert.IsType<SchWire>(Assert.Single(editor.Selection));
+        Assert.Equal(at, pasted.Points[0]);
+
+        // The clipboard holds a copy of its own, so a second paste is a second item rather than the first moved again.
+        editor.Paste(at);
+        Assert.Equal(3, sheet.Wires.Count);
+        Assert.NotEqual(pasted.Uuid, Assert.IsType<SchWire>(Assert.Single(editor.Selection)).Uuid);
+
+        editor.Undo();
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void Cutting_takes_it_off_the_sheet_and_keeps_it()
+    {
+        var editor = Editor(out var sheet);
+        editor.SetSelection([sheet.Wires.Single()]);
+
+        editor.Cut();
+
+        Assert.Empty(sheet.Wires);
+        Assert.True(editor.CanPaste);
+
+        // What was cut survives the item it came from being gone from the sheet.
+        editor.Paste(new Vector2L(50_800_000, 50_800_000));
+        Assert.Single(sheet.Wires);
+    }
 }
