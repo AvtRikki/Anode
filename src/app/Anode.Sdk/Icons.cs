@@ -60,6 +60,9 @@ public static class Icons
     public const string Via = "via";
     public const string Route = "route";
     public const string Wire = "wire";
+    public const string Label = "label";
+    public const string NoConnect = "no-connect";
+    public const string BusEntry = "bus-entry";
     public const string Bus = "bus";
 
     // ——— Workbench ———
@@ -179,6 +182,18 @@ public static class Icons
         [Route] = new(
             "M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z",
             "M3.2 12.4 H6.6 L12.8 6.2 V3.6 M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z"),
+
+        // A label is a name on a flag; a no-connect is the cross that says "left alone on purpose"; a bus entry is
+        // the little diagonal that takes a wire off the rails.
+        [Label] = new(
+            "M2.2 4.6 H10.4 L13.8 8 L10.4 11.4 H2.2 Z",
+            "M2.2 4.6 H10.4 L13.8 8 L10.4 11.4 H2.2 Z"),
+        [NoConnect] = new(
+            null,
+            "M3.6 3.6 L12.4 12.4 M12.4 3.6 L3.6 12.4"),
+        [BusEntry] = new(
+            null,
+            "M1.8 3.4 H14.2 M10.6 5.2 L6.2 9.6 M6.2 9.6 H1.8"),
 
         // A wire runs corner to corner between two connection dots; a bus is the pair of rails a wire taps into.
         [Wire] = new(

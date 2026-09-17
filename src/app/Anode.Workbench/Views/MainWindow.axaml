@@ -183,8 +183,22 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:ToolButtonViewModel">
+                          <!-- One button per tool, whatever it can do: a tool with kinds shows them on press and
+                               hold, so the bar stays a row of icons however many kinds are added later. -->
                           <Button Classes="tool" Classes.selected="{Binding IsActive}" Command="{Binding UseCommand}"
-                                  ToolTip.Tip="{Binding Title}" Content="{Binding Icon}" />
+                                  ToolTip.Tip="{Binding Title}" Content="{Binding Icon}">
+                            <FlyoutBase.AttachedFlyout>
+                              <MenuFlyout ItemsSource="{Binding Variants}">
+                                <MenuFlyout.ItemContainerTheme>
+                                  <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                                x:DataType="vm:ToolButtonViewModel">
+                                    <Setter Property="Header" Value="{Binding Title}" />
+                                    <Setter Property="Command" Value="{Binding UseCommand}" />
+                                  </ControlTheme>
+                                </MenuFlyout.ItemContainerTheme>
+                              </MenuFlyout>
+                            </FlyoutBase.AttachedFlyout>
+                          </Button>
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>

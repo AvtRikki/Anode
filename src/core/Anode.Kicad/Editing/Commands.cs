@@ -131,6 +131,34 @@ public sealed class DeleteNodesCommand(INodeHost host, IReadOnlyList<INodeItem> 
     }
 }
 
+/// <summary>
+/// Several changes as one step. A single click of a drawing tool can draw a wire, dot it and cut the wire it ran
+/// into; undo must take all of that back at once, or the file passes through states the user never made.
+/// </summary>
+public sealed class CompositeCommand(string name, IReadOnlyList<IEditCommand> commands) : IEditCommand
+{
+    public string Name => name;
+
+    public IReadOnlyList<INodeItem> Affected => [.. commands.SelectMany(c => c.Affected)];
+
+    public void Apply()
+    {
+        foreach (var command in commands)
+        {
+            command.Apply();
+        }
+    }
+
+    public void Revert()
+    {
+        // Backwards, so each command undoes into the tree the one before it left.
+        for (int i = commands.Count - 1; i >= 0; i--)
+        {
+            commands[i].Revert();
+        }
+    }
+}
+
 public sealed class UndoStack
 {
     private readonly List<IEditCommand> _done = [];

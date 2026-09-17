@@ -2,7 +2,9 @@ using System.Numerics;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Anode.Editing;
 using Anode.Geometry;
 using Anode.Kicad;
@@ -136,6 +138,83 @@ public sealed class SchematicCanvas : Panel
         SyncViewport();
         _camera.Fit(scene.BoardOutline.IsEmpty ? scene.Bounds : scene.BoardOutline);
         Present();
+    }
+
+    /// <summary>
+    /// Asks for a name where the item is being dropped. A label with no name says nothing, so the tool cannot place
+    /// one until this answers; Enter gives the name, Esc gives nothing. The field belongs to the canvas because the
+    /// canvas is what owns the screen — the tool only knows it asked.
+    /// </summary>
+    internal Task<string?> AskForNameAsync(Vector2L sheetPoint, string initial)
+    {
+        if (Scene is not { } scene)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
+        var answer = new TaskCompletionSource<string?>();
+        var screen = _camera.WorldToScreen(scene.ToSceneMm(sheetPoint.ToDouble()));
+
+        var box = new TextBox
+        {
+            Classes = { "filter" },
+            Text = initial,
+            MinWidth = 140,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(Math.Max(screen.X, 0), Math.Max(screen.Y - 12, 0), 0, 0),
+        };
+
+        // The field is only given up once it has actually had the keys: focus arrives a layout pass later, and a
+        // box that never got it must not quietly cancel the placing.
+        bool focused = false;
+
+        void Close(string? result)
+        {
+            // The answer is given before the field goes away. Removing it makes it lose focus, and that handler
+            // re-enters here with "cancelled" — which would win the race and throw away the name that was typed.
+            answer.TrySetResult(result);
+
+            if (Children.Contains(box))
+            {
+                Children.Remove(box);
+            }
+
+            Focus();
+            Present();
+        }
+
+        box.GotFocus += (_, _) => focused = true;
+
+        box.KeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                case Key.Enter or Key.Return:
+                    Close(box.Text);
+                    e.Handled = true;
+                    break;
+                case Key.Escape:
+                    Close(null);
+                    e.Handled = true;
+                    break;
+            }
+        };
+
+        box.LostFocus += (_, _) =>
+        {
+            if (focused)
+            {
+                Close(null);
+            }
+        };
+
+        Children.Add(box);
+        box.SelectAll();
+
+        // Focus after the layout pass: a control that is not in the tree yet cannot take it.
+        Dispatcher.UIThread.Post(() => box.Focus(), DispatcherPriority.Loaded);
+        return answer.Task;
     }
 
     /// <summary>

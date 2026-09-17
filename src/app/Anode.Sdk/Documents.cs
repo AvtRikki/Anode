@@ -97,6 +97,12 @@ public sealed record ToolDescriptor(string Id, string TitleKey, string IconKey)
     /// <summary>Shortcut as displayed, e.g. "W". The document registers the gesture itself.</summary>
     public string? ShortcutText { get; init; }
 
+    /// <summary>
+    /// Kinds of the same tool — a label and its global and hierarchical sorts. The button does the tool itself and
+    /// offers these behind a chevron; a document that has none leaves this empty.
+    /// </summary>
+    public IReadOnlyList<ToolDescriptor> Variants { get; init; } = [];
+
     public required Action Activate { get; init; }
 }
 

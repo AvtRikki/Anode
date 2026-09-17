@@ -53,9 +53,19 @@ public class ToolBarTests
             Assert.Null(shell.CurrentBanner);
 
             // The document names its tools; the pane turns them into buttons.
-            Assert.Equal(["sch.tool.select", "sch.tool.wire", "sch.tool.bus"], document!.Tools.Select(t => t.Id));
+            // The label's sorts are not buttons of their own: one button carries them as its kinds.
+            Assert.Equal(
+                ["sch.tool.select", "sch.tool.wire", "sch.tool.bus", "sch.tool.label", "sch.tool.noConnect", "sch.tool.busEntry"],
+                document!.Tools.Select(t => t.Id));
+
+            var label = document.Tools.Single(t => t.Id == "sch.tool.label");
+            Assert.Equal(
+                ["sch.tool.label", "sch.tool.globalLabel", "sch.tool.hierarchicalLabel"],
+                label.Variants.Select(v => v.Id));
+
+            // The bar shows what the document offers, all of it and in its order.
             Assert.True(shell.ActivePane.HasTools);
-            Assert.Equal(3, shell.ActivePane.Tools.Count);
+            Assert.Equal(document.Tools.Count, shell.ActivePane.Tools.Count);
             Assert.All(shell.ActivePane.Tools, t => Assert.NotNull(t.Icon));
 
             // Nothing chosen means the pointer selects, and that is the button that reads as pressed.
@@ -71,6 +81,16 @@ public class ToolBarTests
 
             Assert.True(shell.Commands.TryExecute("sch.tool.bus"));
             Assert.Equal("sch.tool.bus", document.ActiveToolId);
+
+            // A kind chosen from behind the chevron becomes the tool, and the button it sits under stays marked.
+            var labelButton = shell.ActivePane.Tools.Single(t => t.HasVariants);
+            labelButton.Variants[1].UseCommand.Execute(null);
+            Assert.Equal("sch.tool.globalLabel", document.ActiveToolId);
+            Assert.True(shell.ActivePane.Tools.Single(t => t.HasVariants).IsActive);
+
+            // And it stays chosen: pressing the button itself uses the kind last picked.
+            shell.ActivePane.Tools.Single(t => t.HasVariants).UseCommand.Execute(null);
+            Assert.Equal("sch.tool.globalLabel", document.ActiveToolId);
 
             // Back to the pointer.
             shell.ActivePane.Tools[0].UseCommand.Execute(null);

@@ -88,6 +88,80 @@ public class SchematicEditorTests
     }
 
     [Fact]
+    public void A_tap_dots_the_meeting_point_and_cuts_what_it_ran_into()
+    {
+        var editor = Editor(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        // The sheet holds one wire from 50.8 to 63.5; the new one ends halfway along it.
+        var tap = new Vector2L(57_150_000, 50_800_000);
+        editor.DrawWire([(new Vector2L(57_150_000, 38_100_000), tap)]);
+
+        // The wire drawn, and the one it ran into now in two pieces that meet at the tap.
+        Assert.Equal(3, sheet.Wires.Count);
+        Assert.Equal(tap, Assert.Single(sheet.Junctions).Position);
+        Assert.Contains(sheet.Wires, w => w.Points is [var a, var b] && a == new Vector2L(50_800_000, 50_800_000) && b == tap);
+        Assert.Contains(sheet.Wires, w => w.Points is [var a, var b] && a == tap && b == new Vector2L(63_500_000, 50_800_000));
+
+        // One click was one step: a single undo takes the wire, the dot and the cut back together.
+        editor.Undo();
+
+        Assert.Single(sheet.Wires);
+        Assert.Empty(sheet.Junctions);
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.False(editor.History.CanUndo);
+    }
+
+    [Fact]
+    public void A_corner_gets_neither_a_dot_nor_a_cut()
+    {
+        var editor = Editor(out var sheet);
+
+        // Starting where the existing wire ends: two ends meeting, which is a corner and nothing more.
+        editor.DrawWire([(new Vector2L(63_500_000, 50_800_000), new Vector2L(63_500_000, 38_100_000))]);
+
+        Assert.Equal(2, sheet.Wires.Count);
+        Assert.Empty(sheet.Junctions);
+    }
+
+    [Fact]
+    public void A_bus_is_drawn_without_dots_or_cuts()
+    {
+        var editor = Editor(out var sheet);
+
+        editor.DrawWire([(new Vector2L(57_150_000, 38_100_000), new Vector2L(57_150_000, 50_800_000))], bus: true);
+
+        // Wires and buses share one list in the model, told apart by IsBus: the bus arrived, the wire it crosses was
+        // left whole, and a bus meets a wire through an entry rather than a dot.
+        Assert.Single(sheet.Wires, w => w.IsBus);
+        var wire = Assert.Single(sheet.Wires, w => !w.IsBus);
+        Assert.Equal([new Vector2L(50_800_000, 50_800_000), new Vector2L(63_500_000, 50_800_000)], wire.Points);
+        Assert.Empty(sheet.Junctions);
+    }
+
+    [Fact]
+    public void A_placed_label_is_on_the_sheet_and_in_the_scene()
+    {
+        var editor = Editor(out var sheet);
+        int before = editor.Scene.TopLevelItems.Count();
+
+        var label = SchNodes.Label(SchLabelKind.Local, "VCC", A);
+        editor.Apply("Place a label", [label], []);
+
+        // On the sheet as an item of the file...
+        Assert.Same(label, Assert.Single(sheet.Labels));
+
+        // ...and drawn, which is the half that was in doubt when a placed label could not be seen.
+        Assert.Contains(editor.Scene.TopLevelItems, item => ReferenceEquals(item, label));
+        Assert.Equal(before + 1, editor.Scene.TopLevelItems.Count());
+
+        editor.Undo();
+
+        Assert.Empty(sheet.Labels);
+        Assert.Equal(before, editor.Scene.TopLevelItems.Count());
+    }
+
+    [Fact]
     public void A_drawn_wire_is_in_the_scene_and_leaves_it_again()
     {
         var editor = Editor(out _);

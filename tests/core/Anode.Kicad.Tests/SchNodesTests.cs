@@ -35,6 +35,47 @@ public class SchNodesTests
         Assert.Equal(A, SchNodes.NoConnect(A).Position);
     }
 
+    [Theory]
+    [InlineData(SchLabelKind.Local, "label")]
+    [InlineData(SchLabelKind.Global, "global_label")]
+    [InlineData(SchLabelKind.Hierarchical, "hierarchical_label")]
+    [InlineData(SchLabelKind.NetClassFlag, "netclass_flag")]
+    public void A_label_is_written_under_the_head_its_kind_asks_for(SchLabelKind kind, string head)
+    {
+        var label = SchNodes.Label(kind, "VCC", A);
+
+        Assert.Equal(head, label.Node.Head);
+        Assert.Equal(kind, label.Kind);
+        Assert.Equal("VCC", label.Text);
+        Assert.Equal(A, label.Position);
+        Assert.False(string.IsNullOrEmpty(label.Uuid));
+    }
+
+    [Fact]
+    public void A_label_that_leaves_the_sheet_carries_a_direction()
+    {
+        Assert.Equal("output", SchNodes.Label(SchLabelKind.Global, "DONE", A, shape: "output").Shape);
+        Assert.Equal("input", SchNodes.Label(SchLabelKind.Hierarchical, "CLK", A).Shape);
+    }
+
+    [Fact]
+    public void A_name_with_quotes_in_it_survives_the_round_trip()
+    {
+        var label = SchNodes.Label(SchLabelKind.Local, "A\"B", A);
+
+        Assert.Equal("A\"B", label.Text);
+    }
+
+    [Fact]
+    public void A_bus_entry_carries_its_step()
+    {
+        var entry = SchNodes.BusEntry(A, new Vector2L(2_540_000, 2_540_000));
+
+        Assert.Equal("bus_entry", entry.Node.Head);
+        Assert.Equal(A, entry.Position);
+        Assert.Equal(new Vector2L(A.X + 2_540_000, A.Y + 2_540_000), entry.EndPoint);
+    }
+
     [Fact]
     public void Adding_a_wire_and_undoing_it_gives_the_file_back()
     {

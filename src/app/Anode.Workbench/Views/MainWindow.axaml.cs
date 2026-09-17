@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -20,6 +21,8 @@ namespace Anode.Workbench.Views;
 public partial class MainWindow : Window
 {
     private readonly NativeMenu _mainMenu = new();
+    private CancellationTokenSource? _toolHold;
+    private Button? _heldTool;
     private bool _menuQueued;
     private ShellViewModel? _shell;
     private bool _closeConfirmed;
@@ -32,6 +35,10 @@ public partial class MainWindow : Window
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DropEvent, OnDrop);
         AddHandler(KeyDownEvent, OnPreviewKeyDown, RoutingStrategies.Tunnel);
+
+        // A button marks its own press as handled, so the hold is watched on the way down, before it gets there.
+        AddHandler(PointerPressedEvent, OnToolPressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnToolReleased, RoutingStrategies.Tunnel);
         PaletteInput.AddHandler(KeyDownEvent, OnPaletteKeyDown, RoutingStrategies.Tunnel);
 
         // Icons are drawn, not resources, so the ones outside data templates are set here.
@@ -272,6 +279,12 @@ public partial class MainWindow : Window
                 return;
             }
 
+            // A field being typed into owns Esc: it closes the field, not the tool behind it.
+            if (FocusManager?.GetFocusedElement() is TextBox)
+            {
+                return;
+            }
+
             // Nothing was open, so Esc falls through to the commands: a document can put its own meaning on it, and
             // that meaning must hold wherever the focus happens to be — a tool bar button, say.
         }
@@ -430,6 +443,54 @@ public partial class MainWindow : Window
     }
 
     // ——— Rail, slide-over, banner, palette ———
+
+    private void OnToolPressed(object? sender, PointerPressedEventArgs e)
+    {
+        CancelHold();
+
+        if ((e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not
+            { DataContext: ToolButtonViewModel { HasVariants: true } } button)
+        {
+            return;
+        }
+
+        _heldTool = button;
+        var hold = new CancellationTokenSource();
+        _toolHold = hold;
+        _ = HoldAsync(button, hold.Token);
+    }
+
+    private void OnToolReleased(object? sender, PointerReleasedEventArgs e) => CancelHold();
+
+    /// <summary>
+    /// Press and hold gives up a tool's kinds. The wait is a plain delay rather than a dispatcher timer: a timer
+    /// never ticks in a headless session, and a gesture that cannot be tested is a gesture that quietly breaks.
+    /// </summary>
+    private async Task HoldAsync(Button button, CancellationToken cancelled)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(420), cancelled);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (ReferenceEquals(_heldTool, button))
+        {
+            _heldTool = null;
+            FlyoutBase.ShowAttachedFlyout(button);
+        }
+    }
+
+    private void CancelHold()
+    {
+        _toolHold?.Cancel();
+        _toolHold?.Dispose();
+        _toolHold = null;
+        _heldTool = null;
+    }
 
     private void OnRailDoubleTapped(object? sender, TappedEventArgs e)
     {

@@ -6,11 +6,21 @@
     "tool": {
       "select": "Select",
       "wire": "Wire",
-      "bus": "Bus"
+      "bus": "Bus",
+      "label": "Label",
+      "globalLabel": "Global label",
+      "hierarchicalLabel": "Hierarchical label",
+      "noConnect": "No connect",
+      "busEntry": "Bus entry"
     },
     "command": {
       "wire": "Draw a wire",
       "bus": "Draw a bus",
+      "label": "Place a label",
+      "globalLabel": "Place a global label",
+      "hierarchicalLabel": "Place a hierarchical label",
+      "noConnect": "Place a no-connect",
+      "busEntry": "Place a bus entry",
       "undo": "Undo",
       "redo": "Redo",
       "delete": "Delete selection",

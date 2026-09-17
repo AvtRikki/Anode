@@ -36,6 +36,115 @@ internal interface ISchTool
 }
 
 /// <summary>
+/// Places one item per click and stays armed for the next — what KiCad's no-connect and bus-entry tools do. The item
+/// itself comes from <paramref name="make"/>, so the tool is the same whatever it places.
+/// </summary>
+internal sealed class PlaceTool(SchematicEditor editor, string id, Func<Vector2L, SchItem> make, Func<Vector2L, LayerGeometry?> preview) : ISchTool
+{
+    private Vector2L _cursor;
+
+    public string Id => id;
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        _cursor = editor.Snap(sheetPoint);
+        Preview = preview(_cursor);
+        Changed?.Invoke();
+    }
+
+    public void Click(Vector2L sheetPoint)
+    {
+        var point = editor.Snap(sheetPoint);
+        editor.Apply(id, [make(point)], []);
+        _cursor = point;
+    }
+
+    /// <summary>There is no run to end: the tool places one item at a time.</summary>
+    public bool Finish() => false;
+
+    /// <summary>Nothing is ever in progress here, so Esc has no run to end and gives the pointer back at once.</summary>
+    public bool Cancel()
+    {
+        Preview = null;
+        Changed?.Invoke();
+        return false;
+    }
+}
+
+/// <summary>
+/// Places a label. The name is asked for at the point it is dropped — a label without a name says nothing — and the
+/// asking belongs to whoever owns the screen, so it arrives as a callback rather than as a dialog in here.
+/// </summary>
+internal sealed class LabelTool(
+    SchematicEditor editor,
+    SchLabelKind kind,
+    Func<Vector2L, Task<string?>> askForName,
+    Action<Exception>? onError = null) : ISchTool
+{
+    private bool _asking;
+
+    public string Id { get; } = kind switch
+    {
+        SchLabelKind.Global => "sch.tool.globalLabel",
+        SchLabelKind.Hierarchical => "sch.tool.hierarchicalLabel",
+        SchLabelKind.NetClassFlag => "sch.tool.netClassFlag",
+        _ => "sch.tool.label",
+    };
+
+    public LayerGeometry? Preview => null;
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+    }
+
+    public void Click(Vector2L sheetPoint)
+    {
+        if (_asking)
+        {
+            return;
+        }
+
+        var point = editor.Snap(sheetPoint);
+        _asking = true;
+        _ = Ask(point);
+    }
+
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        Changed?.Invoke();
+        return false;
+    }
+
+    private async Task Ask(Vector2L point)
+    {
+        try
+        {
+            if (await askForName(point) is { Length: > 0 } name)
+            {
+                editor.Apply(Id, [SchNodes.Label(kind, name, point)], []);
+            }
+        }
+        catch (Exception ex)
+        {
+            // The task is not awaited by anyone, so an exception here would otherwise disappear without a trace.
+            onError?.Invoke(ex);
+        }
+        finally
+        {
+            _asking = false;
+        }
+    }
+}
+
+/// <summary>
 /// Draws wires and buses. The run itself is <see cref="WireRun"/>; this turns it into pointer input, a preview and
 /// items in the file. Each leg is its own item, which is how KiCad stores wires.
 /// </summary>
@@ -72,7 +181,8 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
 
         if (legs.Count > 0)
         {
-            editor.Add([.. legs.Select(leg => SchNodes.Wire([leg.From, leg.To], bus))]);
+            // The wires, the dot and the cut are the editor's business; the tool only says where they go.
+            editor.DrawWire(legs, bus);
         }
     }
 

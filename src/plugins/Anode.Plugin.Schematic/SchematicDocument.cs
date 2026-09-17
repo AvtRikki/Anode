@@ -2,7 +2,9 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Anode.Editing;
+using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
 using Anode.Sdk;
 using Anode.Render;
 
@@ -75,6 +77,7 @@ public sealed class SchematicDocument : DocumentBase
     private readonly SchematicEditor _editor;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
+    private string _labelTool = "sch.tool.label";
     private string? _tool;
     private string _cursor = string.Empty;
     private string _frame = string.Empty;
@@ -166,20 +169,52 @@ public sealed class SchematicDocument : DocumentBase
         new("sch.tool.select", "sch.tool.select", Icons.Select) { ShortcutText = "Esc", Activate = () => UseTool(null) },
         new("sch.tool.wire", "sch.tool.wire", Icons.Wire) { ShortcutText = "W", Activate = () => UseTool("sch.tool.wire") },
         new("sch.tool.bus", "sch.tool.bus", Icons.Bus) { ShortcutText = "B", Activate = () => UseTool("sch.tool.bus") },
+        new(_labelTool, _labelTool, Icons.Label)
+        {
+            ShortcutText = "L",
+            Activate = () => UseTool(_labelTool),
+
+            // One button for the label, its sorts behind a chevron; the one last chosen stays on the button.
+            Variants =
+            [
+                new("sch.tool.label", "sch.tool.label", Icons.Label) { ShortcutText = "L", Activate = () => UseTool("sch.tool.label") },
+                new("sch.tool.globalLabel", "sch.tool.globalLabel", Icons.Label) { ShortcutText = "⇧L", Activate = () => UseTool("sch.tool.globalLabel") },
+                new("sch.tool.hierarchicalLabel", "sch.tool.hierarchicalLabel", Icons.Label) { Activate = () => UseTool("sch.tool.hierarchicalLabel") },
+            ],
+        },
+        new("sch.tool.noConnect", "sch.tool.noConnect", Icons.NoConnect) { ShortcutText = "Q", Activate = () => UseTool("sch.tool.noConnect") },
+        new("sch.tool.busEntry", "sch.tool.busEntry", Icons.BusEntry) { Activate = () => UseTool("sch.tool.busEntry") },
     ];
 
     public override string? ActiveToolId => _tool;
+
+    /// <summary>KiCad's bus entry steps one grid square down and to the right.</summary>
+    private static readonly Vector2L BusStep = new(2_540_000, 2_540_000);
+
+    /// <summary>The name is asked for on the canvas, where the label is being dropped.</summary>
+    private LabelTool Label(SchematicCanvas canvas, SchLabelKind kind) =>
+        new(_editor, kind, point => canvas.AskForNameAsync(point, string.Empty), ex => _context?.Log.Error(ex.Message, ex));
 
     /// <summary>Puts a tool on the pointer, or takes it off; the buttons and the canvas follow.</summary>
     public void UseTool(string? id)
     {
         _tool = id;
+        if (id is "sch.tool.label" or "sch.tool.globalLabel" or "sch.tool.hierarchicalLabel")
+        {
+            _labelTool = id;
+        }
+
         if (_canvas is { } canvas)
         {
             canvas.Tool = id switch
             {
                 "sch.tool.wire" => new WireTool(_editor),
                 "sch.tool.bus" => new WireTool(_editor, bus: true),
+                "sch.tool.label" => Label(canvas, SchLabelKind.Local),
+                "sch.tool.globalLabel" => Label(canvas, SchLabelKind.Global),
+                "sch.tool.hierarchicalLabel" => Label(canvas, SchLabelKind.Hierarchical),
+                "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
+                "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
                 _ => null,
             };
         }
@@ -261,6 +296,31 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", ShortcutText = "B", MenuKey = "menu.place", MenuOrder = 10,
                 Execute = () => UseTool("sch.tool.bus"),
+            },
+            new("sch.tool.label", "sch.command.label")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "L", MenuKey = "menu.place", MenuOrder = 20,
+                Execute = () => UseTool("sch.tool.label"),
+            },
+            new("sch.tool.globalLabel", "sch.command.globalLabel")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⇧L", MenuKey = "menu.place", MenuOrder = 30,
+                Execute = () => UseTool("sch.tool.globalLabel"),
+            },
+            new("sch.tool.hierarchicalLabel", "sch.command.hierarchicalLabel")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 40,
+                Execute = () => UseTool("sch.tool.hierarchicalLabel"),
+            },
+            new("sch.tool.noConnect", "sch.command.noConnect")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "Q", MenuKey = "menu.place", MenuOrder = 50,
+                Execute = () => UseTool("sch.tool.noConnect"),
+            },
+            new("sch.tool.busEntry", "sch.command.busEntry")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 60,
+                Execute = () => UseTool("sch.tool.busEntry"),
             },
             new("sch.fit", "sch.command.fit")
             {

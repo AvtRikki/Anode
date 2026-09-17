@@ -73,7 +73,13 @@ public class MainMenuTests
 
             var menu = MainMenu.Build(shell.Commands);
             Assert.Equal(["File", "Edit", "View", "Place"], Titles(menu));
-            Assert.Equal(["Draw a wire", "Draw a bus"], Items(menu, "Place"));
+            // Place holds everything the sheet can draw, in the order the document asked for.
+            Assert.Equal(
+                [
+                    "Draw a wire", "Draw a bus", "Place a label", "Place a global label",
+                    "Place a hierarchical label", "Place a no-connect", "Place a bus entry",
+                ],
+                Items(menu, "Place"));
 
             // Edit opens with the history, in the order the document asked for.
             Assert.Equal(["Undo", "Redo"], Items(menu, "Edit").Take(2));

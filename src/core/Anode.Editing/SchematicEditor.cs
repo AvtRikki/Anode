@@ -304,6 +304,62 @@ public sealed class SchematicEditor
         }
     }
 
+    /// <summary>
+    /// Draws the legs of a run: the wires, a dot where the run met another wire or where three ends now meet, and the
+    /// cut that turns the wire it ran into two items. All of it is one step, because it was one click. A bus meets a
+    /// wire through an entry, so it gets neither dot nor cut.
+    /// </summary>
+    public void DrawWire(IReadOnlyList<(Vector2L From, Vector2L To)> legs, bool bus = false)
+    {
+        if (legs.Count == 0)
+        {
+            return;
+        }
+
+        var add = new List<SchItem>();
+        var remove = new List<SchItem>();
+        add.AddRange(legs.Select(leg => SchNodes.Wire([leg.From, leg.To], bus)));
+
+        if (!bus)
+        {
+            add.AddRange(SchJunctions.Needed(Sheet, legs).Select(SchNodes.Junction));
+
+            Vector2L[] ends = [.. legs.SelectMany(leg => (Vector2L[])[leg.From, leg.To])];
+            foreach (var split in SchSplits.At(Sheet, ends))
+            {
+                remove.Add(split.Wire);
+                add.AddRange(split.Pieces);
+            }
+        }
+
+        Apply(bus ? "Draw bus" : "Draw wire", add, remove);
+    }
+
+    /// <summary>
+    /// Adds and removes in one undoable step. A tap draws a wire, dots the meeting point and cuts the wire it ran
+    /// into: three changes, one click, one undo.
+    /// </summary>
+    public void Apply(string name, IReadOnlyList<SchItem> add, IReadOnlyList<SchItem> remove)
+    {
+        if (add.Count == 0 && remove.Count == 0)
+        {
+            return;
+        }
+
+        var steps = new List<IEditCommand>();
+        if (remove.Count > 0)
+        {
+            steps.Add(new DeleteNodesCommand(Sheet, remove));
+        }
+
+        if (add.Count > 0)
+        {
+            steps.Add(new AddNodesCommand(Sheet, add));
+        }
+
+        Run(new CompositeCommand(name, steps));
+    }
+
     public void DeleteSelection()
     {
         if (Move is not null || _selection.Count == 0)

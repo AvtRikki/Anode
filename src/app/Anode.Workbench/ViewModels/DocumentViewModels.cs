@@ -94,6 +94,9 @@ public sealed partial class DocumentPaneViewModel(ShellViewModel shell) : Observ
 {
     public ShellViewModel Shell { get; } = shell;
 
+    private IReadOnlyList<ToolButtonViewModel> _tools = [];
+    private IDocument? _toolsOf;
+
     public ObservableCollection<DocumentTabViewModel> Tabs { get; } = [];
 
     [ObservableProperty]
@@ -109,15 +112,37 @@ public sealed partial class DocumentPaneViewModel(ShellViewModel shell) : Observ
 
     public bool HasDocument => ActiveTab is not null;
 
-    /// <summary>Tools of the document in front, floating over its canvas.</summary>
-    public IReadOnlyList<ToolButtonViewModel> Tools => ActiveTab?.Document is { Tools.Count: > 0 } document
-        ? [.. document.Tools.Select(t => new ToolButtonViewModel(t, document))]
-        : [];
+    /// <summary>
+    /// Tools of the document in front, floating over its canvas. The buttons are kept: rebuilding them on every
+    /// change of the document's state would replace the bar under the pointer and eat a press that had begun.
+    /// </summary>
+    public IReadOnlyList<ToolButtonViewModel> Tools
+    {
+        get
+        {
+            var document = ActiveTab?.Document;
+            if (!ReferenceEquals(document, _toolsOf))
+            {
+                _toolsOf = document;
+                _tools = document is { Tools.Count: > 0 }
+                    ? [.. document.Tools.Select(t => new ToolButtonViewModel(t, document))]
+                    : [];
+            }
+
+            return _tools;
+        }
+    }
 
     public bool HasTools => Tools.Count > 0;
 
-    /// <summary>The document changed tool: the buttons are rebuilt so the pressed one is right.</summary>
-    public void RaiseTools() => OnPropertyChanged(nameof(Tools));
+    /// <summary>The document changed tool: the same buttons, only the pressed one moved.</summary>
+    public void RaiseTools()
+    {
+        foreach (var tool in Tools)
+        {
+            tool.RaiseActive();
+        }
+    }
 
     /// <summary>The right half of a split window, drawn with a separating line.</summary>
     public bool IsSecondary => Shell.Panes.IndexOf(this) > 0;
@@ -151,8 +176,25 @@ public sealed partial class ToolButtonViewModel(ToolDescriptor descriptor, IDocu
 
     public Control? Icon => _icon ??= Icons.Draw(descriptor.IconKey, 16);
 
+    /// <summary>The kinds behind the chevron; empty for a tool that is only itself.</summary>
+    public IReadOnlyList<ToolButtonViewModel> Variants { get; } =
+        [.. descriptor.Variants.Select(v => new ToolButtonViewModel(v, document))];
+
+    public bool HasVariants => Variants.Count > 0;
+
     public bool IsActive => string.Equals(document.ActiveToolId, descriptor.Id, StringComparison.Ordinal)
+        || descriptor.Variants.Any(v => string.Equals(document.ActiveToolId, v.Id, StringComparison.Ordinal))
         || (document.ActiveToolId is null && descriptor.Id.EndsWith(".select", StringComparison.Ordinal));
+
+    /// <summary>The tool in use moved; the button itself is the same one.</summary>
+    public void RaiseActive()
+    {
+        OnPropertyChanged(nameof(IsActive));
+        foreach (var variant in Variants)
+        {
+            variant.RaiseActive();
+        }
+    }
 
     [RelayCommand]
     private void Use() => descriptor.Activate();
