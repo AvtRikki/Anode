@@ -229,5 +229,8 @@ public sealed class Schematic : INodeHost
     /// </summary>
     internal void Register(LibSymbol definition) => _librarySymbols[definition.Name] = definition;
 
+    /// <summary>Forgets a definition again, when the placement that brought it in is undone.</summary>
+    internal void Unregister(string name) => _librarySymbols.Remove(name);
+
     public void Save(string path) => Document.Save(path);
 }
