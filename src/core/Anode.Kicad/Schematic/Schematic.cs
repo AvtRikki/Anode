@@ -222,5 +222,12 @@ public sealed class Schematic : INodeHost
     /// <summary>Definition for a placed symbol, if the file carries one.</summary>
     public LibSymbol? Definition(SymbolInstance symbol) => _librarySymbols.GetValueOrDefault(symbol.LibId);
 
+    /// <summary>
+    /// Registers a definition that was added to <c>lib_symbols</c> after the file was read. The lookup is built once
+    /// while loading, so a part placed later would otherwise have a body in the file that the model cannot find —
+    /// and a symbol whose definition cannot be found is a symbol that does not draw.
+    /// </summary>
+    internal void Register(LibSymbol definition) => _librarySymbols[definition.Name] = definition;
+
     public void Save(string path) => Document.Save(path);
 }

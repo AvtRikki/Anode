@@ -72,5 +72,19 @@ internal static class TestData
             : null;
     }
 
+    /// <summary>A symbol library to read, preferring the one the demos ship.</summary>
+    public static string? AnySymbolLibrary()
+    {
+        string preferred = Path.Combine(KiCadDir, "demos", "cm5_minima", "CM5IO.kicad_sym");
+        if (File.Exists(preferred))
+        {
+            return preferred;
+        }
+
+        return Directory.Exists(KiCadDir)
+            ? Directory.EnumerateFiles(KiCadDir, "*.kicad_sym", SearchOption.AllDirectories).Order(StringComparer.Ordinal).FirstOrDefault()
+            : null;
+    }
+
     public static string FullPath(string relative) => Path.Combine(KiCadDir, relative);
 }

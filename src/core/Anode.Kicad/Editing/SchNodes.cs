@@ -109,6 +109,17 @@ public static class SchNodes
     public static SchNoConnect NoConnect(Vector2L at) =>
         new(Fresh($"(no_connect (at {KiCadNumber.FormatMm(at.X)} {KiCadNumber.FormatMm(at.Y)}) (uuid \"{Guid.NewGuid()}\"))"));
 
+    /// <summary>
+    /// A subtree from somewhere else — a definition copied out of a library — made ready to live in this file: its
+    /// own copy, with the whitespace of its old home dropped so the writer lays it out where it now sits.
+    /// </summary>
+    public static SList Adopt(SList node)
+    {
+        var copy = node.CloneList();
+        Strip(copy);
+        return copy;
+    }
+
     private static SList Fresh(string text)
     {
         var root = SDocument.Parse(text).Root;
