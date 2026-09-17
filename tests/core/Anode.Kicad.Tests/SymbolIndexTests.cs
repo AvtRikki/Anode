@@ -150,4 +150,50 @@ public class SymbolIndexTests : IDisposable
 
         Assert.Equal("Part", index.Find("Local:Part")?.Name);
     }
+
+    [Fact]
+    public void A_library_that_is_turned_off_stops_being_offered()
+    {
+        Library("device.kicad_sym", "R");
+        Library("conn.kicad_sym", "DB9");
+
+        var index = SymbolIndex.Build(null, Table(("Device", "device.kicad_sym"), ("Conn", "conn.kicad_sym")), Variables);
+
+        Assert.Equal(["Device:R", "Conn:DB9"], index.Search(string.Empty).Select(r => r.LibId));
+
+        index.SetEnabled("Conn", false);
+
+        // Off means not offered and not found — by either name.
+        Assert.Equal(["Device:R"], index.Search(string.Empty).Select(r => r.LibId));
+        Assert.Null(index.Find("Conn:DB9"));
+        Assert.Null(index.Find("DB9"));
+    }
+
+    [Fact]
+    public void Turning_a_library_off_keeps_its_row_so_it_can_come_back()
+    {
+        Library("device.kicad_sym", "R");
+
+        var index = SymbolIndex.Build(null, Table(("Device", "device.kicad_sym")), Variables);
+        index.SetEnabled("Device", false);
+
+        // The row stays: that is what lets the panel list it with its tick cleared.
+        var row = Assert.Single(index.Libraries);
+        Assert.False(row.IsEnabled);
+        Assert.Empty(index.Search(string.Empty));
+
+        index.SetEnabled("Device", true);
+        Assert.Equal(["Device:R"], index.Search(string.Empty).Select(r => r.LibId));
+    }
+
+    [Fact]
+    public void Turning_off_a_library_nobody_has_changes_nothing()
+    {
+        Library("device.kicad_sym", "R");
+
+        var index = SymbolIndex.Build(null, Table(("Device", "device.kicad_sym")), Variables);
+        index.SetEnabled("NotHere", false);
+
+        Assert.Equal(["Device:R"], index.Search(string.Empty).Select(r => r.LibId));
+    }
 }

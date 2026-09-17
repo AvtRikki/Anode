@@ -61,6 +61,12 @@
       "symbolsRail": "Ко"
     },
     "symbols": {
+      "sources": "Библиотеки",
+      "sourcesOf": "{0} из {1} библиотек",
+      "sourceProject": "в проекте",
+      "sourceAdded": "добавлена",
+      "sourceInstalled": "установлена",
+      "sourceBroken": "не читается",
       "filter": "Найти компонент…",
       "add": "Добавить библиотеку…",
       "none": "У проекта нет библиотек",

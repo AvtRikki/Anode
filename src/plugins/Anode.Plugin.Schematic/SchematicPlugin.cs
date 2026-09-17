@@ -21,11 +21,12 @@ public sealed class SchematicPlugin : IPlugin
         // The parts a sheet can draw from. Same place as the inspector, so the two are tabs of one stack and each
         // gets the whole right side when it is the one showing — rather than halving it between them.
         var remembered = new SymbolLibraryList(context.DataDirectory);
+        var disabled = new DisabledSources(context.DataDirectory);
         context.Panels.Register(new PanelDescriptor(
             "sch.symbols",
             "sch.panel.symbols",
             DockArea.RightTop,
-            workbench => new SymbolsPanel(workbench, remembered))
+            workbench => new SymbolsPanel(workbench, remembered, disabled))
         {
             IconKey = Icons.Component,
             RailLabelKey = "sch.panel.symbolsRail",

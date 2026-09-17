@@ -61,6 +61,12 @@
       "symbolsRail": "Co"
     },
     "symbols": {
+      "sources": "Libraries",
+      "sourcesOf": "{0} of {1} libraries",
+      "sourceProject": "in the project",
+      "sourceAdded": "added",
+      "sourceInstalled": "installed",
+      "sourceBroken": "will not read",
       "filter": "Find a part\u2026",
       "add": "Add library\u2026",
       "none": "No libraries for this project",

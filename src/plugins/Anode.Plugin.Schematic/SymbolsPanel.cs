@@ -21,22 +21,29 @@ internal sealed class SymbolsPanel : ContentControl
 {
     private readonly IWorkbench _workbench;
     private readonly SymbolLibraryList _remembered;
+    private readonly DisabledSources _disabled;
     private readonly TextBox _filter;
     private readonly StackPanel _rows = new() { Spacing = 1 };
     private readonly TextBlock _summary;
+    private readonly Button _sources;
     private SymbolChooser? _chooser;
+    private SymbolIndex? _index;
     private string? _shownFor;
 
-    public SymbolsPanel(IWorkbench workbench, SymbolLibraryList remembered)
+    public SymbolsPanel(IWorkbench workbench, SymbolLibraryList remembered, DisabledSources disabled)
     {
         _workbench = workbench;
         _remembered = remembered;
+        _disabled = disabled;
 
         _filter = new TextBox { Classes = { "filter" }, PlaceholderText = Tr.T("sch.symbols.filter") };
         _filter.TextChanged += (_, _) => Filter(_filter.Text ?? string.Empty);
 
         _summary = Ui.Text(string.Empty, "dim");
         _summary.FontSize = 11.5;
+
+        _sources = Ui.TagButton(Tr.T("sch.symbols.sources"), "outline", ShowSources);
+        _sources.HorizontalAlignment = HorizontalAlignment.Right;
 
         var add = Ui.TagButton(Tr.T("sch.symbols.add"), "outline", () => _ = AddLibraryAsync());
         add.HorizontalAlignment = HorizontalAlignment.Left;
@@ -51,7 +58,19 @@ internal sealed class SymbolsPanel : ContentControl
                     Spacing = 7,
                     Margin = new Thickness(11, 10),
                     [DockPanel.DockProperty] = Dock.Top,
-                    Children = { _filter, _summary },
+                    Children =
+                    {
+                        _filter,
+                        new DockPanel
+                        {
+                            LastChildFill = false,
+                            Children =
+                            {
+                                new Panel { [DockPanel.DockProperty] = Dock.Right, Children = { _sources } },
+                                _summary,
+                            },
+                        },
+                    },
                 },
                 new Border
                 {
@@ -95,7 +114,13 @@ internal sealed class SymbolsPanel : ContentControl
             return;
         }
 
-        _chooser = new SymbolChooser(ProjectLibraries.For(path, _remembered.Load()));
+        _index = ProjectLibraries.For(path, _remembered.Load());
+        foreach (string nickname in _disabled.For(Project))
+        {
+            _index.SetEnabled(nickname, false);
+        }
+
+        _chooser = new SymbolChooser(_index);
         _chooser.Query = _filter.Text ?? string.Empty;
         Show();
     }
@@ -149,7 +174,77 @@ internal sealed class SymbolsPanel : ContentControl
         _summary.Text = chooser.Results.Count >= chooser.Limit
             ? Tr.T("sch.symbols.capped", chooser.Limit)
             : Tr.T("sch.symbols.count", chooser.Results.Count);
+
+        UpdateSources();
     }
+
+    /// <summary>The project this sheet belongs to, which is what a switched-off source is remembered against.</summary>
+    private string? Project => ProjectLibraries.ProjectFolder(Sheet?.FilePath);
+
+    /// <summary>The button says how many of the libraries found are actually being offered.</summary>
+    private void UpdateSources()
+    {
+        var libraries = _index?.Libraries ?? [];
+        _sources.Content = libraries.Count == 0
+            ? Tr.T("sch.symbols.sources")
+            : Tr.T("sch.symbols.sourcesOf", libraries.Count(l => l.IsEnabled), libraries.Count);
+        _sources.IsEnabled = libraries.Count > 0;
+    }
+
+    /// <summary>
+    /// Every library this project can reach, with a tick against the ones being offered and a word for where each
+    /// came from. Turning one off leaves its row here, so it can be turned back on.
+    /// </summary>
+    private void ShowSources()
+    {
+        if (_index is not { } index || index.Libraries.Count == 0)
+        {
+            return;
+        }
+
+        var remembered = _remembered.Load();
+        var flyout = new MenuFlyout();
+
+        foreach (var library in index.Libraries)
+        {
+            string origin = library.IsProject
+                ? Tr.T("sch.symbols.sourceProject")
+                : remembered.Any(r => string.Equals(Path.GetFullPath(r), library.Path, PathComparison))
+                    ? Tr.T("sch.symbols.sourceAdded")
+                    : Tr.T("sch.symbols.sourceInstalled");
+
+            if (library.Problem is not null)
+            {
+                origin = Tr.T("sch.symbols.sourceBroken");
+            }
+
+            // The tick belongs in the icon column, not in the text: a menu reserves that column whether it is
+            // filled or not, so a library that is off keeps its name in line with one that is on.
+            var item = new MenuItem
+            {
+                Header = $"{library.Nickname}  ·  {origin}",
+                Icon = library.IsEnabled ? Ui.Text("✓") : null,
+                IsEnabled = library.Problem is null,
+            };
+
+            var row = library;
+            item.Click += (_, _) => Toggle(row.Nickname, !row.IsEnabled);
+            flyout.Items.Add(item);
+        }
+
+        flyout.ShowAt(_sources);
+    }
+
+    private void Toggle(string nickname, bool enabled)
+    {
+        _index?.SetEnabled(nickname, enabled);
+        _disabled.Set(Project, nickname, enabled);
+        _chooser?.Refresh();
+        Show();
+    }
+
+    private static StringComparison PathComparison =>
+        OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
     private Control Row(SymbolChoice choice)
     {

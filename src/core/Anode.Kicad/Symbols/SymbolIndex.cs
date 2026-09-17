@@ -11,6 +11,12 @@ public sealed record SymbolLibraryRef(string Nickname, string Path, bool IsProje
     /// <summary>Why the library could not be read, or null while it has not been tried or was read.</summary>
     public string? Problem { get; internal set; }
 
+    /// <summary>
+    /// Whether this library is offered. A project may know of more libraries than it wants to see at once, and
+    /// turning one off is not the same as removing it: the row stays, so it can be turned back on.
+    /// </summary>
+    public bool IsEnabled { get; internal set; } = true;
+
     /// <summary>The library, loaded on first use; null when it could not be read.</summary>
     public SymbolLibrary? Library { get; internal set; }
 }
@@ -78,6 +84,15 @@ public sealed class SymbolIndex
             .Select(entry => new SymbolLibraryRef(entry.Name, entry.Resolve(variables), isProject));
     }
 
+    /// <summary>Turns a library on or off by nickname; unknown nicknames are ignored.</summary>
+    public void SetEnabled(string nickname, bool enabled)
+    {
+        if (_libraries.FirstOrDefault(l => string.Equals(l.Nickname, nickname, StringComparison.Ordinal)) is { } row)
+        {
+            row.IsEnabled = enabled;
+        }
+    }
+
     /// <summary>The library of this nickname, read if it has not been read yet; null when there is no such row.</summary>
     public SymbolLibraryRef? Open(string nickname)
     {
@@ -116,7 +131,7 @@ public sealed class SymbolIndex
         if (colon < 0)
         {
             // Unqualified: the first library that has such a symbol, in search order.
-            foreach (var row in _libraries)
+            foreach (var row in _libraries.Where(l => l.IsEnabled))
             {
                 Open(row);
                 if (row.Library?.Find(libId) is { } found)
@@ -128,7 +143,7 @@ public sealed class SymbolIndex
             return null;
         }
 
-        return Open(libId[..colon])?.Library?.Find(libId[(colon + 1)..]);
+        return Open(libId[..colon]) is { IsEnabled: true } named ? named.Library?.Find(libId[(colon + 1)..]) : null;
     }
 
     /// <summary>
@@ -138,7 +153,7 @@ public sealed class SymbolIndex
     public IEnumerable<(string LibId, LibSymbol Symbol)> Search(string text, int limit = 200)
     {
         int found = 0;
-        foreach (var row in _libraries)
+        foreach (var row in _libraries.Where(l => l.IsEnabled))
         {
             Open(row);
             if (row.Library is not { } library)
