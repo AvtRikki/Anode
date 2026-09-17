@@ -78,6 +78,7 @@ public sealed class SchematicDocument : DocumentBase
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
     private string _labelTool = "sch.tool.label";
+    private string _shapeTool = "sch.tool.line";
     private string? _tool;
     private string _cursor = string.Empty;
     private string _frame = string.Empty;
@@ -184,7 +185,26 @@ public sealed class SchematicDocument : DocumentBase
         },
         new("sch.tool.noConnect", "sch.tool.noConnect", Icons.NoConnect) { ShortcutText = "Q", Activate = () => UseTool("sch.tool.noConnect") },
         new("sch.tool.busEntry", "sch.tool.busEntry", Icons.BusEntry) { Activate = () => UseTool("sch.tool.busEntry") },
+        new("sch.tool.text", "sch.tool.text", Icons.Text) { ShortcutText = "T", Activate = () => UseTool("sch.tool.text") },
+        new(_shapeTool, _shapeTool, ShapeIcon(_shapeTool))
+        {
+            Activate = () => UseTool(_shapeTool),
+            Variants =
+            [
+                new("sch.tool.line", "sch.tool.line", Icons.Line) { Activate = () => UseTool("sch.tool.line") },
+                new("sch.tool.rectangle", "sch.tool.rectangle", Icons.Rectangle) { Activate = () => UseTool("sch.tool.rectangle") },
+                new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
+            ],
+        },
     ];
+
+    /// <summary>The shape button wears the kind it would draw.</summary>
+    private static string ShapeIcon(string tool) => tool switch
+    {
+        "sch.tool.rectangle" => Icons.Rectangle,
+        "sch.tool.circle" => Icons.Circle,
+        _ => Icons.Line,
+    };
 
     public override string? ActiveToolId => _tool;
 
@@ -192,8 +212,19 @@ public sealed class SchematicDocument : DocumentBase
     private static readonly Vector2L BusStep = new(2_540_000, 2_540_000);
 
     /// <summary>The name is asked for on the canvas, where the label is being dropped.</summary>
-    private LabelTool Label(SchematicCanvas canvas, SchLabelKind kind) =>
-        new(_editor, kind, point => canvas.AskForNameAsync(point, string.Empty), ex => _context?.Log.Error(ex.Message, ex));
+    private PromptTool Label(SchematicCanvas canvas, SchLabelKind kind) =>
+        Prompt(canvas, LabelToolId(kind), (name, at) => SchNodes.Label(kind, name, at));
+
+    private static string LabelToolId(SchLabelKind kind) => kind switch
+    {
+        SchLabelKind.Global => "sch.tool.globalLabel",
+        SchLabelKind.Hierarchical => "sch.tool.hierarchicalLabel",
+        _ => "sch.tool.label",
+    };
+
+    /// <summary>Anything that is written before it is placed asks for its words the same way.</summary>
+    private PromptTool Prompt(SchematicCanvas canvas, string id, Func<string, Vector2L, SchItem> make) =>
+        new(_editor, id, point => canvas.AskForNameAsync(point, string.Empty), make, ex => _context?.Log.Error(ex.Message, ex));
 
     /// <summary>Puts a tool on the pointer, or takes it off; the buttons and the canvas follow.</summary>
     public void UseTool(string? id)
@@ -202,6 +233,11 @@ public sealed class SchematicDocument : DocumentBase
         if (id is "sch.tool.label" or "sch.tool.globalLabel" or "sch.tool.hierarchicalLabel")
         {
             _labelTool = id;
+        }
+
+        if (id is "sch.tool.line" or "sch.tool.rectangle" or "sch.tool.circle")
+        {
+            _shapeTool = id;
         }
 
         if (_canvas is { } canvas)
@@ -213,6 +249,10 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.label" => Label(canvas, SchLabelKind.Local),
                 "sch.tool.globalLabel" => Label(canvas, SchLabelKind.Global),
                 "sch.tool.hierarchicalLabel" => Label(canvas, SchLabelKind.Hierarchical),
+                "sch.tool.text" => Prompt(canvas, "sch.tool.text", (written, at) => SchNodes.Text(written, at)),
+                "sch.tool.line" => new ShapeTool(_editor, "sch.tool.line", SchShapeKind.Polyline),
+                "sch.tool.rectangle" => new ShapeTool(_editor, "sch.tool.rectangle", SchShapeKind.Rectangle),
+                "sch.tool.circle" => new ShapeTool(_editor, "sch.tool.circle", SchShapeKind.Circle),
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
                 _ => null,
@@ -321,6 +361,26 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 60,
                 Execute = () => UseTool("sch.tool.busEntry"),
+            },
+            new("sch.tool.text", "sch.command.text")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "T", MenuKey = "menu.place", MenuOrder = 70,
+                Execute = () => UseTool("sch.tool.text"),
+            },
+            new("sch.tool.line", "sch.command.line")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 80,
+                Execute = () => UseTool("sch.tool.line"),
+            },
+            new("sch.tool.rectangle", "sch.command.rectangle")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 90,
+                Execute = () => UseTool("sch.tool.rectangle"),
+            },
+            new("sch.tool.circle", "sch.command.circle")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 100,
+                Execute = () => UseTool("sch.tool.circle"),
             },
             new("sch.fit", "sch.command.fit")
             {

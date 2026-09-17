@@ -11,7 +11,11 @@
       "globalLabel": "Global label",
       "hierarchicalLabel": "Hierarchical label",
       "noConnect": "No connect",
-      "busEntry": "Bus entry"
+      "busEntry": "Bus entry",
+      "text": "Text",
+      "line": "Line",
+      "rectangle": "Rectangle",
+      "circle": "Circle"
     },
     "command": {
       "wire": "Draw a wire",
@@ -21,6 +25,10 @@
       "hierarchicalLabel": "Place a hierarchical label",
       "noConnect": "Place a no-connect",
       "busEntry": "Place a bus entry",
+      "text": "Place text",
+      "line": "Draw a line",
+      "rectangle": "Draw a rectangle",
+      "circle": "Draw a circle",
       "undo": "Undo",
       "redo": "Redo",
       "delete": "Delete selection",

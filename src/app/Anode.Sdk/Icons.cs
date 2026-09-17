@@ -63,6 +63,10 @@ public static class Icons
     public const string Label = "label";
     public const string NoConnect = "no-connect";
     public const string BusEntry = "bus-entry";
+    public const string Text = "text";
+    public const string Line = "line";
+    public const string Rectangle = "rectangle";
+    public const string Circle = "circle";
     public const string Bus = "bus";
 
     // ——— Workbench ———
@@ -182,6 +186,20 @@ public static class Icons
         [Route] = new(
             "M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z",
             "M3.2 12.4 H6.6 L12.8 6.2 V3.6 M1.6 10.8 H4.8 V14 H1.6 Z M11.2 2 H14.4 V5.2 H11.2 Z"),
+
+        // Things drawn on the sheet rather than wired: a note, and the three shapes a drawing needs most.
+        [Text] = new(
+            null,
+            "M3.4 3.4 H12.6 M8 3.4 V12.6 M6.2 12.6 H9.8"),
+        [Line] = new(
+            null,
+            "M2.8 12.8 L13.2 3.2"),
+        [Rectangle] = new(
+            "M2.6 4.4 H13.4 V11.6 H2.6 Z",
+            "M2.6 4.4 H13.4 V11.6 H2.6 Z"),
+        [Circle] = new(
+            "M8 2.8 A5.2 5.2 0 1 1 8 13.2 A5.2 5.2 0 1 1 8 2.8 Z",
+            "M8 2.8 A5.2 5.2 0 1 1 8 13.2 A5.2 5.2 0 1 1 8 2.8 Z"),
 
         // A label is a name on a flag; a no-connect is the cross that says "left alone on purpose"; a bus entry is
         // the little diagonal that takes a wire off the rails.

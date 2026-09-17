@@ -63,6 +63,45 @@ public static class SchNodes
             + $" (size {KiCadNumber.FormatMm(size.X)} {KiCadNumber.FormatMm(size.Y)})"
             + $" (stroke (width 0) (type default)) (uuid \"{Guid.NewGuid()}\"))"));
 
+    /// <summary>Free text on the sheet — a note, not a net name.</summary>
+    public static SchText Text(string text, Vector2L at, double angle = 0) =>
+        new(Fresh(
+            $"(text {Quote(text)} (at {KiCadNumber.FormatMm(at.X)} {KiCadNumber.FormatMm(at.Y)} {KiCadNumber.FormatAngle(angle)})"
+            + $" (effects (font (size 1.27 1.27))) (uuid \"{Guid.NewGuid()}\"))"));
+
+    /// <summary>A line or a run of them, drawn on the sheet rather than wired.</summary>
+    public static SchGraphic Polyline(IReadOnlyList<Vector2L> points)
+    {
+        if (points.Count < 2)
+        {
+            throw new ArgumentException("A polyline needs at least two points.", nameof(points));
+        }
+
+        var text = new StringBuilder("(polyline (pts");
+        foreach (var point in points)
+        {
+            text.Append(" (xy ").Append(KiCadNumber.FormatMm(point.X)).Append(' ').Append(KiCadNumber.FormatMm(point.Y)).Append(')');
+        }
+
+        text.Append(')').Append(Outline).Append($" (uuid \"{Guid.NewGuid()}\"))");
+        return new SchGraphic(Fresh(text.ToString()));
+    }
+
+    /// <summary>A rectangle by two opposite corners.</summary>
+    public static SchGraphic Rectangle(Vector2L start, Vector2L end) =>
+        new(Fresh(
+            $"(rectangle (start {KiCadNumber.FormatMm(start.X)} {KiCadNumber.FormatMm(start.Y)})"
+            + $" (end {KiCadNumber.FormatMm(end.X)} {KiCadNumber.FormatMm(end.Y)}){Outline} (uuid \"{Guid.NewGuid()}\"))"));
+
+    /// <summary>A circle by its centre and radius; a schematic circle stores the radius, unlike a board one.</summary>
+    public static SchGraphic Circle(Vector2L center, long radius) =>
+        new(Fresh(
+            $"(circle (center {KiCadNumber.FormatMm(center.X)} {KiCadNumber.FormatMm(center.Y)})"
+            + $" (radius {KiCadNumber.FormatMm(radius)}){Outline} (uuid \"{Guid.NewGuid()}\"))"));
+
+    /// <summary>What every sheet graphic carries: the default stroke, and no fill.</summary>
+    private const string Outline = " (stroke (width 0) (type default)) (fill (type none))";
+
     /// <summary>Text as KiCad writes it: quoted, with quotes and backslashes escaped.</summary>
     private static string Quote(string text) => SEscape.Quote(text);
 

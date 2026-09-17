@@ -77,6 +77,49 @@ public class SchNodesTests
     }
 
     [Fact]
+    public void Free_text_carries_what_was_written_and_where()
+    {
+        var text = SchNodes.Text("13V rail", A);
+
+        Assert.Equal("text", text.Node.Head);
+        Assert.Equal("13V rail", text.Text);
+        Assert.Equal(A, text.Position);
+    }
+
+    [Fact]
+    public void A_drawn_line_keeps_its_points()
+    {
+        var line = SchNodes.Polyline([A, B]);
+
+        Assert.Equal("polyline", line.Node.Head);
+        Assert.Equal(SchShapeKind.Polyline, line.Kind);
+        Assert.Equal([A, B], line.Points);
+        Assert.False(line.IsFilled);
+    }
+
+    [Fact]
+    public void A_rectangle_and_a_circle_keep_their_geometry()
+    {
+        var rectangle = SchNodes.Rectangle(A, B);
+
+        Assert.Equal(SchShapeKind.Rectangle, rectangle.Kind);
+        Assert.Equal(A, rectangle.Start);
+        Assert.Equal(B, rectangle.End);
+
+        var circle = SchNodes.Circle(A, 2_540_000);
+
+        Assert.Equal(SchShapeKind.Circle, circle.Kind);
+        Assert.Equal(A, circle.Center);
+        Assert.Equal(2_540_000, circle.Radius);
+    }
+
+    [Fact]
+    public void A_line_of_one_point_is_refused()
+    {
+        Assert.Throws<ArgumentException>(() => SchNodes.Polyline([A]));
+    }
+
+    [Fact]
     public void Adding_a_wire_and_undoing_it_gives_the_file_back()
     {
         string? path = TestData.AnySchematic();

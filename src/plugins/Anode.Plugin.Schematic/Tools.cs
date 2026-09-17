@@ -76,24 +76,153 @@ internal sealed class PlaceTool(SchematicEditor editor, string id, Func<Vector2L
 }
 
 /// <summary>
-/// Places a label. The name is asked for at the point it is dropped — a label without a name says nothing — and the
-/// asking belongs to whoever owns the screen, so it arrives as a callback rather than as a dialog in here.
+/// Draws a shape in two clicks: the first sets a corner, the second finishes it, and in between the shape follows
+/// the cursor. A line, a rectangle and a circle are the same gesture over two points.
 /// </summary>
-internal sealed class LabelTool(
+internal sealed class ShapeTool(SchematicEditor editor, string id, SchShapeKind kind) : ISchTool
+{
+    private const double StrokeMm = 0.1524;
+    private const int CircleSteps = 48;
+
+    private Vector2L _anchor;
+    private Vector2L _cursor;
+    private bool _started;
+
+    public string Id => id;
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        _cursor = editor.Snap(sheetPoint);
+        Rebuild();
+    }
+
+    public void Click(Vector2L sheetPoint)
+    {
+        var point = editor.Snap(sheetPoint);
+        _cursor = point;
+
+        if (!_started)
+        {
+            _anchor = point;
+            _started = true;
+            Rebuild();
+            return;
+        }
+
+        if (point != _anchor)
+        {
+            editor.Apply(id, [Make(_anchor, point)], []);
+        }
+
+        _started = false;
+        Rebuild();
+    }
+
+    /// <summary>A shape is finished by its second click; there is nothing else to end.</summary>
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        bool had = _started;
+        _started = false;
+        Preview = null;
+        Changed?.Invoke();
+        return had;
+    }
+
+    private SchItem Make(Vector2L from, Vector2L to) => kind switch
+    {
+        SchShapeKind.Rectangle => SchNodes.Rectangle(from, to),
+        SchShapeKind.Circle => SchNodes.Circle(from, Radius(from, to)),
+        _ => SchNodes.Polyline([from, to]),
+    };
+
+    private static long Radius(Vector2L center, Vector2L edge)
+    {
+        double dx = edge.X - center.X;
+        double dy = edge.Y - center.Y;
+        return (long)Math.Round(Math.Sqrt((dx * dx) + (dy * dy)));
+    }
+
+    private void Rebuild()
+    {
+        if (!_started)
+        {
+            Preview = null;
+            Changed?.Invoke();
+            return;
+        }
+
+        var layer = new LayerGeometry(LayerStyle.Sch.Symbol);
+        float width = (float)StrokeMm;
+
+        switch (kind)
+        {
+            case SchShapeKind.Rectangle:
+                var corners = new[]
+                {
+                    _anchor,
+                    new Vector2L(_cursor.X, _anchor.Y),
+                    _cursor,
+                    new Vector2L(_anchor.X, _cursor.Y),
+                };
+
+                for (int i = 0; i < corners.Length; i++)
+                {
+                    layer.Lines.Add(new LinePrim(Scene(corners[i]), Scene(corners[(i + 1) % corners.Length]), width, -1));
+                }
+
+                break;
+
+            case SchShapeKind.Circle:
+                double radius = Radius(_anchor, _cursor);
+                var previous = Scene(new Vector2L(_anchor.X + (long)radius, _anchor.Y));
+                for (int i = 1; i <= CircleSteps; i++)
+                {
+                    double angle = 2 * Math.PI * i / CircleSteps;
+                    var next = Scene(new Vector2L(
+                        _anchor.X + (long)(radius * Math.Cos(angle)),
+                        _anchor.Y + (long)(radius * Math.Sin(angle))));
+                    layer.Lines.Add(new LinePrim(previous, next, width, -1));
+                    previous = next;
+                }
+
+                break;
+
+            default:
+                layer.Lines.Add(new LinePrim(Scene(_anchor), Scene(_cursor), width, -1));
+                break;
+        }
+
+        Preview = layer;
+        Changed?.Invoke();
+    }
+
+    private Vector2 Scene(Vector2L point)
+    {
+        var mm = editor.Scene.ToSceneMm(point.ToDouble());
+        return new Vector2((float)mm.X, (float)mm.Y);
+    }
+}
+
+/// <summary>
+/// Places something that has to be named first: a label without a name says nothing, and neither does free text.
+/// The asking belongs to whoever owns the screen, so it arrives as a callback rather than as a dialog in here.
+/// </summary>
+internal sealed class PromptTool(
     SchematicEditor editor,
-    SchLabelKind kind,
-    Func<Vector2L, Task<string?>> askForName,
+    string id,
+    Func<Vector2L, Task<string?>> ask,
+    Func<string, Vector2L, SchItem> make,
     Action<Exception>? onError = null) : ISchTool
 {
     private bool _asking;
 
-    public string Id { get; } = kind switch
-    {
-        SchLabelKind.Global => "sch.tool.globalLabel",
-        SchLabelKind.Hierarchical => "sch.tool.hierarchicalLabel",
-        SchLabelKind.NetClassFlag => "sch.tool.netClassFlag",
-        _ => "sch.tool.label",
-    };
+    public string Id => id;
 
     public LayerGeometry? Preview => null;
 
@@ -127,9 +256,9 @@ internal sealed class LabelTool(
     {
         try
         {
-            if (await askForName(point) is { Length: > 0 } name)
+            if (await ask(point) is { Length: > 0 } written)
             {
-                editor.Apply(Id, [SchNodes.Label(kind, name, point)], []);
+                editor.Apply(Id, [make(written, point)], []);
             }
         }
         catch (Exception ex)

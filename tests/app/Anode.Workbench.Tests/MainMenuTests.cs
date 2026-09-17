@@ -78,6 +78,7 @@ public class MainMenuTests
                 [
                     "Draw a wire", "Draw a bus", "Place a label", "Place a global label",
                     "Place a hierarchical label", "Place a no-connect", "Place a bus entry",
+                    "Place text", "Draw a line", "Draw a rectangle", "Draw a circle",
                 ],
                 Items(menu, "Place"));
 
