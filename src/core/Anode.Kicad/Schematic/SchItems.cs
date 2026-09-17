@@ -194,6 +194,21 @@ public sealed class LibSymbol : SchItem
 
     public IReadOnlyList<SchPin> Pins => _pins;
 
+    /// <summary>
+    /// The designator prefix the library gives this part — "R", "C", "U". KiCad writes it with a question mark on a
+    /// part that has not been annotated yet.
+    /// </summary>
+    public string? Reference => Field("Reference");
+
+    /// <summary>What the library says the part is for, when it says anything.</summary>
+    public string? Description => Field("Description");
+
+    private string? Field(string name) => Node.Lists()
+        .FirstOrDefault(l => l.Head == "property" && string.Equals(l.Str(1), name, StringComparison.Ordinal))
+        ?.Str(2) is { Length: > 0 } value
+        ? value
+        : null;
+
     /// <summary>Graphics of one placed unit: its own plus the ones common to all units.</summary>
     public IEnumerable<SchGraphic> GraphicsOf(int unit, int bodyStyle) =>
         Units.Where(u => u.IsGraphic && Matches(u, unit, bodyStyle)).Select(u => _graphics[u.Index]);

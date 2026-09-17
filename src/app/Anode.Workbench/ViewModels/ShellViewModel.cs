@@ -1016,6 +1016,8 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
         public IProjectStructureRegistry Project => shell.ProjectStructure;
 
+        public string DataDirectory => AppPaths.DataDirectory;
+
         public ILog Log => shell.Log;
     }
 

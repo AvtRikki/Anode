@@ -274,6 +274,37 @@ internal sealed class PromptTool(
 }
 
 /// <summary>
+/// Places a part that was chosen somewhere else — the symbols panel. The tool itself carries no chooser: it knows
+/// the part and drops a copy of it wherever it is clicked, and stays armed so a row of them can be laid down.
+/// </summary>
+internal sealed class SymbolTool(SchematicEditor editor, string libId, LibSymbol definition, Action<string, LibSymbol, Vector2L> place) : ISchTool
+{
+    public string Id => "sch.tool.symbol";
+
+    /// <summary>What is chosen, so the panel can mark the row and the button can say what it would place.</summary>
+    public string LibId => libId;
+
+    public LayerGeometry? Preview => null;
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+    }
+
+    public void Click(Vector2L sheetPoint) => place(libId, definition, editor.Snap(sheetPoint));
+
+    /// <summary>A part is placed by its click; there is no run to end.</summary>
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        Changed?.Invoke();
+        return false;
+    }
+}
+
+/// <summary>
 /// Draws wires and buses. The run itself is <see cref="WireRun"/>; this turns it into pointer input, a preview and
 /// items in the file. Each leg is its own item, which is how KiCad stores wires.
 /// </summary>

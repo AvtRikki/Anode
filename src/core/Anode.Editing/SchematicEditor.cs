@@ -374,6 +374,13 @@ public sealed class SchematicEditor
         Run(new ModifyNodesCommand(name, items, mutate));
     }
 
+    /// <summary>
+    /// Runs a command that was prepared elsewhere, as one step. Placing a part is two changes — the definition
+    /// copied into the sheet and the instance that draws from it — and one click made both, so one undo must take
+    /// back both; composing them is the caller's business, running them is this.
+    /// </summary>
+    public void Run(IEditCommand command) => Run(command, removedFromScene: true);
+
     public void DeleteSelection()
     {
         if (Move is not null || _selection.Count == 0)

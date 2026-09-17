@@ -18,6 +18,20 @@ public sealed class SchematicPlugin : IPlugin
 
         context.Project.Register(new SchematicStructure());
 
+        // The parts a sheet can draw from, beside the inspector on the right.
+        var remembered = new SymbolLibraryList(context.DataDirectory);
+        context.Panels.Register(new PanelDescriptor(
+            "sch.symbols",
+            "sch.panel.symbols",
+            DockArea.RightBottom,
+            workbench => new SymbolsPanel(workbench, remembered))
+        {
+            IconKey = Icons.Component,
+            RailLabelKey = "sch.panel.symbolsRail",
+            DocumentTypes = [SchematicDocumentType.TypeId],
+            Order = 0,
+        });
+
         context.Log.Info(Tr.T("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }

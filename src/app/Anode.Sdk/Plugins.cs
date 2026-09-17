@@ -6,7 +6,7 @@ namespace Anode.Sdk;
 /// <summary>Version of the plugin contracts in this assembly. Plugins declare the version they were built against.</summary>
 public static class PlatformContract
 {
-    public const int Version = 9;
+    public const int Version = 10;
 }
 
 /// <summary>Contents of a plugin's <c>plugin.json</c>.</summary>
@@ -55,6 +55,12 @@ public interface IPluginContext
 
     /// <summary>Where a plugin describes its files for the project tree.</summary>
     IProjectStructureRegistry Project { get; }
+
+    /// <summary>
+    /// Where this application keeps its per-user files. A plugin that remembers something across sessions — a list
+    /// of libraries, a last choice — puts it here rather than inventing a place of its own.
+    /// </summary>
+    string DataDirectory { get; }
 
     ILog Log { get; }
 }

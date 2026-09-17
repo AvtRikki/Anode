@@ -77,6 +77,7 @@ public sealed class SchematicDocument : DocumentBase
     private readonly SchematicEditor _editor;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
+    private (string LibId, LibSymbol Definition)? _part;
     private string _labelTool = "sch.tool.label";
     private string _shapeTool = "sch.tool.line";
     private string? _tool;
@@ -254,6 +255,61 @@ public sealed class SchematicDocument : DocumentBase
     private PromptTool Prompt(SchematicCanvas canvas, string id, Func<string, Vector2L, SchItem> make) =>
         new(_editor, id, point => canvas.AskForNameAsync(point, string.Empty), make, ex => _context?.Log.Error(ex.Message, ex));
 
+    /// <summary>
+    /// Arms the pointer with a part chosen in the symbols panel. The next click on the sheet drops it, and the tool
+    /// stays armed, so several of the same part can be laid down without going back to the panel.
+    /// </summary>
+    public void ChoosePart(string libId, LibSymbol definition)
+    {
+        _part = (libId, definition);
+        UseTool("sch.tool.symbol");
+    }
+
+    /// <summary>The part currently on the pointer, so the panel can mark the row it came from.</summary>
+    public string? ChosenPart => _tool == "sch.tool.symbol" ? _part?.LibId : null;
+
+    /// <summary>
+    /// Writes a placed part: the definition copied into the sheet and the instance that draws from it, as one step,
+    /// because one click made both and one undo must take back both.
+    /// </summary>
+    private void PlacePart(string libId, LibSymbol definition, Vector2L at)
+    {
+        try
+        {
+            var symbol = SchSymbols.Place(Sheet, libId, definition, at, Designator(definition), ProjectName(), SchSymbols.PathOf(Sheet));
+            _editor.Run(new CompositeCommand(
+                Tr.T("sch.command.symbol"),
+                [new AddLibrarySymbolCommand(Sheet, libId, definition), new AddNodesCommand(Sheet, [symbol])]));
+        }
+        catch (Exception ex) when (ex is KiCadFormatException or InvalidOperationException or NotSupportedException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+            _context?.Workbench.ShowBanner(new Banner(ex.Message, IsAlert: true));
+        }
+    }
+
+    /// <summary>
+    /// What the part is called before anyone annotates it: the library's own prefix with a question mark, which is
+    /// what KiCad writes and what annotation later replaces.
+    /// </summary>
+    private static string Designator(LibSymbol definition)
+    {
+        string prefix = definition.Reference ?? "U";
+        return prefix.EndsWith('?') ? prefix : prefix + "?";
+    }
+
+    /// <summary>The project a sheet belongs to, as its .kicad_pro is named; the sheet's own name otherwise.</summary>
+    private string ProjectName()
+    {
+        if (ProjectLibraries.ProjectFolder(FilePath) is { } folder
+            && Directory.EnumerateFiles(folder, "*.kicad_pro").Order(StringComparer.Ordinal).FirstOrDefault() is { } project)
+        {
+            return Path.GetFileNameWithoutExtension(project);
+        }
+
+        return Path.GetFileNameWithoutExtension(FilePath ?? string.Empty);
+    }
+
     /// <summary>Puts a tool on the pointer, or takes it off; the buttons and the canvas follow.</summary>
     public void UseTool(string? id)
     {
@@ -281,6 +337,7 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.line" => new ShapeTool(_editor, "sch.tool.line", SchShapeKind.Polyline),
                 "sch.tool.rectangle" => new ShapeTool(_editor, "sch.tool.rectangle", SchShapeKind.Rectangle),
                 "sch.tool.circle" => new ShapeTool(_editor, "sch.tool.circle", SchShapeKind.Circle),
+                "sch.tool.symbol" when _part is { } part => new SymbolTool(_editor, part.LibId, part.Definition, PlacePart),
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
                 "sch.tool.junction" => new PlaceTool(_editor, "sch.tool.junction", SchNodes.Junction, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),

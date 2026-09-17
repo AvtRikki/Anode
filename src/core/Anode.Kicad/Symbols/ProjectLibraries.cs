@@ -9,20 +9,169 @@ namespace Anode.Kicad;
 /// </summary>
 public static class ProjectLibraries
 {
-    /// <summary>The index for the project a sheet belongs to; empty when it can draw from nothing.</summary>
-    public static SymbolIndex For(string? sheetPath)
+    /// <summary>
+    /// The index for the project a sheet belongs to. Libraries come from three places, in the order they are
+    /// searched: the project's own table (and anything lying beside it), then <paramref name="alsoOffer"/> — the
+    /// libraries this application was told to remember — then whatever KiCad itself has installed.
+    /// </summary>
+    /// <param name="alsoOffer">Paths of .kicad_sym files to offer besides; unreadable ones are simply not listed.</param>
+    public static SymbolIndex For(string? sheetPath, IEnumerable<string>? alsoOffer = null)
     {
         string? project = ProjectFolder(sheetPath);
+        var installed = Rows(Installed().Concat(alsoOffer ?? []));
+
         if (project is null)
         {
-            return SymbolIndex.Build(null, Global(), Variables(), null);
+            return SymbolIndex.Build(null, Global() ?? installed, Variables(), null);
         }
 
         var variables = Variables();
         variables["KIPRJMOD"] = project;
 
         var table = Table(Path.Combine(project, "sym-lib-table"));
-        return SymbolIndex.Build(WithLooseLibraries(project, table, variables), Global(), Variables(), project);
+        return SymbolIndex.Build(
+            WithLooseLibraries(project, table, variables),
+            Merge(Global(), installed),
+            Variables(),
+            project);
+    }
+
+    /// <summary>
+    /// Adds a library to the project's own table, writing the file when there is none yet. Returns the nickname it
+    /// was given, or null when the project already names that very file.
+    ///
+    /// The table is KiCad's own file and is written through the lossless tree, so the rows already in it come back
+    /// exactly as they were.
+    /// </summary>
+    public static string? AddToProjectTable(string projectFolder, string libraryPath)
+    {
+        string path = Path.Combine(projectFolder, "sym-lib-table");
+        var table = Table(path);
+        string full = Path.GetFullPath(libraryPath);
+
+        var variables = Variables();
+        variables["KIPRJMOD"] = projectFolder;
+
+        foreach (var entry in table?.Entries ?? [])
+        {
+            if (FullPath(entry.Resolve(variables), projectFolder) is { } already
+                && already.Equals(full, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+        }
+
+        string nickname = Nickname(Path.GetFileNameWithoutExtension(libraryPath), table);
+
+        // A library inside the project folder is named relative to it, so the project can be moved whole.
+        string uri = full.StartsWith(Path.GetFullPath(projectFolder) + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            ? "${KIPRJMOD}/" + Path.GetRelativePath(projectFolder, full).Replace(Path.DirectorySeparatorChar, '/')
+            : full;
+
+        string row = $"\t(lib (name \"{nickname}\")(type \"KiCad\")(uri \"{uri}\")(options \"\")(descr \"\"))";
+        string text = table is null
+            ? "(sym_lib_table\n\t(version 7)\n" + row + "\n)\n"
+            : Insert(File.ReadAllText(path), row);
+
+        File.WriteAllText(path, text);
+        return nickname;
+    }
+
+    /// <summary>A name no row of the table already uses.</summary>
+    private static string Nickname(string wanted, SymLibTable? table)
+    {
+        if (table?.Find(wanted) is null)
+        {
+            return wanted;
+        }
+
+        for (int i = 2; ; i++)
+        {
+            string candidate = $"{wanted}-{i}";
+            if (table.Find(candidate) is null)
+            {
+                return candidate;
+            }
+        }
+    }
+
+    /// <summary>Puts a row before the closing bracket, leaving every line already written untouched.</summary>
+    private static string Insert(string table, string row)
+    {
+        int close = table.LastIndexOf(')');
+        return close < 0 ? table : table[..close] + row + "\n" + table[close..];
+    }
+
+    /// <summary>A table naming each of these files, nicknamed by file.</summary>
+    private static SymLibTable? Rows(IEnumerable<string> files)
+    {
+        var rows = new List<string>();
+        var seen = new HashSet<string>(OperatingSystem.IsLinux() ? StringComparer.Ordinal : StringComparer.OrdinalIgnoreCase);
+
+        foreach (string file in files.Where(File.Exists))
+        {
+            string nickname = Path.GetFileNameWithoutExtension(file);
+            if (seen.Add(nickname))
+            {
+                rows.Add($"\t(lib (name \"{nickname}\")(type \"KiCad\")(uri \"{file}\")(options \"\")(descr \"\"))");
+            }
+        }
+
+        return rows.Count == 0 ? null : SymLibTable.Parse("(sym_lib_table\n\t(version 7)\n" + string.Join("\n", rows) + "\n)");
+    }
+
+    /// <summary>Both tables as one, the first keeping its nicknames where they collide.</summary>
+    private static SymLibTable? Merge(SymLibTable? first, SymLibTable? second)
+    {
+        if (first is null || second is null)
+        {
+            return first ?? second;
+        }
+
+        var rows = new List<string>();
+        foreach (var entry in first.Entries.Concat(second.Entries))
+        {
+            rows.Add($"\t(lib (name \"{entry.Name}\")(type \"{entry.Type}\")(uri \"{entry.Uri}\")(options \"{entry.Options}\")(descr \"{entry.Description}\"))");
+        }
+
+        return SymLibTable.Parse("(sym_lib_table\n\t(version 7)\n" + string.Join("\n", rows) + "\n)");
+    }
+
+    /// <summary>Symbol libraries of a KiCad installed where KiCad installs itself.</summary>
+    public static IEnumerable<string> Installed()
+    {
+        foreach (string folder in InstalledFolders().Where(Directory.Exists))
+        {
+            foreach (string file in Directory.EnumerateFiles(folder, "*.kicad_sym").Order(StringComparer.Ordinal))
+            {
+                yield return file;
+            }
+        }
+    }
+
+    private static IEnumerable<string> InstalledFolders()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return "/Applications/KiCad/KiCad.app/Contents/SharedSupport/symbols";
+            yield return "/Library/Application Support/kicad/symbols";
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            string programs = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            if (Directory.Exists(Path.Combine(programs, "KiCad")))
+            {
+                foreach (string version in Directory.EnumerateDirectories(Path.Combine(programs, "KiCad")).OrderDescending(StringComparer.Ordinal))
+                {
+                    yield return Path.Combine(version, "share", "kicad", "symbols");
+                }
+            }
+        }
+        else
+        {
+            yield return "/usr/share/kicad/symbols";
+            yield return "/usr/local/share/kicad/symbols";
+        }
     }
 
     /// <summary>The folder holding the project file, walking up from the sheet; the sheet's own folder otherwise.</summary>

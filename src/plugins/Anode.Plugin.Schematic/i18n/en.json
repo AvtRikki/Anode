@@ -14,6 +14,7 @@
       "junction": "Junction",
       "busEntry": "Bus entry",
       "text": "Text",
+      "symbol": "Symbol",
       "line": "Line",
       "rectangle": "Rectangle",
       "circle": "Circle"
@@ -24,6 +25,7 @@
       "label": "Place a label",
       "globalLabel": "Place a global label",
       "hierarchicalLabel": "Place a hierarchical label",
+      "symbol": "Place a part",
       "noConnect": "Place a no-connect",
       "junction": "Place a junction",
       "busEntry": "Place a bus entry",
@@ -53,6 +55,20 @@
       "bidirectional": "bidirectional",
       "tri_state": "tri-state",
       "passive": "passive"
+    },
+    "panel": {
+      "symbols": "Components",
+      "symbolsRail": "Co"
+    },
+    "symbols": {
+      "filter": "Find a part\u2026",
+      "add": "Add library\u2026",
+      "none": "No libraries for this project",
+      "empty": "Nothing matches",
+      "hint": "Put a .kicad_sym beside the project, or add one.",
+      "added": "Added library {0}",
+      "known": "The project already has that library",
+      "count": "{0} of {1}"
     },
     "block": {
       "identity": "Identification",
