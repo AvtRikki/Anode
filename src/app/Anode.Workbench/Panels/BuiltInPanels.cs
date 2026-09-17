@@ -1,9 +1,11 @@
 using System.Collections.Specialized;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Anode.Sdk;
 using Anode.Workbench.Services;
 using Anode.Workbench.ViewModels;
@@ -18,6 +20,10 @@ public sealed class InspectorPanel : ContentControl
     /// <summary>The boxes of the current selection, in the order they are drawn: E puts the caret in the first.</summary>
     private readonly List<TextBox> _editable = [];
 
+    /// <summary>What is currently drawn, as a signature. Rebuilding when this has not changed would be worse than
+    /// wasteful: it throws away the box the caret is in.</summary>
+    private string? _shown;
+
     public InspectorPanel(IWorkbench workbench)
     {
         _workbench = workbench;
@@ -30,17 +36,40 @@ public sealed class InspectorPanel : ContentControl
 
     private void FocusFirstEditable()
     {
-        if (_editable.FirstOrDefault() is { } box)
+        if (_editable.FirstOrDefault() is not { } box)
         {
-            box.Focus();
-            box.SelectAll();
+            return;
         }
+
+        // A box that has not been through layout yet refuses the caret, so the focus is posted behind it. The same
+        // thing bit the name box on the canvas, and is fixed here the same way.
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (box.IsAttachedToVisualTree())
+                {
+                    box.Focus();
+                    box.SelectAll();
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void Render()
     {
+        // The document tells the frame it has changed for all sorts of reasons — a redrawn frame, a moved cursor —
+        // and almost none of them change what the inspector says. Rebuilding anyway destroyed whatever box the
+        // caret was in, which made a field impossible to type in while the canvas was drawing.
+        var current = _workbench.ActiveDocument?.Selection;
+        string signature = Signature(current);
+        if (signature == _shown)
+        {
+            return;
+        }
+
+        _shown = signature;
         _editable.Clear();
-        if (_workbench.ActiveDocument?.Selection is not { } selection)
+        if (current is not { } selection)
         {
             Content = Ui.Text(Tr.T("shell.inspector.empty"), "dim");
             return;
@@ -70,6 +99,44 @@ public sealed class InspectorPanel : ContentControl
         }
 
         Content = new ScrollViewer { Content = root };
+    }
+
+    /// <summary>
+    /// Everything the panel draws, as one string. Two selections with the same signature look the same, so the one
+    /// already on screen is left alone — caret, selection and all.
+    /// </summary>
+    private static string Signature(SelectionInfo? selection)
+    {
+        if (selection is null)
+        {
+            return string.Empty;
+        }
+
+        var text = new StringBuilder();
+        text.Append(selection.Title).Append('\u001f').Append(selection.Subtitle).Append('\u001f').Append(selection.Tag);
+
+        foreach (var block in selection.Blocks)
+        {
+            text.Append('\u001e').Append(block.Title).Append(block.IsAlert).Append(block.IsConnections);
+            foreach (var row in block.Rows)
+            {
+                text.Append('\u001f').Append(row.Name).Append('=').Append(row.Value)
+                    .Append('|').Append(row.Trailing).Append(row.IsUnresolved)
+                    .Append(row.Commit is null ? '-' : '+');
+            }
+        }
+
+        foreach (var item in selection.Properties)
+        {
+            text.Append('\u001e').Append(item.Name).Append('=').Append(item.Value).Append(item.IsSection);
+        }
+
+        foreach (var action in selection.Actions)
+        {
+            text.Append('\u001e').Append(action.Label).Append(action.IsPrimary);
+        }
+
+        return text.ToString();
     }
 
     /// <summary>Three lines on the raised fill: what it is called, what kind it is, and where it lives.</summary>

@@ -101,10 +101,27 @@ public class InspectorTests
 
                 // E is answered by the panel: the caret lands in the first value that will take one.
                 Assert.True(shell.Commands.TryExecute("sch.properties"));
-                Dispatcher.UIThread.RunJobs();
 
-                var focused = window.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(b => b.IsFocused);
-                Assert.True(focused is not null, "E did not put the caret in a value");
+                // The panel posts the focus behind layout, because a box that has not been laid out yet refuses the
+                // caret; so the test waits for it rather than assuming one pump delivers it.
+                TextBox? focused = null;
+                for (int i = 0; i < 50 && focused is null; i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    focused = window.GetVisualDescendants().OfType<TextBox>().FirstOrDefault(b => b.IsFocused);
+                    if (focused is null)
+                    {
+                        Thread.Sleep(2);
+                    }
+                }
+
+                // When this fails it must say which of two very different things went wrong: the panel never drew an
+                // editable row, or it drew one and the caret never arrived.
+                var boxes = window.GetVisualDescendants().OfType<TextBox>().ToList();
+                Assert.True(
+                    focused is not null,
+                    $"E did not put the caret in a value: {boxes.Count} box(es) "
+                    + $"[{string.Join(", ", boxes.Select(b => $"\"{b.Text}\""))}]");
                 Assert.Equal("VCC", focused!.Text);
 
                 // Writing through that field lands in the file and is one step of the history.
