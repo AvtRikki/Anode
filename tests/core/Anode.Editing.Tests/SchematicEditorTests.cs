@@ -173,4 +173,30 @@ public class SchematicEditorTests
         editor.Undo();
         Assert.Equal(before, editor.Scene.TopLevelItems.Count());
     }
+
+    [Fact]
+    public void Deleting_a_tap_takes_the_dot_it_needed_with_it()
+    {
+        var editor = Editor(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        var tap = new Vector2L(57_150_000, 50_800_000);
+        var start = new Vector2L(57_150_000, 38_100_000);
+        editor.DrawWire([(start, tap)]);
+        Assert.Single(sheet.Junctions);
+
+        editor.SetSelection([sheet.Wires.Single(w => w.Points is [var a, _] && a == start)]);
+        editor.DeleteSelection();
+
+        // The branch is gone, and so is the dot: what is left of the wire it tapped meets end to end, which is a
+        // corner and needs nothing.
+        Assert.Empty(sheet.Junctions);
+        Assert.Equal(2, sheet.Wires.Count);
+
+        // The delete was one step, the drawing another; undoing both gives the file back byte for byte.
+        editor.Undo();
+        Assert.Single(sheet.Junctions);
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
 }

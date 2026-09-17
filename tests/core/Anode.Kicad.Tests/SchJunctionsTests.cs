@@ -159,4 +159,108 @@ public class SchJunctionsTests
 
         Assert.Equal([Middle, Below], SchJunctions.Needed(sheet, [(Middle, Below)]));
     }
+
+    /// <summary>The horizontal wire, a branch that ends halfway along it, and the dot that says they are joined.</summary>
+    private static Schematic Tapped() => Sheet("""
+    	(wire
+    		(pts
+    			(xy 50.8 25.4) (xy 50.8 50.8)
+    		)
+    		(stroke
+    			(width 0)
+    			(type default)
+    		)
+    		(uuid "0a1b2c3d-0000-4000-8000-000000000006")
+    	)
+    	(junction
+    		(at 50.8 50.8)
+    		(diameter 0)
+    		(color 0 0 0 0)
+    		(uuid "0a1b2c3d-0000-4000-8000-000000000007")
+    	)
+    """);
+
+    [Fact]
+    public void A_dot_goes_when_the_branch_under_it_goes()
+    {
+        var sheet = Tapped();
+        var branch = sheet.Wires.Single(w => w.Points is [var a, _] && a == Above);
+
+        Assert.Same(sheet.Junctions[0], Assert.Single(SchJunctions.Stale(sheet, [branch])));
+    }
+
+    [Fact]
+    public void A_dot_stays_while_something_still_branches_there()
+    {
+        // Two branches end in the middle of the horizontal wire; one of them leaving still leaves a T behind.
+        var sheet = Sheet("""
+        	(wire
+        		(pts
+        			(xy 50.8 25.4) (xy 50.8 50.8)
+        		)
+        		(stroke
+        			(width 0)
+        			(type default)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000006")
+        	)
+        	(wire
+        		(pts
+        			(xy 50.8 76.2) (xy 50.8 50.8)
+        		)
+        		(stroke
+        			(width 0)
+        			(type default)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000007")
+        	)
+        	(junction
+        		(at 50.8 50.8)
+        		(diameter 0)
+        		(color 0 0 0 0)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000008")
+        	)
+        """);
+
+        var branch = sheet.Wires.Single(w => w.Points is [var a, _] && a == Above);
+
+        Assert.Empty(SchJunctions.Stale(sheet, [branch]));
+    }
+
+    [Fact]
+    public void A_dot_the_delete_never_touched_is_left_where_it_is()
+    {
+        // A dot on its own, and a wire somewhere else entirely. By the rule the dot is needed by nothing — but the
+        // delete did not touch it, and a delete is not an excuse to audit the rest of the sheet.
+        var sheet = Sheet("""
+        	(wire
+        		(pts
+        			(xy 25.4 101.6) (xy 76.2 101.6)
+        		)
+        		(stroke
+        			(width 0)
+        			(type default)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000009")
+        	)
+        	(junction
+        		(at 101.6 101.6)
+        		(diameter 0)
+        		(color 0 0 0 0)
+        		(uuid "0a1b2c3d-0000-4000-8000-00000000000a")
+        	)
+        """);
+
+        var far = sheet.Wires.Single(w => w.Points[0].Y == 101_600_000);
+
+        Assert.Empty(SchJunctions.Stale(sheet, [far]));
+    }
+
+    [Fact]
+    public void Deleting_something_that_is_not_a_wire_takes_no_dot_with_it()
+    {
+        var sheet = Tapped();
+
+        Assert.Empty(SchJunctions.Stale(sheet, []));
+    }
 }

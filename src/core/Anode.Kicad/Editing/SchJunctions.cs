@@ -43,11 +43,55 @@ public static class SchJunctions
         return needed;
     }
 
-    /// <summary>Every wire segment of the sheet; a wire is a polyline, so each pair of its points is one.</summary>
-    private static List<(Vector2L A, Vector2L B)> Segments(Schematic sheet)
+    /// <summary>
+    /// Dots that stop meaning anything once <paramref name="removed"/> leaves the sheet: the branch under them is
+    /// going, and what is left is a corner, or nothing at all.
+    ///
+    /// Only dots that sat on a wire being removed are reconsidered. A delete is not an excuse to audit the whole
+    /// sheet — a dot the user put somewhere for their own reasons, away from what is being deleted, stays.
+    /// </summary>
+    public static IReadOnlyList<SchJunction> Stale(Schematic sheet, IReadOnlyList<SchItem> removed)
+    {
+        var wires = removed.OfType<SchWire>().Where(w => !w.IsBus).ToList();
+        if (wires.Count == 0)
+        {
+            return [];
+        }
+
+        var going = removed.ToHashSet();
+        var segments = Segments(sheet, going);
+        return
+        [
+            .. sheet.Junctions.Where(dot =>
+                !going.Contains(dot)
+                && wires.Any(wire => Carries(wire, dot.Position))
+                && !IsNeeded(segments, dot.Position)),
+        ];
+    }
+
+    /// <summary>The point lies on the wire: at one of its ends, or anywhere along it.</summary>
+    private static bool Carries(SchWire wire, Vector2L point)
+    {
+        var points = wire.Points;
+        for (int i = 1; i < points.Length; i++)
+        {
+            if (points[i - 1] == point || points[i] == point || IsInside(points[i - 1], points[i], point))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Every wire segment of the sheet; a wire is a polyline, so each pair of its points is one. Wires in
+    /// <paramref name="excluded"/> are counted as already gone.
+    /// </summary>
+    private static List<(Vector2L A, Vector2L B)> Segments(Schematic sheet, IReadOnlySet<SchItem>? excluded = null)
     {
         var segments = new List<(Vector2L A, Vector2L B)>();
-        foreach (var wire in sheet.Wires.Where(w => !w.IsBus))
+        foreach (var wire in sheet.Wires.Where(w => !w.IsBus && excluded?.Contains(w) != true))
         {
             var points = wire.Points;
             for (int i = 1; i < points.Length; i++)
@@ -65,23 +109,23 @@ public static class SchJunctions
     private static bool IsNeeded(List<(Vector2L A, Vector2L B)> segments, Vector2L point)
     {
         int ends = 0;
+        bool inside = false;
         foreach (var (a, b) in segments)
         {
             if (a == point || b == point)
             {
                 ends++;
-                continue;
             }
-
-            // The point sits inside this wire: that is a T, and a T is always a connection.
-            if (IsInside(a, b, point))
+            else if (IsInside(a, b, point))
             {
-                return true;
+                inside = true;
             }
         }
 
+        // A wire ending inside another is a T, and a T connects. A point that merely lies along a wire with nothing
+        // ending there is no meeting at all — which is exactly what is left once the branch that made it one is gone.
         // Two ends meeting is a corner; three is a branch, and a branch needs a dot.
-        return ends >= 3;
+        return (inside && ends > 0) || ends >= 3;
     }
 
     /// <summary>The point lies on the segment, strictly between its ends. Exact, in nanometres.</summary>

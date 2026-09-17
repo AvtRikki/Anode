@@ -369,7 +369,11 @@ public sealed class SchematicEditor
 
         var items = _selection.ToList();
         _selection.Clear();
-        Run(new DeleteNodesCommand(Sheet, items));
+
+        // A dot is only a dot while the branch under it is there. Taking the branch away takes the dot with it, in
+        // the same step, so one undo gives both back.
+        var stale = SchJunctions.Stale(Sheet, items);
+        Run(new DeleteNodesCommand(Sheet, stale.Count == 0 ? items : [.. items, .. stale]));
     }
 
     public void Undo()
