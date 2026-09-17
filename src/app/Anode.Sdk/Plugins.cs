@@ -6,7 +6,7 @@ namespace Anode.Sdk;
 /// <summary>Version of the plugin contracts in this assembly. Plugins declare the version they were built against.</summary>
 public static class PlatformContract
 {
-    public const int Version = 3;
+    public const int Version = 4;
 }
 
 /// <summary>Contents of a plugin's <c>plugin.json</c>.</summary>
@@ -52,6 +52,9 @@ public interface IPluginContext
     IPanelRegistry Panels { get; }
 
     IDocumentRegistry Documents { get; }
+
+    /// <summary>Where a plugin describes its files for the project tree.</summary>
+    IProjectStructureRegistry Project { get; }
 
     ILog Log { get; }
 }

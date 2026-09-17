@@ -49,14 +49,34 @@ public class SchematicPluginTests
             var document = Pump(shell.OpenAsync(sheet));
             Assert.NotNull(document);
             Assert.Equal(Path.GetFileName(sheet), document.Title);
-            Assert.False(document.CanSave);
+            // The sheet is editable now: it can be saved, and it starts clean.
+            Assert.True(document.CanSave);
+            Assert.False(document.IsDirty);
             Assert.StartsWith("schematic · ", document.Summary, StringComparison.Ordinal);
             Assert.NotEmpty(document.StatusFields);
 
-            // The sheets panel docks on the left next to the project panel.
-            var sheets = Assert.Single(shell.LeftStacks.SelectMany(s => s.Tabs), t => t.Descriptor.Id == "sch.sheets");
-            Assert.Equal("Sheets", sheets.Title);
+            // The hierarchy is not a panel of its own any more: the plugin describes the file and the project tree
+            // shows it, so the schematic domain contributes structure rather than a second navigation panel.
+            Assert.DoesNotContain(shell.Panels.Panels, p => p.Id == "sch.sheets");
+            Assert.NotEmpty(shell.ProjectStructure.Contributors);
             Assert.NotNull(shell.Commands.Find("sch.fit"));
+
+            // Editing commands are what the title bar's history buttons are driven by.
+            Assert.NotNull(shell.Commands.Find("edit.undo"));
+            Assert.NotNull(shell.Commands.Find("edit.redo"));
+            Assert.Equal("schematic", shell.Commands.Find("edit.undo")?.Scope);
+            Assert.True(shell.HasHistory);
+            Assert.False(shell.CanUndo);
+
+            // A hierarchical sheet reports its children as instances — the same file may appear under two names.
+            string hierarchy = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "complex_hierarchy.kicad_sch");
+            if (File.Exists(hierarchy))
+            {
+                var children = shell.ProjectStructure.Describe(hierarchy);
+                Assert.Equal(2, children.Count);
+                Assert.Equal(["ampli_ht_horizontal", "ampli_ht_vertical"], children.Select(c => c.Title).Order(StringComparer.Ordinal));
+                Assert.All(children, c => Assert.Equal(Icons.Sheets, c.IconKey));
+            }
 
             ShellWindowTests.Snapshot(window, directory, "schematic-sheet");
             window.Close();

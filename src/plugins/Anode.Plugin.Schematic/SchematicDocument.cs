@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Anode.Editing;
 using Anode.Kicad;
 using Anode.Sdk;
 using Anode.Render;
@@ -40,6 +41,7 @@ public sealed class SchematicDocument : DocumentBase
 {
     private readonly List<IDisposable> _registrations = [];
     private readonly IReadOnlyList<SheetCheck> _checks;
+    private readonly SchematicEditor _editor;
     private SchematicCanvas? _canvas;
     private string _cursor = string.Empty;
     private string _frame = string.Empty;
@@ -50,6 +52,9 @@ public sealed class SchematicDocument : DocumentBase
         Sheet = schematic;
         Scene = scene;
         FilePath = path;
+        _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
+        _editor.SelectionChanged += OnSelectionChanged;
+        _editor.History.Changed += OnHistoryChanged;
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -62,8 +67,9 @@ public sealed class SchematicDocument : DocumentBase
 
     public override string Title => Path.GetFileName(FilePath ?? Tr.T("sch.document.untitled"));
 
-    /// <summary>Reading only for now: the schematic has no edits, so there is nothing to save.</summary>
-    public override bool CanSave => false;
+    public override bool CanSave => true;
+
+    public override bool IsDirty => _editor.History.IsDirty;
 
     public override string Summary
     {
@@ -85,9 +91,13 @@ public sealed class SchematicDocument : DocumentBase
             }
 
             fields.Add(new StatusField(Count()));
-            if (_canvas?.Selection is { } selection)
+            if (_editor.Selection is [var single])
             {
-                fields.Add(new StatusField(Tr.T("sch.status.selected", SchItemProperties.Header(selection).Title)));
+                fields.Add(new StatusField(Tr.T("sch.status.selected", SchItemProperties.Header(single).Title)));
+            }
+            else if (_editor.Selection.Count > 1)
+            {
+                fields.Add(new StatusField(Tr.T("sch.status.selected", Tr.T("sch.selection.multi", _editor.Selection.Count))));
             }
 
             if (_frame.Length > 0)
@@ -103,9 +113,11 @@ public sealed class SchematicDocument : DocumentBase
     {
         get
         {
-            if (_canvas?.Selection is not { } item)
+            if (_editor.Selection is not [var item])
             {
-                return null;
+                return _editor.Selection.Count > 1
+                    ? new SelectionInfo(Tr.T("sch.selection.multi", _editor.Selection.Count), null, [])
+                    : null;
             }
 
             var (title, subtitle, tag) = SchItemProperties.Header(item);
@@ -115,14 +127,81 @@ public sealed class SchematicDocument : DocumentBase
 
     public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue())];
 
+    public override Task<bool> SaveAsync(string? path = null)
+    {
+        _editor.Save(path ?? FilePath ?? throw new InvalidOperationException("The sheet has no path to save to."));
+        FilePath = path ?? FilePath;
+        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty));
+        return Task.FromResult(true);
+    }
+
     public override void Activate(IPluginContext context)
     {
-        _registrations.Add(context.Commands.Register(new CommandDescriptor("sch.fit", "sch.command.fit")
+        CommandDescriptor[] commands =
+        [
+            new("edit.undo", "sch.command.undo")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
+                CanExecute = () => _editor.History.CanUndo,
+                Execute = () => Guard(() => _editor.Undo(), context),
+            },
+            new("edit.redo", "sch.command.redo")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
+                CanExecute = () => _editor.History.CanRedo,
+                Execute = () => Guard(() => _editor.Redo(), context),
+            },
+            new("edit.delete", "sch.command.delete")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌫",
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.DeleteSelection(), context),
+            },
+            new("sch.move", "sch.command.move")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "M",
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => _canvas?.BeginMoveWithCursor(),
+            },
+            new("sch.rotate", "sch.command.rotate")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "R",
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Rotate(90), context),
+            },
+            new("sch.mirror", "sch.command.mirror")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "X",
+                CanExecute = () => _editor.Selection.Count > 0,
+                Execute = () => Guard(() => _editor.Mirror(horizontal: true), context),
+            },
+            new("sch.fit", "sch.command.fit")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "Home",
+                Execute = () => _canvas?.ZoomToFit(),
+            },
+        ];
+
+        foreach (var command in commands)
         {
-            ScopeKey = "scope.schematic",
-            ShortcutText = "Home",
-            Execute = () => _canvas?.ZoomToFit(),
-        }));
+            _registrations.Add(context.Commands.Register(command));
+        }
+    }
+
+    private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
+        new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    private void Guard(Action action, IPluginContext context)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or KiCadFormatException)
+        {
+            context.Log.Warn(ex.Message);
+            context.Workbench.ShowBanner(new Banner(ex.Message, IsAlert: false));
+        }
     }
 
     public override void Deactivate()
@@ -138,13 +217,15 @@ public sealed class SchematicDocument : DocumentBase
     public override void Dispose()
     {
         Deactivate();
+        _editor.SelectionChanged -= OnSelectionChanged;
+        _editor.History.Changed -= OnHistoryChanged;
         Tr.Changed -= OnLanguageChanged;
         base.Dispose();
     }
 
     protected override Control CreateView()
     {
-        var canvas = new SchematicCanvas { Scene = Scene };
+        var canvas = new SchematicCanvas { Editor = _editor };
         _canvas = canvas;
         canvas.CursorMoved += position =>
         {
@@ -166,10 +247,15 @@ public sealed class SchematicDocument : DocumentBase
             _zoom = canvas.ZoomPercent;
             OnPropertyChanged(nameof(Summary));
         };
-        canvas.SelectionChanged += () => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
-
         return canvas;
     }
+
+    /// <summary>The canvas draws again when the history moves; the workbench re-reads the document's state.</summary>
+    public void Redraw() => _canvas?.Redraw();
+
+    private void OnSelectionChanged() => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
+
+    private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields), nameof(Summary));
 
     private string Count() => Tr.T("sch.status.symbols", Sheet.Symbols.Count, Tr.Plural("sch.symbol", Sheet.Symbols.Count));
 

@@ -2,13 +2,13 @@ using Anode.Sexpr;
 
 namespace Anode.Kicad.Editing;
 
-/// <summary>An undoable change to a board.</summary>
-public interface IBoardCommand
+/// <summary>An undoable change to a file's tree.</summary>
+public interface IEditCommand
 {
     string Name { get; }
 
     /// <summary>Top-level items whose geometry or presence changes; views refresh them around Apply and Revert.</summary>
-    IReadOnlyList<BoardItem> Affected { get; }
+    IReadOnlyList<INodeItem> Affected { get; }
 
     void Apply();
 
@@ -19,14 +19,14 @@ public interface IBoardCommand
 /// Changes items in place. The first Apply runs the mutation; undo and redo restore exact snapshots of the items'
 /// trees, so reverting returns the file byte for byte.
 /// </summary>
-public sealed class ModifyItemsCommand(string name, IReadOnlyList<BoardItem> items, Action mutate) : IBoardCommand
+public sealed class ModifyNodesCommand(string name, IReadOnlyList<INodeItem> items, Action mutate) : IEditCommand
 {
     private SList[]? _before;
     private SList[]? _after;
 
     public string Name => name;
 
-    public IReadOnlyList<BoardItem> Affected => items;
+    public IReadOnlyList<INodeItem> Affected => items;
 
     public void Apply()
     {
@@ -63,28 +63,29 @@ public sealed class ModifyItemsCommand(string name, IReadOnlyList<BoardItem> ite
             items[i].Node.RestoreFrom(snapshots[i]);
         }
 
-        foreach (var footprint in items.OfType<Footprint>())
+        // A restored subtree invalidates whatever was cached on top of it — a footprint's pads, say.
+        foreach (var item in items)
         {
-            footprint.Refresh();
+            item.AfterRestore();
         }
     }
 }
 
 /// <summary>Removes top-level items; undo puts them back at their original positions in the file.</summary>
-public sealed class DeleteItemsCommand(Board board, IReadOnlyList<BoardItem> items) : IBoardCommand
+public sealed class DeleteNodesCommand(INodeHost host, IReadOnlyList<INodeItem> items) : IEditCommand
 {
-    private readonly List<(BoardItem Item, int Index)> _removed = [];
+    private readonly List<(INodeItem Item, int Index)> _removed = [];
 
     public string Name => items.Count == 1 ? "Delete item" : $"Delete {items.Count} items";
 
-    public IReadOnlyList<BoardItem> Affected => items;
+    public IReadOnlyList<INodeItem> Affected => items;
 
     public void Apply()
     {
         _removed.Clear();
-        foreach (var item in items.OrderByDescending(i => board.Root.IndexOf(i.Node)))
+        foreach (var item in items.OrderByDescending(i => i.Node.Parent?.IndexOf(i.Node) ?? 0))
         {
-            _removed.Add((item, board.Detach(item)));
+            _removed.Add((item, host.Detach(item)));
         }
     }
 
@@ -92,7 +93,7 @@ public sealed class DeleteItemsCommand(Board board, IReadOnlyList<BoardItem> ite
     {
         foreach (var (item, index) in _removed.OrderBy(r => r.Index))
         {
-            board.Attach(item, index);
+            host.Attach(item, index);
         }
 
         _removed.Clear();
@@ -101,8 +102,8 @@ public sealed class DeleteItemsCommand(Board board, IReadOnlyList<BoardItem> ite
 
 public sealed class UndoStack
 {
-    private readonly List<IBoardCommand> _done = [];
-    private readonly List<IBoardCommand> _undone = [];
+    private readonly List<IEditCommand> _done = [];
+    private readonly List<IEditCommand> _undone = [];
     private int _savedAt;
 
     public event Action? Changed;
@@ -118,7 +119,7 @@ public sealed class UndoStack
     /// <summary>True when the board differs from the last saved (or loaded) state.</summary>
     public bool IsDirty => _savedAt != _done.Count;
 
-    public void Execute(IBoardCommand command)
+    public void Execute(IEditCommand command)
     {
         command.Apply();
 
@@ -133,7 +134,7 @@ public sealed class UndoStack
         Changed?.Invoke();
     }
 
-    public IBoardCommand? Undo()
+    public IEditCommand? Undo()
     {
         if (!CanUndo)
         {
@@ -148,7 +149,7 @@ public sealed class UndoStack
         return command;
     }
 
-    public IBoardCommand? Redo()
+    public IEditCommand? Redo()
     {
         if (!CanRedo)
         {

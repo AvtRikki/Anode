@@ -2,14 +2,14 @@
   "scope": { "schematic": "schematic" },
   "sch": {
     "document": { "label": "KiCad schematic", "untitled": "schematic" },
-    "panel": { "sheets": "Sheets", "sheets.rail": "Sh" },
-    "sheets": {
-      "empty": "Sheets appear once a schematic is open",
-      "root": "Root sheet",
-      "children": "Child sheets",
-      "missing": "file not found"
-    },
+    "sheets": { "missing": "file not found" },
     "command": {
+      "undo": "Undo",
+      "redo": "Redo",
+      "delete": "Delete selection",
+      "move": "Move selection",
+      "rotate": "Rotate 90°",
+      "mirror": "Mirror",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
     },
@@ -66,7 +66,7 @@
     "units": { "mm": "mm" },
     "log": {
       "loaded": "{0}: {1} symbols, {2} primitives.",
-      "activated": "{0} {1}: .kicad_sch, sheets panel."
+      "activated": "{0} {1}: .kicad_sch, sheet hierarchy."
     }
   }
 }

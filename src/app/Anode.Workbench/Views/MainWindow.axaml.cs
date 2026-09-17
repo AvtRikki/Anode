@@ -37,6 +37,8 @@ public partial class MainWindow : Window
         SearchIcon.Content = Icons.Draw(Icons.Search, 13);
         ProjectChevron.Content = Icons.Draw(Icons.ChevronDown, 10);
         BranchIcon.Content = Icons.Draw(Icons.Branch, 12);
+        UndoButton.Content = Icons.Draw(Icons.Undo, 15);
+        RedoButton.Content = Icons.Draw(Icons.Redo, 15);
         ToggleLeftDock.Content = Icons.Draw(Icons.DockLeft, 15);
         ToggleRightDock.Content = Icons.Draw(Icons.DockRight, 15);
         ToggleBottomDock.Content = Icons.Draw(Icons.DockBottom, 15);

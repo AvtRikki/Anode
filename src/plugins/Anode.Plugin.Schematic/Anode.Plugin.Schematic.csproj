@@ -26,6 +26,7 @@
   <ItemGroup>
     <!-- The schematic domain and the shared canvas: private to this plugin. -->
     <ProjectReference Include="..\..\core\Anode.Kicad\Anode.Kicad.csproj" />
+    <ProjectReference Include="..\..\core\Anode.Editing\Anode.Editing.csproj" />
     <ProjectReference Include="..\..\render\Anode.Render.Avalonia\Anode.Render.Avalonia.csproj" />
   </ItemGroup>
 </Project>

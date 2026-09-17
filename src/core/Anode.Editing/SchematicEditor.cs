@@ -6,9 +6,9 @@ using Anode.Render;
 namespace Anode.Editing;
 
 /// <summary>An in-progress move: the moved items' primitives are drawn with <see cref="PreviewTransform"/> until committed.</summary>
-public sealed class MoveOperation
+public sealed class SchMoveOperation
 {
-    internal MoveOperation(IReadOnlyList<BoardItem> items, IReadOnlyList<LayerGeometry> preview, Vector2L anchorNm, Vector2D startCursorNm)
+    internal SchMoveOperation(IReadOnlyList<SchItem> items, IReadOnlyList<LayerGeometry> preview, Vector2L anchorNm, Vector2D startCursorNm)
     {
         Items = items;
         Preview = preview;
@@ -16,7 +16,7 @@ public sealed class MoveOperation
         StartCursorNm = startCursorNm;
     }
 
-    public IReadOnlyList<BoardItem> Items { get; }
+    public IReadOnlyList<SchItem> Items { get; }
 
     /// <summary>Primitives of the moved items, removed from the scene for the duration of the move.</summary>
     public IReadOnlyList<LayerGeometry> Preview { get; }
@@ -36,54 +36,50 @@ public sealed class MoveOperation
 }
 
 /// <summary>
-/// Editing session for one board: selection, moves, rotation, deletion and undo, keeping the scene in sync.
+/// Editing session for one sheet: selection, moves, rotation, mirroring, deletion and undo, keeping the scene in
+/// sync. The counterpart of <see cref="BoardEditor"/> — same shape, same undo stack, schematic rules: the grid is
+/// KiCad's 50 mil, and a mirror is a property of the symbol rather than reflected geometry.
 /// UI-agnostic; coordinates passed in are scene millimetres.
 /// </summary>
-public sealed class BoardEditor
+public sealed class SchematicEditor
 {
-    private readonly List<BoardItem> _selection = [];
+    private readonly List<SchItem> _selection = [];
 
-    public BoardEditor(BoardScene scene)
+    public SchematicEditor(SchematicScene scene)
     {
         Scene = scene;
     }
 
-    public BoardScene Scene { get; }
+    public SchematicScene Scene { get; }
 
-    public Board Board => Scene.Board;
+    public Schematic Sheet => Scene.Schematic;
 
     public UndoStack History { get; } = new();
 
-    /// <summary>Grid step for move snapping; 0 disables snapping.</summary>
-    public long GridNm { get; set; } = 100_000;
+    /// <summary>Grid step for move snapping: 50 mil, as KiCad draws schematics on. 0 disables snapping.</summary>
+    public long GridNm { get; set; } = 1_270_000;
 
     /// <summary>Triangulate polygons of rebuilt items right away (needed by the OpenGL backend).</summary>
     public bool TriangulateChanges { get; set; }
 
-    public IReadOnlyList<BoardItem> Selection => _selection;
+    public IReadOnlyList<SchItem> Selection => _selection;
 
     /// <summary>Scene owners of the selected items. A new set instance is published on every change.</summary>
     public IReadOnlySet<int> SelectedOwners { get; private set; } = new HashSet<int>();
 
-    /// <summary>The primitive owner last clicked, used to pick a net to highlight.</summary>
+    /// <summary>The primitive owner last clicked.</summary>
     public int FocusOwner { get; private set; } = -1;
 
-    public MoveOperation? Move { get; private set; }
-
-    /// <summary>Net of the clicked pad, track or via when exactly one item is selected.</summary>
-    public Net? FocusNet =>
-        _selection.Count == 1 && Scene.IsLive(FocusOwner) && ReferenceEquals(Scene.TopLevelOf(FocusOwner), _selection[0])
-            ? Scene.OwnerNet(FocusOwner) is { IsUnconnected: false } net ? net : null
-            : null;
+    public SchMoveOperation? Move { get; private set; }
 
     public event Action? SelectionChanged;
 
     /// <summary>Scene primitives changed (edit, undo, move started or ended).</summary>
     public event Action? SceneChanged;
 
-    public bool IsSelected(BoardItem item) => _selection.Contains(item);
+    public bool IsSelected(SchItem item) => _selection.Contains(item);
 
-    /// <summary>Selects the top-level item of <paramref name="owner"/>; with <paramref name="toggle"/> adds or removes it.</summary>
+    /// <summary>Selects the item of <paramref name="owner"/>; with <paramref name="toggle"/> adds or removes it.</summary>
     public void Click(int owner, bool toggle)
     {
         if (!Scene.IsLive(owner))
@@ -96,22 +92,22 @@ public sealed class BoardEditor
             return;
         }
 
-        var top = Scene.TopLevelOf(owner);
+        var item = Scene.Owner(owner);
         FocusOwner = owner;
         if (!toggle)
         {
             _selection.Clear();
-            _selection.Add(top);
+            _selection.Add(item);
         }
-        else if (!_selection.Remove(top))
+        else if (!_selection.Remove(item))
         {
-            _selection.Add(top);
+            _selection.Add(item);
         }
 
         PublishSelection();
     }
 
-    public void SetSelection(IEnumerable<BoardItem> items)
+    public void SetSelection(IEnumerable<SchItem> items)
     {
         _selection.Clear();
         foreach (var item in items)
@@ -136,33 +132,33 @@ public sealed class BoardEditor
             _selection.Clear();
         }
 
-        var candidates = new List<BoardItem>();
-        foreach (var top in Scene.TopLevelItems)
+        var candidates = new List<SchItem>();
+        foreach (var item in Scene.TopLevelItems)
         {
-            var bounds = Scene.BoundsOf(top);
+            var bounds = Scene.BoundsOf(item);
             bool hit = crossing
                 ? box.Intersects(bounds)
                 : !bounds.IsEmpty && box.Contains(bounds.MinX, bounds.MinY) && box.Contains(bounds.MaxX, bounds.MaxY);
 
             if (hit)
             {
-                candidates.Add(top);
+                candidates.Add(item);
             }
         }
 
-        // Bounds only narrow crossing selection down; an outline's bounds cover the whole board.
-        IEnumerable<BoardItem> hits = crossing
+        // Bounds only narrow crossing selection down; a symbol's box covers the gaps between its own lines.
+        IEnumerable<SchItem> hits = crossing
             ? candidates.Where(SelectionGeometry.Touching(Scene.Layers, box, candidates, Scene.OwnersOf).Contains)
             : candidates;
 
-        foreach (var top in hits)
+        foreach (var item in hits)
         {
-            if (toggle && _selection.Remove(top))
+            if (toggle && _selection.Remove(item))
             {
                 continue;
             }
 
-            _selection.Add(top);
+            _selection.Add(item);
         }
 
         FocusOwner = -1;
@@ -170,14 +166,14 @@ public sealed class BoardEditor
     }
 
     /// <summary>Starts moving the movable part of the selection, grabbing <paramref name="grabbed"/> if it is selected.</summary>
-    public bool BeginMove(BoardItem? grabbed, Vector2D cursorScene)
+    public bool BeginMove(SchItem? grabbed, Vector2D cursorScene)
     {
         if (Move is not null)
         {
             return false;
         }
 
-        var items = _selection.Where(BoardEdits.CanTransform).ToList();
+        var items = _selection.Where(SchEdits.CanTransform).ToList();
         if (items.Count == 0)
         {
             return false;
@@ -185,7 +181,7 @@ public sealed class BoardEditor
 
         var anchorItem = grabbed is not null && items.Contains(grabbed) ? grabbed : items[0];
         var preview = Scene.Remove(items, collect: true);
-        Move = new MoveOperation(items, preview, BoardEdits.Anchor(anchorItem), Scene.ToBoardNm(cursorScene));
+        Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene));
         SceneChanged?.Invoke();
         return true;
     }
@@ -197,7 +193,7 @@ public sealed class BoardEditor
             return;
         }
 
-        var cursor = Scene.ToBoardNm(cursorScene);
+        var cursor = Scene.ToSheetNm(cursorScene);
         var raw = new Vector2L((long)Math.Round(cursor.X - move.StartCursorNm.X), (long)Math.Round(cursor.Y - move.StartCursorNm.Y));
         move.Delta = Snap(move.AnchorNm + raw) - move.AnchorNm;
         UpdatePreviewTransform(move);
@@ -222,7 +218,7 @@ public sealed class BoardEditor
         {
             foreach (var item in items)
             {
-                BoardEdits.Transform(item, anchor, rotation, delta);
+                SchEdits.Transform(item, anchor, SchEdits.CanRotate(item) ? rotation : 0, delta);
             }
         });
 
@@ -250,18 +246,42 @@ public sealed class BoardEditor
             return;
         }
 
-        var items = _selection.Where(BoardEdits.CanTransform).ToList();
+        var items = _selection.Where(SchEdits.CanRotate).ToList();
         if (items.Count == 0)
         {
             return;
         }
 
-        var pivot = items.Count == 1 ? BoardEdits.Anchor(items[0]) : SelectionCenter(items);
+        var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
         Run(new ModifyNodesCommand("Rotate", items, () =>
         {
             foreach (var item in items)
             {
-                BoardEdits.Transform(item, pivot, degrees, default);
+                SchEdits.Transform(item, pivot, degrees, default);
+            }
+        }));
+    }
+
+    /// <summary>Mirrors the selection left to right (<paramref name="horizontal"/>) or top to bottom.</summary>
+    public void Mirror(bool horizontal)
+    {
+        if (Move is not null)
+        {
+            return;
+        }
+
+        var items = _selection.Where(SchEdits.CanTransform).ToList();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
+        Run(new ModifyNodesCommand(horizontal ? "Mirror horizontally" : "Mirror vertically", items, () =>
+        {
+            foreach (var item in items)
+            {
+                SchEdits.Mirror(item, pivot, horizontal);
             }
         }));
     }
@@ -275,7 +295,7 @@ public sealed class BoardEditor
 
         var items = _selection.ToList();
         _selection.Clear();
-        Run(new DeleteNodesCommand(Board, items));
+        Run(new DeleteNodesCommand(Sheet, items));
     }
 
     public void Undo()
@@ -283,7 +303,7 @@ public sealed class BoardEditor
         CancelMove();
         if (History.Undo() is { } command)
         {
-            Refresh([.. command.Affected.OfType<BoardItem>()]);
+            Refresh([.. command.Affected.OfType<SchItem>()]);
         }
     }
 
@@ -292,13 +312,13 @@ public sealed class BoardEditor
         CancelMove();
         if (History.Redo() is { } command)
         {
-            Refresh([.. command.Affected.OfType<BoardItem>()]);
+            Refresh([.. command.Affected.OfType<SchItem>()]);
         }
     }
 
     public void Save(string path)
     {
-        Board.Save(path);
+        Sheet.Save(path);
         History.MarkSaved();
     }
 
@@ -307,7 +327,7 @@ public sealed class BoardEditor
 
     private long SnapValue(long value) => (long)Math.Round((double)value / GridNm, MidpointRounding.AwayFromZero) * GridNm;
 
-    private Vector2L SelectionCenter(IEnumerable<BoardItem> items)
+    private Vector2L SelectionCenter(IEnumerable<SchItem> items)
     {
         var bounds = RectD.Empty;
         foreach (var item in items)
@@ -315,11 +335,11 @@ public sealed class BoardEditor
             bounds = bounds.Union(Scene.BoundsOf(item));
         }
 
-        var center = Scene.ToBoardNm(new Vector2D((bounds.MinX + bounds.MaxX) / 2, (bounds.MinY + bounds.MaxY) / 2));
+        var center = Scene.ToSheetNm(new Vector2D((bounds.MinX + bounds.MaxX) / 2, (bounds.MinY + bounds.MaxY) / 2));
         return Snap(center.Round());
     }
 
-    private void UpdatePreviewTransform(MoveOperation move)
+    private void UpdatePreviewTransform(SchMoveOperation move)
     {
         var anchor = Scene.ToSceneMm(move.AnchorNm.ToDouble());
         double dx = (double)move.Delta.X / Units.NmPerMm;
@@ -331,8 +351,7 @@ public sealed class BoardEditor
 
     private void Run(IEditCommand command, bool removedFromScene = false)
     {
-        // The stack is shared with the schematic, so a command reports plain node items.
-        var affected = command.Affected.OfType<BoardItem>().ToList();
+        var affected = command.Affected.OfType<SchItem>().ToList();
         if (!removedFromScene)
         {
             Scene.Remove(affected);
@@ -349,16 +368,16 @@ public sealed class BoardEditor
         }
     }
 
-    private void Refresh(IReadOnlyList<BoardItem> items)
+    private void Refresh(IReadOnlyList<SchItem> items)
     {
         Scene.Remove(items);
         AddToScene(items.Where(i => i.IsAttached));
         PublishSelection();
     }
 
-    private void AddToScene(IEnumerable<BoardItem> items)
+    private void AddToScene(IEnumerable<SchItem> items)
     {
-        SceneBuilder.AddItems(Scene, items);
+        SchematicSceneBuilder.AddItems(Scene, items);
         if (TriangulateChanges)
         {
             SceneTriangulator.Triangulate(Scene);

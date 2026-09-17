@@ -267,6 +267,11 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Foreground" Value="{DynamicResource Chrome.TextFaint}" />
   </Style>
+  <!-- A button with nothing to do must not read louder than one that works: no fill, faint ink. -->
+  <Style Selector="Button.dockToggle:disabled /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.TextFaint}" />
+  </Style>
   <Style Selector="Button.dockToggle:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
     <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
@@ -448,6 +453,25 @@
   </Style>
 
   <!-- Command palette. -->
+  <!-- Filter field of the project tree. -->
+  <Style Selector="TextBox.filter">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="MinHeight" Value="24" />
+    <Setter Property="Padding" Value="6,3" />
+    <Setter Property="CaretBrush" Value="{DynamicResource State.Accent}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="TextBox.filter /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Chrome.Line}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="2" />
+  </Style>
+  <Style Selector="TextBox.filter:focus /template/ Border#PART_BorderElement, TextBox.filter:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Bg}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource State.Accent}" />
+  </Style>
+
   <Style Selector="TextBox.paletteInput">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />

@@ -16,7 +16,7 @@ namespace Anode.Workbench.Tests;
 /// </summary>
 public class PanelScopeTests
 {
-    private static string PluginsRoot => Path.Combine(TestData.RepoRoot, "src", "app", "Anode.Workbench", "bin",
+    internal static string PluginsRoot => Path.Combine(TestData.RepoRoot, "src", "app", "Anode.Workbench", "bin",
 #if DEBUG
         "Debug",
 #else
@@ -51,21 +51,18 @@ public class PanelScopeTests
             ShellContributions.ShowStartPage(shell);
             Assert.Contains("shell.project", Placed(shell));
             Assert.DoesNotContain("pcb.layers", Placed(shell));
-            Assert.DoesNotContain("sch.sheets", Placed(shell));
 
             var boardDocument = Pump(shell.OpenAsync(board));
             Assert.NotNull(boardDocument);
             Assert.Contains("pcb.layers", Placed(shell));
-            Assert.DoesNotContain("sch.sheets", Placed(shell));
 
+            // A sheet in front takes the board's panels away; the schematic brings structure, not panels of its own.
             Pump(shell.OpenAsync(sheet));
-            Assert.Contains("sch.sheets", Placed(shell));
             Assert.DoesNotContain("pcb.layers", Placed(shell));
 
             // Coming back to the board brings its panels back with it.
             shell.Activate(boardDocument!);
             Assert.Contains("pcb.layers", Placed(shell));
-            Assert.DoesNotContain("sch.sheets", Placed(shell));
 
             window.Close();
         });

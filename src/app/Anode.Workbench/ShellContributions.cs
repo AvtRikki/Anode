@@ -101,7 +101,7 @@ public static class ShellContributions
 
         RegisterLanguages(shell);
 
-        shell.Panels.Register(new PanelDescriptor("shell.project", "panel.project", DockArea.LeftTop, _ => new ProjectPanel(shell))
+        shell.Panels.Register(new PanelDescriptor("shell.project", "panel.project", DockArea.LeftTop, _ => new ProjectTreePanel(shell))
         {
             IconKey = Icons.Folder, RailLabelKey = "panel.project.rail", Order = 0,
         });

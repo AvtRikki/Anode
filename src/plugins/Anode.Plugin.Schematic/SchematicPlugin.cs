@@ -4,8 +4,9 @@ using Anode.Sdk;
 namespace Anode.Plugin.Schematic;
 
 /// <summary>
-/// The schematic domain as a plugin: its own translations, a document type for <c>.kicad_sch</c> and the sheets
-/// panel. Sheet commands belong to the open document and are registered when it becomes active.
+/// The schematic domain as a plugin: its own translations, a document type for <c>.kicad_sch</c> and the hierarchy
+/// of sheets it describes for the project tree. Sheet commands belong to the open document and are registered when
+/// it becomes active.
 /// </summary>
 public sealed class SchematicPlugin : IPlugin
 {
@@ -15,13 +16,7 @@ public sealed class SchematicPlugin : IPlugin
 
         context.Documents.Register(new SchematicDocumentType(context.Log));
 
-        context.Panels.Register(new PanelDescriptor("sch.sheets", "sch.panel.sheets", DockArea.LeftTop, workbench => new SheetsPanel(workbench))
-        {
-            IconKey = Icons.Sheets,
-            RailLabelKey = "sch.panel.sheets.rail",
-            Order = 5,
-            DocumentTypes = [SchematicDocumentType.TypeId],
-        });
+        context.Project.Register(new SchematicStructure());
 
         context.Log.Info(Tr.T("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }

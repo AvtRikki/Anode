@@ -23,6 +23,10 @@ public sealed class ShellStrings : ObservableObject
 
     public string HintBottomDock => Tr.T("shell.hint.bottomDock");
 
+    public string HintUndo => Tr.T("shell.hint.undo");
+
+    public string HintRedo => Tr.T("shell.hint.redo");
+
     public string RailMore => Tr.T("shell.rail.more");
 
     public string SlideOverPin => Tr.T("shell.slideOver.pin");

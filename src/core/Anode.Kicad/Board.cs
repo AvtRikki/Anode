@@ -6,7 +6,7 @@ namespace Anode.Kicad;
 public sealed class KiCadFormatException(string message) : Exception(message);
 
 /// <summary>A <c>.kicad_pcb</c> file: the lossless CST plus typed views over its items.</summary>
-public sealed class Board
+public sealed class Board : INodeHost
 {
     private readonly List<Footprint> _footprints = [];
     private readonly List<Segment> _segments = [];
@@ -156,6 +156,10 @@ public sealed class Board
             case Text t: _texts.Add(t); break;
         }
     }
+
+    int INodeHost.Detach(INodeItem item) => Detach((BoardItem)item);
+
+    void INodeHost.Attach(INodeItem item, int index) => Attach((BoardItem)item, index);
 
     public static Board Load(string path) => FromDocument(SDocument.Load(path));
 

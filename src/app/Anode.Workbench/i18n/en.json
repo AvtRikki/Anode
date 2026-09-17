@@ -48,7 +48,20 @@
       "emptyHint": "Open a KiCad board — its folder becomes the project.",
       "files": "Files",
       "count": "{0} files · {1}",
-      "branch": "Branch"
+      "branch": "Branch",
+      "view": { "design": "Design" },
+      "section": {
+        "schematic": "Schematic",
+        "board": "Board",
+        "rules": "Rules",
+        "libraries": "Libraries",
+        "outputs": "Outputs",
+        "other": "Other"
+      },
+      "filterHint": "Filter…",
+      "nothing": "Nothing matches",
+      "showAll": "Show every file",
+      "showFewer": "Hide generated files"
     },
     "inspector": {
       "empty": "Select an object on the canvas"
@@ -72,6 +85,8 @@
       "beta": "beta"
     },
     "hint": {
+      "undo": "Undo",
+      "redo": "Redo",
       "leftDock": "Left dock (⌥1)",
       "rightDock": "Right dock (⌥2)",
       "bottomDock": "Bottom dock (⌥3)"

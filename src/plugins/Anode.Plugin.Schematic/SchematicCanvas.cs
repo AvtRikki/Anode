@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Anode.Editing;
 using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Render;
@@ -11,22 +12,23 @@ using Anode.Render.Avalonia;
 namespace Anode.Plugin.Schematic;
 
 /// <summary>
-/// Sheet view. Wheel zooms around the cursor; middle/right drag or Space+drag pans; left click selects one item
-/// (Shift adds to the selection). Reading only for now — the schematic is not editable yet.
+/// Sheet view and editor. Wheel zooms around the cursor; middle/right drag or Space+drag pans; left click selects
+/// (Shift adds), a drag on empty paper draws a selection box, a drag on the selection moves it. R turns, X and Y
+/// mirror, Delete removes, Esc cancels.
 /// </summary>
 public sealed class SchematicCanvas : Panel
 {
-    public static readonly StyledProperty<SchematicScene?> SceneProperty =
-        AvaloniaProperty.Register<SchematicCanvas, SchematicScene?>(nameof(Scene));
+    public static readonly StyledProperty<SchematicEditor?> EditorProperty =
+        AvaloniaProperty.Register<SchematicCanvas, SchematicEditor?>(nameof(Editor));
 
     private const double DragSlopPixels = 4;
 
     private readonly Camera2D _camera = new();
     private readonly ISceneSurface _surface;
-    private readonly HashSet<int> _selected = [];
+    private Gesture _gesture;
     private Point _lastPoint;
     private Point _pressPoint;
-    private bool _panning;
+    private int _pressOwner = -1;
     private bool _spaceDown;
     private bool _fitPending;
 
@@ -48,19 +50,26 @@ public sealed class SchematicCanvas : Panel
         _surface.FrameRendered += ms => FrameRendered?.Invoke(ms);
     }
 
-    public SchematicScene? Scene
+    private enum Gesture
     {
-        get => GetValue(SceneProperty);
-        set => SetValue(SceneProperty, value);
+        None,
+        Panning,
+        BoxSelecting,
+        Moving,
     }
+
+    public SchematicEditor? Editor
+    {
+        get => GetValue(EditorProperty);
+        set => SetValue(EditorProperty, value);
+    }
+
+    public SchematicScene? Scene => Editor?.Scene;
 
     public string BackendName => _surface.BackendName;
 
     /// <summary>Zoom as a percentage of "one sheet millimetre is one pixel".</summary>
     public double ZoomPercent => _camera.PixelsPerMm * 100;
-
-    /// <summary>The single selected item, or null.</summary>
-    public SchItem? Selection { get; private set; }
 
     /// <summary>Cursor position in sheet millimetres; null when the pointer leaves.</summary>
     public event Action<Vector2D?>? CursorMoved;
@@ -68,8 +77,6 @@ public sealed class SchematicCanvas : Panel
     public event Action<double>? FrameRendered;
 
     public event Action? ViewChanged;
-
-    public event Action? SelectionChanged;
 
     public void Redraw() => Present();
 
@@ -91,17 +98,41 @@ public sealed class SchematicCanvas : Panel
         Present();
     }
 
+    /// <summary>Starts a move from the keyboard, the way KiCad's M does: the selection follows the cursor.</summary>
+    public void BeginMoveWithCursor()
+    {
+        if (Editor is { } editor && _gesture == Gesture.None && editor.BeginMove(null, World(_lastPoint)))
+        {
+            _gesture = Gesture.Moving;
+            editor.UpdateMove(World(_lastPoint));
+            Present();
+        }
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == SceneProperty)
+        if (change.Property != EditorProperty)
         {
-            _selected.Clear();
-            Selection = null;
-            _surface.Scene = Scene;
-            ZoomToFit();
-            Present();
+            return;
         }
+
+        if (change.OldValue is SchematicEditor old)
+        {
+            old.SceneChanged -= Present;
+            old.SelectionChanged -= Present;
+        }
+
+        if (change.NewValue is SchematicEditor editor)
+        {
+            editor.SceneChanged += Present;
+            editor.SelectionChanged += Present;
+        }
+
+        _gesture = Gesture.None;
+        _surface.Scene = Scene;
+        ZoomToFit();
+        Present();
     }
 
     protected override void OnSizeChanged(SizeChangedEventArgs e)
@@ -147,9 +178,24 @@ public sealed class SchematicCanvas : Panel
         _pressPoint = point.Position;
         var props = point.Properties;
 
+        // A click while the selection is on the cursor drops it where it stands.
+        if (_gesture == Gesture.Moving && props.IsLeftButtonPressed)
+        {
+            Editor?.CommitMove();
+            _gesture = Gesture.None;
+            Present();
+            e.Handled = true;
+            return;
+        }
+
         if (props.IsMiddleButtonPressed || props.IsRightButtonPressed || (props.IsLeftButtonPressed && _spaceDown))
         {
-            _panning = true;
+            _gesture = Gesture.Panning;
+            e.Pointer.Capture(this);
+        }
+        else if (props.IsLeftButtonPressed)
+        {
+            _pressOwner = Pick(point.Position);
             e.Pointer.Capture(this);
         }
 
@@ -161,10 +207,26 @@ public sealed class SchematicCanvas : Panel
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
 
-        if (_panning)
+        switch (_gesture)
         {
-            _camera.PanPixels(p.X - _lastPoint.X, p.Y - _lastPoint.Y);
-            Present();
+            case Gesture.Panning:
+                _camera.PanPixels(p.X - _lastPoint.X, p.Y - _lastPoint.Y);
+                Present();
+                break;
+
+            case Gesture.Moving:
+                Editor?.UpdateMove(World(p));
+                Present();
+                break;
+
+            case Gesture.BoxSelecting:
+                Present();
+                break;
+
+            case Gesture.None when e.GetCurrentPoint(this).Properties.IsLeftButtonPressed
+                && Distance(p, _pressPoint) > DragSlopPixels:
+                StartDrag(p);
+                break;
         }
 
         _lastPoint = p;
@@ -180,16 +242,33 @@ public sealed class SchematicCanvas : Panel
     {
         base.OnPointerReleased(e);
         var p = e.GetPosition(this);
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
-        if (_panning)
+        switch (_gesture)
         {
-            _panning = false;
-        }
-        else if (e.InitialPressMouseButton == MouseButton.Left && Distance(p, _pressPoint) <= DragSlopPixels)
-        {
-            Select(Pick(p), e.KeyModifiers.HasFlag(KeyModifiers.Shift));
+            case Gesture.Panning:
+                _gesture = Gesture.None;
+                break;
+
+            case Gesture.BoxSelecting:
+                Editor?.SelectInBox(SelectionBox(p), IsCrossing(p), shift);
+                _gesture = Gesture.None;
+                break;
+
+            case Gesture.Moving:
+                // The move stays on the cursor until the next click, as KiCad does.
+                break;
+
+            default:
+                if (e.InitialPressMouseButton == MouseButton.Left && Distance(p, _pressPoint) <= DragSlopPixels)
+                {
+                    Editor?.Click(_pressOwner, shift);
+                }
+
+                break;
         }
 
+        _pressOwner = -1;
         e.Pointer.Capture(null);
         Present();
     }
@@ -203,6 +282,7 @@ public sealed class SchematicCanvas : Panel
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        var editor = Editor;
         switch (e.Key)
         {
             case Key.Space:
@@ -212,8 +292,33 @@ public sealed class SchematicCanvas : Panel
                 ZoomToFit();
                 break;
             case Key.Escape:
-                Select(-1, false);
+                if (_gesture == Gesture.Moving)
+                {
+                    editor?.CancelMove();
+                    _gesture = Gesture.None;
+                }
+                else
+                {
+                    editor?.SetSelection([]);
+                }
+
                 Present();
+                break;
+            case Key.Delete or Key.Back:
+                editor?.DeleteSelection();
+                break;
+            case Key.R:
+                editor?.Rotate(90);
+                Present();
+                break;
+            case Key.X:
+                editor?.Mirror(horizontal: true);
+                break;
+            case Key.Y:
+                editor?.Mirror(horizontal: false);
+                break;
+            case Key.M:
+                BeginMoveWithCursor();
                 break;
             default:
                 return;
@@ -231,24 +336,28 @@ public sealed class SchematicCanvas : Panel
         }
     }
 
-    private void Select(int owner, bool add)
+    /// <summary>A drag that started on the selection moves it; anywhere else it draws a selection box.</summary>
+    private void StartDrag(Point current)
     {
-        if (!add)
+        if (Editor is not { } editor)
         {
-            _selected.Clear();
+            return;
         }
 
-        if (owner >= 0 && Scene?.IsLive(owner) == true)
+        bool onSelection = _pressOwner >= 0 && editor.Scene.IsLive(_pressOwner)
+            && editor.IsSelected(editor.Scene.Owner(_pressOwner));
+
+        if (onSelection && editor.BeginMove(editor.Scene.Owner(_pressOwner), World(_pressPoint)))
         {
-            _selected.Add(owner);
-            Selection = Scene.Owner(owner);
+            _gesture = Gesture.Moving;
+            editor.UpdateMove(World(current));
         }
-        else if (_selected.Count == 0)
+        else
         {
-            Selection = null;
+            _gesture = Gesture.BoxSelecting;
         }
 
-        SelectionChanged?.Invoke();
+        Present();
     }
 
     /// <summary>Topmost primitive under the cursor, or -1. Decoration layers (the paper) are never picked.</summary>
@@ -300,6 +409,16 @@ public sealed class SchematicCanvas : Panel
         return -1;
     }
 
+    private RectD SelectionBox(Point current)
+    {
+        var a = World(_pressPoint);
+        var b = World(current);
+        return new RectD(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Max(a.X, b.X), Math.Max(a.Y, b.Y));
+    }
+
+    /// <summary>Right-to-left on screen means crossing selection.</summary>
+    private bool IsCrossing(Point current) => current.X < _pressPoint.X;
+
     private Vector2D World(Point screen)
     {
         SyncViewport();
@@ -316,21 +435,29 @@ public sealed class SchematicCanvas : Panel
 
     private void Present()
     {
-        if (Scene is null)
+        if (Editor is not { } editor)
         {
             _surface.Present(null);
             return;
         }
 
         SyncViewport();
-        _surface.Present(new ViewState(
+        var move = editor.Move;
+        var view = new ViewState(
             _camera.WorldToScreenTransform,
             _camera.PixelsPerMm,
             _camera.ViewportWidth,
             _camera.ViewportHeight,
             _camera.FlipX,
-            _selected.Count > 0 ? new HashSet<int>(_selected) : null,
-            null,
-            RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1));
+            editor.SelectedOwners,
+            RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1)
+        {
+            Preview = move?.Preview,
+            PreviewTransform = move?.PreviewTransform ?? Transform2D.Identity,
+            SelectionBox = _gesture == Gesture.BoxSelecting ? SelectionBox(_lastPoint) : null,
+            SelectionBoxCrossing = _gesture == Gesture.BoxSelecting && IsCrossing(_lastPoint),
+        };
+
+        _surface.Present(view);
     }
 }

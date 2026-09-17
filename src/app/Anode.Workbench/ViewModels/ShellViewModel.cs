@@ -63,6 +63,8 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         };
 
         Panels.Changed += Relayout;
+        // Undo and redo live in the title bar; whether they exist at all is the active document's business.
+        Commands.Changed += RaiseHistoryState;
         // Panels follow the document: a board brings its layers, a sheet brings its hierarchy.
         ActiveDocumentChanged += Relayout;
         Tr.Changed += OnLanguageChanged;
@@ -78,6 +80,9 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public PanelRegistry Panels { get; } = new();
 
     public DocumentRegistry DocumentTypes { get; } = new();
+
+    /// <summary>What plugins told us about the files of the project, for the tree.</summary>
+    public ProjectStructureRegistry ProjectStructure { get; } = new();
 
     /// <summary>Context handed to documents and built-in contributions.</summary>
     public IPluginContext Context { get; }
@@ -165,6 +170,46 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public partial string? ProjectBranch { get; set; }
 
     public bool HasProject => ProjectDirectory is not null;
+
+    /// <summary>The active document offers undo at all — the title bar shows its buttons only then.</summary>
+    public bool HasHistory => Commands.Find("edit.undo") is not null || Commands.Find("edit.redo") is not null;
+
+    public bool CanUndo => CanRun("edit.undo");
+
+    public bool CanRedo => CanRun("edit.redo");
+
+    public string UndoTip => Tip("edit.undo", "shell.hint.undo");
+
+    public string RedoTip => Tip("edit.redo", "shell.hint.redo");
+
+    /// <summary>Raises the state of the history buttons; the document says when its history moved.</summary>
+    public void RaiseHistoryState()
+    {
+        foreach (string name in (string[])[nameof(HasHistory), nameof(CanUndo), nameof(CanRedo), nameof(UndoTip), nameof(RedoTip)])
+        {
+            OnPropertyChanged(name);
+        }
+    }
+
+    private bool CanRun(string id)
+    {
+        if (Commands.Find(id) is not { } command)
+        {
+            return false;
+        }
+
+        try
+        {
+            return command.CanExecute();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private string Tip(string id, string fallbackKey) =>
+        Commands.Find(id) is { } command ? command.Title : Tr.T(fallbackKey);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(LeftColumnWidth), nameof(IsLeftDockShown))]
@@ -787,6 +832,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         Replace(StatusLeft, fields.Where(f => !f.AlignEnd));
         Replace(StatusRight, fields.Where(f => f.AlignEnd));
         UpdateWindowTitle();
+        RaiseHistoryState();
         ActiveDocumentStateChanged?.Invoke();
     }
 
@@ -836,6 +882,8 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         public IPanelRegistry Panels => shell.Panels;
 
         public IDocumentRegistry Documents => shell.DocumentTypes;
+
+        public IProjectStructureRegistry Project => shell.ProjectStructure;
 
         public ILog Log => shell.Log;
     }

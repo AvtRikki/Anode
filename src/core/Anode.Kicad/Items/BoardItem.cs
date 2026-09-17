@@ -4,7 +4,7 @@ using Anode.Sexpr;
 namespace Anode.Kicad;
 
 /// <summary>Typed view over a CST list. Reads are computed from the tree, so the file stays the source of truth.</summary>
-public abstract class BoardItem(SList node, Board board)
+public abstract class BoardItem(SList node, Board board) : INodeItem
 {
     public SList Node { get; } = node;
 
@@ -22,4 +22,9 @@ public abstract class BoardItem(SList node, Board board)
 
     /// <summary>Transform from the coordinates stored in this item to board coordinates.</summary>
     public virtual Transform2D ToBoard => Transform2D.Identity;
+
+    /// <summary>Most items read straight from the tree and have nothing to rebuild after undo.</summary>
+    public virtual void AfterRestore()
+    {
+    }
 }

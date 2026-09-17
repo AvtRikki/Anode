@@ -4,9 +4,12 @@ using Anode.Sexpr;
 namespace Anode.Kicad;
 
 /// <summary>Typed view over one list of a schematic. Reads are computed from the tree.</summary>
-public abstract class SchItem(SList node)
+public abstract class SchItem(SList node) : INodeItem
 {
     public SList Node { get; } = node;
+
+    /// <summary>False once the item has been removed from its sheet.</summary>
+    public bool IsAttached => Node.Parent is not null;
 
     public string? Uuid => Node.ChildString("uuid");
 
@@ -47,6 +50,11 @@ public abstract class SchItem(SList node)
         }
 
         return (horizontal, vertical);
+    }
+
+    /// <summary>Schematic items read straight from the tree, so a restored subtree needs no rebuilding.</summary>
+    public virtual void AfterRestore()
+    {
     }
 
     /// <summary><c>(hide yes)</c> either directly or inside <c>(effects ...)</c>, as both spellings exist.</summary>

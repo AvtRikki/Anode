@@ -30,6 +30,18 @@ public static class SchematicSceneBuilder
         return scene;
     }
 
+    /// <summary>Draws items again after an edit, into a scene they were removed from.</summary>
+    public static void AddItems(SchematicScene scene, IEnumerable<SchItem> items)
+    {
+        var builder = new Builder(scene);
+        foreach (var item in items)
+        {
+            builder.Add(item);
+        }
+
+        scene.Commit();
+    }
+
     /// <summary>Paper sizes in nanometres, landscape unless the file says portrait.</summary>
     private static Vector2L PaperSize(string name, bool portrait)
     {

@@ -1,5 +1,4 @@
 using System.Numerics;
-using Anode.Kicad;
 using Anode.Render;
 
 namespace Anode.Editing;
@@ -7,20 +6,25 @@ namespace Anode.Editing;
 /// <summary>Exact primitive-level tests for crossing (touch) selection.</summary>
 internal static class SelectionGeometry
 {
-    /// <summary>Candidates with at least one primitive touching <paramref name="box"/>, in one pass over the scene.</summary>
-    public static HashSet<BoardItem> Touching(BoardScene scene, RectD box, IReadOnlyCollection<BoardItem> candidates)
+    /// <summary>Candidates with at least one primitive touching <paramref name="box"/>, in one pass over the layers.</summary>
+    public static HashSet<T> Touching<T>(
+        IReadOnlyList<LayerGeometry> layers,
+        RectD box,
+        IReadOnlyCollection<T> candidates,
+        Func<T, IReadOnlyList<int>> ownersOf)
+        where T : class
     {
-        var hits = new HashSet<BoardItem>(ReferenceEqualityComparer.Instance);
-        var ownerToItem = new Dictionary<int, BoardItem>();
+        var hits = new HashSet<T>(ReferenceEqualityComparer.Instance);
+        var ownerToItem = new Dictionary<int, T>();
         foreach (var item in candidates)
         {
-            foreach (int id in scene.OwnersOf(item))
+            foreach (int id in ownersOf(item))
             {
                 ownerToItem[id] = item;
             }
         }
 
-        foreach (var layer in scene.Layers)
+        foreach (var layer in layers)
         {
             if (layer.IsDecoration || !layer.IsVisible || !layer.Bounds.Intersects(box))
             {
@@ -54,7 +58,7 @@ internal static class SelectionGeometry
 
         return hits;
 
-        bool Pending(int owner, out BoardItem item) =>
+        bool Pending(int owner, out T item) =>
             ownerToItem.TryGetValue(owner, out item!) && !hits.Contains(item);
     }
 

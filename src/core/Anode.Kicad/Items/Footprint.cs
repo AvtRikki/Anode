@@ -68,6 +68,9 @@ public sealed class Footprint : BoardItem
         }
     }
 
+    /// <summary>Undo swapped the whole subtree, so the cached pads, texts and zones must be rebuilt.</summary>
+    public override void AfterRestore() => Refresh();
+
     /// <summary>
     /// Re-reads placement and rebuilds the child views from the CST. Call after the footprint's tree changed
     /// (edits, undo); previously returned pads, shapes, texts and zones are no longer valid.

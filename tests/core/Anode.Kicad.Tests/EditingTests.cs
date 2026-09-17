@@ -110,7 +110,7 @@ public class EditingTests
 
     private static Vector2L Mm(double x, double y) => new(Units.MmToNm(x), Units.MmToNm(y));
 
-    private static ModifyItemsCommand Transform(IReadOnlyList<BoardItem> items, Vector2L pivot, double degrees, Vector2L delta) =>
+    private static ModifyNodesCommand Transform(IReadOnlyList<BoardItem> items, Vector2L pivot, double degrees, Vector2L delta) =>
         new("Transform", items, () =>
         {
             foreach (var item in items)
@@ -227,7 +227,7 @@ public class EditingTests
         var board = Board.Parse(Legacy);
         var history = new UndoStack();
 
-        history.Execute(new DeleteItemsCommand(board, [board.Segments[0], board.Vias[0], board.Footprints[0]]));
+        history.Execute(new DeleteNodesCommand(board, [board.Segments[0], board.Vias[0], board.Footprints[0]]));
 
         Assert.Empty(board.Segments);
         Assert.Empty(board.Vias);

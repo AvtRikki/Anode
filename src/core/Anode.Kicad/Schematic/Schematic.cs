@@ -9,7 +9,7 @@ public sealed record SchTitleBlock(string? Title, string? Date, string? Revision
 /// A <c>.kicad_sch</c> file: the lossless CST plus typed views over its items. Like <see cref="Board"/>, nothing is
 /// copied out of the tree — the file stays the source of truth, so saving an unedited schematic is byte-identical.
 /// </summary>
-public sealed class Schematic
+public sealed class Schematic : INodeHost
 {
     private readonly Dictionary<string, LibSymbol> _librarySymbols = new(StringComparer.Ordinal);
     private readonly List<SymbolInstance> _symbols = [];
@@ -143,6 +143,58 @@ public sealed class Schematic
     public IEnumerable<SchItem> Items =>
         _graphics.Cast<SchItem>().Concat(_wires).Concat(_busEntries).Concat(_sheets).Concat(_symbols)
             .Concat(_junctions).Concat(_noConnects).Concat(_labels).Concat(_texts);
+
+    /// <summary>
+    /// Removes a top-level item from the sheet and returns its index among the root's children, which
+    /// <see cref="Attach"/> uses to put it back exactly where it was.
+    /// </summary>
+    public int Detach(SchItem item)
+    {
+        int index = Root.IndexOf(item.Node);
+        if (index < 0)
+        {
+            throw new InvalidOperationException("Item is not a top-level child of this sheet.");
+        }
+
+        Root.RemoveAt(index);
+        _ = item switch
+        {
+            SymbolInstance s => _symbols.Remove(s),
+            SchWire w => _wires.Remove(w),
+            SchBusEntry b => _busEntries.Remove(b),
+            SchJunction j => _junctions.Remove(j),
+            SchNoConnect n => _noConnects.Remove(n),
+            SchLabel l => _labels.Remove(l),
+            SchText t => _texts.Remove(t),
+            SchGraphic g => _graphics.Remove(g),
+            SchSheet sh => _sheets.Remove(sh),
+            _ => false,
+        };
+
+        return index;
+    }
+
+    /// <summary>Re-inserts an item previously removed with <see cref="Detach"/>.</summary>
+    public void Attach(SchItem item, int index)
+    {
+        Root.Insert(Math.Clamp(index, 0, Root.Count), item.Node);
+        switch (item)
+        {
+            case SymbolInstance s: _symbols.Add(s); break;
+            case SchWire w: _wires.Add(w); break;
+            case SchBusEntry b: _busEntries.Add(b); break;
+            case SchJunction j: _junctions.Add(j); break;
+            case SchNoConnect n: _noConnects.Add(n); break;
+            case SchLabel l: _labels.Add(l); break;
+            case SchText t: _texts.Add(t); break;
+            case SchGraphic g: _graphics.Add(g); break;
+            case SchSheet sh: _sheets.Add(sh); break;
+        }
+    }
+
+    int INodeHost.Detach(INodeItem item) => Detach((SchItem)item);
+
+    void INodeHost.Attach(INodeItem item, int index) => Attach((SchItem)item, index);
 
     public static Schematic Load(string path) => new(SDocument.Load(path));
 

@@ -94,3 +94,48 @@ public sealed class DocumentRegistry : IDocumentRegistry
         return _types.LastOrDefault(t => t.Extensions.Contains(extension));
     }
 }
+
+/// <summary>
+/// The contributors that describe files for the project tree. A file is described by the first contributor that
+/// claims its extension; a contributor that throws describes nothing, because a tree must never be the reason a
+/// project fails to open.
+/// </summary>
+public sealed class ProjectStructureRegistry : IProjectStructureRegistry
+{
+    private readonly List<IProjectStructure> _contributors = [];
+
+    public IReadOnlyList<IProjectStructure> Contributors => _contributors;
+
+    public event Action? Changed;
+
+    public IDisposable Register(IProjectStructure contributor)
+    {
+        _contributors.Add(contributor);
+        Changed?.Invoke();
+        return new Registration(() =>
+        {
+            if (_contributors.Remove(contributor))
+            {
+                Changed?.Invoke();
+            }
+        });
+    }
+
+    public IReadOnlyList<ProjectNode> Describe(string path)
+    {
+        string extension = Path.GetExtension(path).ToLowerInvariant();
+        foreach (var contributor in _contributors.Where(c => c.Extensions.Contains(extension, StringComparer.Ordinal)))
+        {
+            try
+            {
+                return contributor.Describe(path);
+            }
+            catch (Exception)
+            {
+                return [];
+            }
+        }
+
+        return [];
+    }
+}

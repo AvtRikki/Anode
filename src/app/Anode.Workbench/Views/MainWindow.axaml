@@ -70,6 +70,11 @@
         </Border>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
+          <Button x:Name="UndoButton" Classes="dockToggle" IsVisible="{Binding HasHistory}" IsEnabled="{Binding CanUndo}"
+                  Tag="edit.undo" Click="OnToggleDock" ToolTip.Tip="{Binding UndoTip}" />
+          <Button x:Name="RedoButton" Classes="dockToggle" IsVisible="{Binding HasHistory}" IsEnabled="{Binding CanRedo}"
+                  Tag="edit.redo" Click="OnToggleDock" ToolTip.Tip="{Binding RedoTip}" Margin="0,0,10,0" />
+
           <Button x:Name="ToggleLeftDock" Classes="dockToggle" Classes.on="{Binding IsLeftDockVisible}"
                   Tag="view.leftDock" Click="OnToggleDock" ToolTip.Tip="{Binding Strings.HintLeftDock}" />
           <Button x:Name="ToggleRightDock" Classes="dockToggle" Classes.on="{Binding IsRightDockVisible}"
