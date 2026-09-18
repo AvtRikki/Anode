@@ -343,13 +343,28 @@ internal sealed class SymbolsPanel : ContentControl
             var place = new MenuItem { Header = Tr.T("sch.symbols.place") };
             place.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
 
-            return new Border
+            var item = new Border
             {
                 Background = Brushes.Transparent,
                 Child = row,
                 ContextMenu = new ContextMenu { ItemsSource = new[] { place } },
                 [ToolTip.TipProperty] = choice.LibId,
             };
+
+            // Dragged onto the sheet, a part lands where it was let go; clicked, it goes on the pointer instead.
+            item.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
+                {
+                    return;
+                }
+
+                var carried = new DataTransfer();
+                carried.Add(DataTransferItem.Create(SymbolDrag.Format, choice));
+                _ = DragDrop.DoDragDropAsync(e, carried, DragDropEffects.Copy);
+            };
+
+            return item;
         },
         supportsRecycling: true);
 

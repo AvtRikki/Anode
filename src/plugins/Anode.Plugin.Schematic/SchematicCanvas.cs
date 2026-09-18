@@ -52,6 +52,23 @@ public sealed class SchematicCanvas : Panel
         Children.Add(control);
         _surface.FrameRendered += ms => FrameRendered?.Invoke(ms);
 
+        // A part can be dragged in from the components panel and dropped where it belongs.
+        DragDrop.SetAllowDrop(this, true);
+        AddHandler(DragDrop.DragOverEvent, (_, e) =>
+        {
+            e.DragEffects = SymbolDrag.Carried(e.DataTransfer) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        });
+
+        AddHandler(DragDrop.DropEvent, (_, e) =>
+        {
+            if (SymbolDrag.Carried(e.DataTransfer) is { } part && PartDropped is { } drop)
+            {
+                e.DragEffects = drop(part, e.GetPosition(this)) ? DragDropEffects.Copy : DragDropEffects.None;
+                e.Handled = true;
+            }
+        });
+
         // A right drag pans the sheet; the menu belongs to a right click that stayed put, and never to a tool run.
         ContextRequested += (_, e) =>
         {
@@ -129,6 +146,9 @@ public sealed class SchematicCanvas : Panel
 
     /// <summary>Esc left the tool; the document puts the pointer back to selecting.</summary>
     public event Action? ToolCancelled;
+
+    /// <summary>A part was dropped on the sheet; the document is the one that knows how to put it down.</summary>
+    public Func<SymbolChoice, Point, bool>? PartDropped { get; set; }
 
     public void Redraw() => Present();
 
@@ -253,6 +273,13 @@ public sealed class SchematicCanvas : Panel
             Present();
         }
     }
+
+    /// <summary>
+    /// The sheet point under a place on this control, snapped to the grid — what a drop needs to know, and the same
+    /// conversion the cursor already goes through.
+    /// </summary>
+    public Vector2L? SheetPointAt(Point point) =>
+        Editor is { } editor && Scene is { } scene ? editor.Snap(scene.ToSheetNm(World(point)).Round()) : null;
 
     /// <summary>Pastes where the pointer is, as KiCad does: the clipboard lands under the cursor, not where it was cut.</summary>
     public void PasteAtCursor()

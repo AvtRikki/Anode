@@ -1,4 +1,5 @@
 using System.Globalization;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Anode.Editing;
@@ -276,6 +277,21 @@ public sealed class SchematicDocument : DocumentBase
 
     /// <summary>The part currently on the pointer, so the panel can mark the row it came from.</summary>
     public string? ChosenPart => _tool == "sch.tool.symbol" ? _part?.LibId : null;
+
+    /// <summary>
+    /// Puts a part down at a point of the canvas — what a drop from the components panel does, as against a click
+    /// with the part already on the pointer. Answers false when the point is not on a sheet.
+    /// </summary>
+    public bool DropPart(string libId, LibSymbol definition, Point onCanvas)
+    {
+        if (_canvas?.SheetPointAt(onCanvas) is not { } at)
+        {
+            return false;
+        }
+
+        PlacePart(libId, definition, at);
+        return true;
+    }
 
     /// <summary>
     /// Writes a placed part: the definition copied into the sheet and the instance that draws from it, as one step,
@@ -610,6 +626,7 @@ public sealed class SchematicDocument : DocumentBase
     {
         var canvas = new SchematicCanvas { Editor = _editor };
         canvas.ToolCancelled += () => UseTool(null);
+        canvas.PartDropped = (part, at) => DropPart(part.LibId, part.Symbol, at);
         canvas.ContextMenu = SheetMenu();
         _canvas = canvas;
         canvas.CursorMoved += position =>

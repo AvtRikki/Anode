@@ -32,8 +32,9 @@ public class SymbolLibraryCacheTests : IDisposable
         var first = SymbolLibraryCache.Load(path);
         var second = SymbolLibraryCache.Load(path);
 
+        // Only that this library was read once and handed back. The cache is process-wide and other tests are
+        // reading their own libraries through it at the same time, so its total is nobody's to assert.
         Assert.Same(first, second);
-        Assert.Equal(1, SymbolLibraryCache.Count);
     }
 
     [Fact]
@@ -73,7 +74,6 @@ public class SymbolLibraryCacheTests : IDisposable
         var first = SymbolLibraryCache.Load(path);
 
         SymbolLibraryCache.Clear();
-        Assert.Equal(0, SymbolLibraryCache.Count);
 
         Assert.NotSame(first, SymbolLibraryCache.Load(path));
     }
