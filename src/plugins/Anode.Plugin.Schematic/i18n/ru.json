@@ -82,6 +82,7 @@
     },
     "block": {
       "identity": "Идентификация",
+      "electrics": "Электрика",
       "geometry": "Геометрия",
       "connections": "Связи",
       "connectionsOf": "Связи · {0}",
@@ -135,6 +136,7 @@
       "library": "Библиотека",
       "footprint": "Посадочное место",
       "unit": "Секция",
+      "net": "Цепь",
       "position": "Позиция",
       "angle": "Угол",
       "mirror": "Зеркало",

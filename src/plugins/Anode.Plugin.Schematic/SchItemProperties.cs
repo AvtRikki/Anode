@@ -43,7 +43,10 @@ internal static class SchItemProperties
     /// cannot yet be filled are left out.
     /// </summary>
     /// <param name="edit">Applies a change as one undoable step: a name for the history, and what to do.</param>
-    public static IEnumerable<InspectorBlock> Blocks(SchItem item, Action<string, Action> edit)
+    public static IEnumerable<InspectorBlock> Blocks(
+        SchItem item,
+        Action<string, Action> edit,
+        Func<SchItem, string?>? netOf = null)
     {
         switch (item)
         {
@@ -106,6 +109,11 @@ internal static class SchItemProperties
                         : [],
                 ]);
 
+                foreach (var electrics in Electrics(item, netOf))
+                {
+                    yield return electrics;
+                }
+
                 yield return Geometry(item, edit);
                 break;
 
@@ -119,6 +127,11 @@ internal static class SchItemProperties
                 break;
 
             case SchWire wire:
+                foreach (var electrics in Electrics(item, netOf))
+                {
+                    yield return electrics;
+                }
+
                 var points = wire.Points;
                 if (points.Length > 0)
                 {
@@ -153,6 +166,18 @@ internal static class SchItemProperties
             default:
                 yield return Geometry(item, edit);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// What the thing is connected to. Absent rather than empty when nothing is known: a block headed "electrics"
+    /// with nothing under it would suggest the answer is "none" when it is "not worked out".
+    /// </summary>
+    private static IEnumerable<InspectorBlock> Electrics(SchItem item, Func<SchItem, string?>? netOf)
+    {
+        if (netOf?.Invoke(item) is { Length: > 0 } net)
+        {
+            yield return new InspectorBlock(Tr.T("sch.block.electrics"), [Computed("net", net)]);
         }
     }
 

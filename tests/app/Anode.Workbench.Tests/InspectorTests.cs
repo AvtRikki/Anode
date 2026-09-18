@@ -81,8 +81,14 @@ public class InspectorTests
                 Assert.Equal(Tr.T("sch.item.label"), selection.Tag);
                 Assert.Equal(Path.GetFileName(sheet), selection.Subtitle);
 
-                // Blocks, in the order the document asked for.
-                Assert.Equal([Tr.T("sch.block.identity"), Tr.T("sch.block.geometry")], selection.Blocks.Select(b => b.Title));
+                // Blocks, in the order the document asked for. A label names a net whether or not anything is
+                // wired to it yet, so what it is connected to sits between what it is and where it is.
+                Assert.Equal(
+                    [Tr.T("sch.block.identity"), Tr.T("sch.block.electrics"), Tr.T("sch.block.geometry")],
+                    selection.Blocks.Select(b => b.Title));
+
+                var electrics = selection.Blocks[1];
+                Assert.Equal("VCC", Assert.Single(electrics.Rows).Value);
 
                 // What can be written, and what was computed.
                 var identity = selection.Blocks[0];
@@ -90,7 +96,7 @@ public class InspectorTests
                 Assert.Equal("VCC", text.Value);
                 Assert.NotNull(text.Commit);
 
-                var geometry = selection.Blocks[1];
+                var geometry = selection.Blocks[2];
                 Assert.All(geometry.Rows, row => Assert.NotNull(row.Commit));
 
                 // A position is a pair of millimetres with no unit appended — the unit cost the panel the width it

@@ -78,6 +78,7 @@ public sealed class SchematicDocument : DocumentBase
     private readonly SchematicEditor _editor;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
+    private IReadOnlyList<SchNet>? _nets;
     private (string LibId, LibSymbol Definition)? _part;
     private string _labelTool = "sch.tool.label";
     private string _shapeTool = "sch.tool.line";
@@ -94,6 +95,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
+        _editor.History.Changed += ForgetNets;
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -165,7 +167,7 @@ public sealed class SchematicDocument : DocumentBase
             subtitle ??= Path.GetFileName(FilePath);
             return new SelectionInfo(title, subtitle, [.. SchItemProperties.For(item)], tag)
             {
-                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate))],
+                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf)],
                 Actions = Actions(item),
             };
         }
@@ -618,6 +620,7 @@ public sealed class SchematicDocument : DocumentBase
         Deactivate();
         _editor.SelectionChanged -= OnSelectionChanged;
         _editor.History.Changed -= OnHistoryChanged;
+        _editor.History.Changed -= ForgetNets;
         Tr.Changed -= OnLanguageChanged;
         base.Dispose();
     }
@@ -710,10 +713,22 @@ public sealed class SchematicDocument : DocumentBase
         }
     }
 
+    /// <summary>
+    /// The nets of this sheet, worked out once and kept until something changes them. The whole sheet is read to
+    /// answer even one question about it, so answering per selection would mean reading it again on every click.
+    /// </summary>
+    public IReadOnlyList<SchNet> Nets => _nets ??= SchConnectivity.Build(Sheet);
+
+    /// <summary>What an item is connected to, by name; null when it is on nothing or nothing is known.</summary>
+    public string? NetOf(SchItem item) =>
+        Nets.FirstOrDefault(net => net.Items.Contains(item))?.Name;
+
     /// <summary>The canvas draws again when the history moves; the workbench re-reads the document's state.</summary>
     public void Redraw() => _canvas?.Redraw();
 
     private void OnSelectionChanged() => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
+
+    private void ForgetNets() => _nets = null;
 
     private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields), nameof(Summary));
 

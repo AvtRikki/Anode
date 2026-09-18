@@ -82,6 +82,7 @@
     },
     "block": {
       "identity": "Identification",
+      "electrics": "Electrics",
       "geometry": "Geometry",
       "connections": "Connections",
       "connectionsOf": "Connections · {0}",
@@ -134,6 +135,7 @@
       "library": "Library",
       "footprint": "Footprint",
       "unit": "Unit",
+      "net": "Net",
       "position": "Position",
       "angle": "Angle",
       "mirror": "Mirror",
