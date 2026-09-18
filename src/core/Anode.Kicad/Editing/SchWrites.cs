@@ -33,6 +33,27 @@ public static class SchWrites
         (property.AtomAt(2) ?? throw new KiCadFormatException($"Field \"{field}\" has no value.")).SetString(value);
     }
 
+    /// <summary>
+    /// The designator of a placed symbol. KiCad keeps it twice — in the <c>Reference</c> property, which is what is
+    /// drawn, and in the instance block, which is what the rest of the project reads — so both are written or the
+    /// file contradicts itself.
+    /// </summary>
+    public static void SetReference(SymbolInstance symbol, string reference)
+    {
+        SetField(symbol, "Reference", reference);
+
+        foreach (var path in symbol.Node.Find("instances")?.Lists().Where(l => l.Head == "project") ?? [])
+        {
+            foreach (var entry in path.Lists().Where(l => l.Head == "path"))
+            {
+                if (entry.Find("reference") is { } written)
+                {
+                    (written.AtomAt(1) ?? throw new KiCadFormatException("An instance has no reference.")).SetString(reference);
+                }
+            }
+        }
+    }
+
     /// <summary>Moves the item to a point, keeping whatever angle it has.</summary>
     public static void SetPosition(SchItem item, Vector2L at)
     {

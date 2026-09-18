@@ -298,13 +298,35 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     /// <summary>
-    /// What the part is called before anyone annotates it: the library's own prefix with a question mark, which is
-    /// what KiCad writes and what annotation later replaces.
+    /// What the part is called as it lands: the library's own prefix and the next free number on the sheet. KiCad
+    /// writes "R?" and numbers later; a part that arrives already named saves that second pass, and the numbering
+    /// rule is the same one either way — never take a number the sheet has already used.
     /// </summary>
-    private static string Designator(LibSymbol definition)
+    private string Designator(LibSymbol definition)
     {
-        string prefix = definition.Reference ?? "U";
-        return prefix.EndsWith('?') ? prefix : prefix + "?";
+        string prefix = SchAnnotation.PrefixOf(definition.Reference);
+        return prefix + SchAnnotation.NextNumber(Sheet, prefix).ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Numbers everything on the sheet that is still waiting, as one step. For sheets that arrived from elsewhere
+    /// with their parts unnumbered; what this application places is numbered as it lands.
+    /// </summary>
+    private void Annotate()
+    {
+        var given = SchAnnotation.Annotate(Sheet, Sheet.Symbols);
+        if (given.Count == 0)
+        {
+            return;
+        }
+
+        _editor.Modify(Tr.T("sch.command.annotate"), [.. given.Select(g => g.Symbol)], () =>
+        {
+            foreach (var (symbol, reference) in given)
+            {
+                SchWrites.SetReference(symbol, reference);
+            }
+        });
     }
 
     /// <summary>The project a sheet belongs to, as its .kicad_pro is named; the sheet's own name otherwise.</summary>
@@ -529,6 +551,12 @@ public sealed class SchematicDocument : DocumentBase
 
                 // The values live in the inspector, so E puts the caret in the first one that can be written.
                 Execute = () => context.Workbench.FocusInspector(),
+            },
+            new("sch.annotate", "sch.command.annotate")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
+                CanExecute = () => SchAnnotation.Unannotated(Sheet).Count > 0,
+                Execute = () => Guard(Annotate, context),
             },
             new("sch.fit", "sch.command.fit")
             {

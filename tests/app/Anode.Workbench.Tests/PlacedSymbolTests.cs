@@ -161,4 +161,78 @@ public class PlacedSymbolTests
         Assert.True(task.IsCompleted, "The sheet did not open within 2 s.");
         return task.GetAwaiter().GetResult();
     }
+
+    [Fact]
+    public Task Parts_are_numbered_as_they_land() => ShellWindowTests.Dispatch(_ =>
+    {
+        GraphicsOptions.Renderer = RendererKind.Skia;
+        Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+
+        string folder = Directory.CreateTempSubdirectory("anode-numbered-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "project.kicad_pro"), "{}");
+            File.WriteAllText(Path.Combine(folder, "parts.kicad_sym"), Library);
+            string sheet = Path.Combine(folder, "project.kicad_sch");
+            File.WriteAllText(sheet, Sheet);
+
+            var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+            var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
+            window.Show();
+
+            var document = Pump(shell.OpenAsync(sheet));
+            Assert.NotNull(document);
+            Dispatcher.UIThread.RunJobs();
+
+            var right = Assert.Single(shell.RightStacks);
+            right.Select(right.Tabs.Single(t => t.Descriptor.Id == "sch.symbols"));
+            Dispatcher.UIThread.RunJobs();
+
+            using (var frame = window.CaptureRenderedFrame())
+            {
+                Assert.NotNull(frame);
+            }
+
+            var panel = window.GetVisualDescendants().First(v => v.GetType().Name == "SymbolsPanel");
+            var row = panel.GetVisualDescendants().OfType<ListBoxItem>()
+                .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "R"));
+            Click(window, Middle(row, window), MouseButton.Left);
+
+            var canvas = window.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "SchematicCanvas");
+            var first = Middle(canvas, window);
+            var second = new Point(first.X + 80, first.Y + 40);
+
+            // The tool stays armed, so two clicks put down two parts.
+            Click(window, first, MouseButton.Left);
+            Click(window, second, MouseButton.Left);
+
+            // Each arrives carrying its own number: no "R?" to go back and fix.
+            Assert.Equal(["R1", "R2"], References(document!));
+
+            Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+            window.Close();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    });
+
+    /// <summary>What the parts on the sheet are called, in the order the file holds them.</summary>
+    private static IReadOnlyList<string> References(IDocument document)
+    {
+        var sheet = document.GetType().GetProperty("Sheet")?.GetValue(document);
+        if (sheet?.GetType().GetProperty("Symbols")?.GetValue(sheet) is not System.Collections.IEnumerable symbols)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. symbols.Cast<object>()
+                .Select(s => s.GetType().GetProperty("Reference")?.GetValue(s) as string ?? "?")
+                .Order(StringComparer.Ordinal),
+        ];
+    }
 }

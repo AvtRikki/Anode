@@ -46,6 +46,7 @@
       "mirror": "Mirror horizontally",
       "mirrorVertical": "Mirror vertically",
       "properties": "Properties",
+      "annotate": "Number the parts",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
     },
