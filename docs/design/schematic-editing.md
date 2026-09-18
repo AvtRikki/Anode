@@ -1,6 +1,21 @@
 # Schematic editing
 
-Status: **stage 0 in progress** (foundation). Written 2026-09-16.
+Status, 2026-09-18: **stages 0–2 done, stage 3 half done.** Written 2026-09-16.
+
+- **Stage 0** — done: one command stack over tree nodes, `SchEdits`, `SchematicEditor`, incremental scene, undo and
+  redo in the header.
+- **Stage 1** — done, and past what was written here: the inspector was rebuilt from the designs with values that
+  can be written (`E`), plus copy, cut, paste, duplicate, rotation both ways and mirroring both axes. A wire's
+  stroke is still not editable.
+- **Stage 2** — done: wire and bus with junctions and splitting, labels of three kinds, no-connect, junction, bus
+  entry, text, line, rectangle, circle. No arc tool, and runs are orthogonal rather than 45°.
+- **Stage 3** — the reading half is done: `.kicad_sym`, both library tables, the index with search and a cache, the
+  components panel with previews, and placing a part that carries its definition with it. Still missing: choosing a
+  unit of a multi-unit part, the alternate body style, changing a symbol, and "update from library".
+- **Stages 4–6** — not started.
+
+Known gaps outside the stages: dragging a part from the panel onto the sheet, `G` (drag keeping wires attached),
+breaking a wire, cleaning up collinear wires, aligning to grid, and a menu bar for Windows and Linux.
 
 The board can be edited; the schematic can only be looked at. This is the plan that closes that gap, in the order
 the work actually has to happen, with the reason each stage exists.
