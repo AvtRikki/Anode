@@ -21,6 +21,10 @@ namespace Anode.Plugin.Schematic;
 /// </summary>
 internal sealed class SymbolsPanel : ContentControl
 {
+    /// <summary>How far the pointer must travel before a press becomes a drag rather than a click.</summary>
+    private const double DragThreshold = 4;
+
+
     private readonly IWorkbench _workbench;
     private readonly SymbolLibraryList _remembered;
     private readonly DisabledSources _disabled;
@@ -352,16 +356,46 @@ internal sealed class SymbolsPanel : ContentControl
             };
 
             // Dragged onto the sheet, a part lands where it was let go; clicked, it goes on the pointer instead.
+            // The drag begins only once the pointer has travelled, or every click would open a drag session.
+            Point from = default;
+            PointerPressedEventArgs? began = null;
+
             item.PointerPressed += (_, e) =>
             {
-                if (!e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
+                if (e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
+                {
+                    from = e.GetPosition(item);
+                    began = e;
+                }
+            };
+
+            item.PointerReleased += (_, _) => began = null;
+
+            item.PointerMoved += (_, e) =>
+            {
+                if (began is not { } press || !e.GetCurrentPoint(item).Properties.IsLeftButtonPressed)
+                {
+                    began = null;
+                    return;
+                }
+
+                var now = e.GetPosition(item);
+                if (Math.Abs(now.X - from.X) < DragThreshold && Math.Abs(now.Y - from.Y) < DragThreshold)
                 {
                     return;
                 }
 
-                var carried = new DataTransfer();
-                carried.Add(DataTransferItem.Create(SymbolDrag.Format, choice));
-                _ = DragDrop.DoDragDropAsync(e, carried, DragDropEffects.Copy);
+                began = null;
+
+                // The text is for the platform, which will not open a drag session carrying nothing it can
+                // represent — on macOS that raises inside AppKit and takes the process with it. The in-process
+                // format beside it is what this application actually reads.
+                var carried = DataTransferItem.CreateText(choice.LibId);
+                carried.Set(SymbolDrag.Format, choice);
+
+                var transfer = new DataTransfer();
+                transfer.Add(carried);
+                _ = DragDrop.DoDragDropAsync(press, transfer, DragDropEffects.Copy);
             };
 
             return item;
