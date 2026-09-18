@@ -203,6 +203,16 @@ public sealed class LibSymbol : SchItem
     /// <summary>What the library says the part is for, when it says anything.</summary>
     public string? Description => Field("Description");
 
+    /// <summary>The value the library gives the part — for a power symbol, the name of the net it is.</summary>
+    public string? Value => Field("Value");
+
+    /// <summary>
+    /// Whether this definition is a power symbol: a part that is not a part at all, but a name for a net drawn as a
+    /// symbol. Both spellings appear in the wild — the bare <c>(power)</c> of older files and the
+    /// <c>(power global)</c> of newer ones — so the marker's presence is the test, not its words.
+    /// </summary>
+    public bool IsPower => Node.Find("power") is not null;
+
     private string? Field(string name) => Node.Lists()
         .FirstOrDefault(l => l.Head == "property" && string.Equals(l.Str(1), name, StringComparison.Ordinal))
         ?.Str(2) is { Length: > 0 } value

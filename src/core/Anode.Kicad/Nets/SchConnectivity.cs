@@ -67,12 +67,51 @@ public static class SchConnectivity
             groups.Add(pin.At);
         }
 
-        foreach (var label in sheet.Labels.Where(l => l.Kind == SchLabelKind.Local))
+        var naming = Names(sheet, pins);
+        foreach (var (position, _, _) in naming)
         {
-            groups.Add(label.Position);
+            groups.Add(position);
         }
 
-        return Assemble(groups, segments, pins, sheet);
+        // A name written twice on a sheet means one net, wherever the two places are — that is what a label is for,
+        // and what a power symbol is entirely. Local labels say so only within the sheet; global and hierarchical
+        // ones will also reach beyond it, once sheets are understood.
+        foreach (var sameName in naming.GroupBy(n => n.Name, StringComparer.Ordinal))
+        {
+            var places = sameName.Select(n => n.Position).ToList();
+            for (int i = 1; i < places.Count; i++)
+            {
+                groups.Join(places[0], places[i]);
+            }
+        }
+
+        return Assemble(groups, segments, pins, naming);
+    }
+
+    /// <summary>
+    /// Everything that gives a net a name, and where it says so: labels, and power symbols, which are nothing but a
+    /// name for a net drawn as a symbol. A net-class flag names nothing — it carries rules, not identity.
+    /// </summary>
+    private static List<(Vector2L Position, string Name, SchItem Item)> Names(Schematic sheet, IReadOnlyList<SchNetPin> pins)
+    {
+        var names = new List<(Vector2L, string, SchItem)>();
+
+        foreach (var label in sheet.Labels.Where(l =>
+            l.Kind is SchLabelKind.Local or SchLabelKind.Global or SchLabelKind.Hierarchical))
+        {
+            names.Add((label.Position, label.Text, label));
+        }
+
+        foreach (var pin in pins)
+        {
+            if (pin.Symbol.Definition is { IsPower: true } definition
+                && (pin.Symbol.Value ?? definition.Value) is { Length: > 0 } name)
+            {
+                names.Add((pin.At, name, pin.Symbol));
+            }
+        }
+
+        return names;
     }
 
     /// <summary>Every pin of every placed part, in sheet coordinates.</summary>
@@ -118,7 +157,7 @@ public static class SchConnectivity
         PointGroups groups,
         List<(Vector2L A, Vector2L B, SchWire Wire)> segments,
         IReadOnlyList<SchNetPin> pins,
-        Schematic sheet)
+        List<(Vector2L Position, string Name, SchItem Item)> naming)
     {
         var pinsOf = new Dictionary<int, List<SchNetPin>>();
         var itemsOf = new Dictionary<int, List<SchItem>>();
@@ -138,17 +177,21 @@ public static class SchConnectivity
             }
         }
 
-        foreach (var label in sheet.Labels.Where(l => l.Kind == SchLabelKind.Local))
+        foreach (var (position, name, item) in naming)
         {
-            int group = groups.Of(label.Position);
-            Bucket(itemsOf, group).Add(label);
+            int group = groups.Of(position);
+            var items = Bucket(itemsOf, group);
+            if (!items.Contains(item))
+            {
+                items.Add(item);
+            }
 
             if (!namesOf.TryGetValue(group, out var names))
             {
                 namesOf[group] = names = new SortedSet<string>(StringComparer.Ordinal);
             }
 
-            names.Add(label.Text);
+            names.Add(name);
         }
 
         var nets = new List<SchNet>();

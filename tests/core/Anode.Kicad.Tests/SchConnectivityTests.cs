@@ -218,4 +218,153 @@ public class SchConnectivityTests
 
         Assert.Empty(SchConnectivity.Build(sheet));
     }
+
+    /// <summary>A sheet whose library holds a power symbol as well as the resistor.</summary>
+    private static Schematic PowerSheet(string body) => Schematic.Parse($$"""
+        (kicad_sch
+        	(version 20260206)
+        	(generator "anode")
+        	(uuid "6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10")
+        	(paper "A4")
+        	(lib_symbols)
+        	(sheet_instances
+        		(path "/"
+        			(page "1")
+        		)
+        	)
+        	(embedded_fonts no)
+        )
+        """.Replace("(lib_symbols)", """
+        	(lib_symbols
+        		(symbol "power:GND"
+        			(power global)
+        			(property "Reference" "#PWR"
+        				(at 0 0 0)
+        			)
+        			(property "Value" "GND"
+        				(at 0 0 0)
+        			)
+        			(symbol "GND_1_1"
+        				(pin power_in line
+        					(at 0 0 90)
+        					(length 0)
+        					(name "GND")
+        					(number "1")
+        				)
+        			)
+        		)
+        	)
+        """, StringComparison.Ordinal).Replace("\t(sheet_instances", body + "\t(sheet_instances", StringComparison.Ordinal));
+
+    private static string Ground(string reference, double x, double y) => $"""
+        	(symbol
+        		(lib_id "power:GND")
+        		(at {x} {y} 0)
+        		(unit 1)
+        		(uuid "0a1b2c3d-0000-4000-8000-0000000{reference.GetHashCode() & 0xFF:x2}")
+        		(property "Reference" "{reference}"
+        			(at {x} {y} 0)
+        		)
+        		(property "Value" "GND"
+        			(at {x} {y} 0)
+        		)
+        	)
+        """;
+
+    [Fact]
+    public void Two_power_symbols_of_one_name_are_one_net()
+    {
+        // Nothing joins them on the sheet but the name they carry, which is the whole point of a power symbol.
+        var sheet = PowerSheet(Ground("#PWR01", 50.8, 50.8) + Ground("#PWR02", 88.9, 76.2));
+
+        var net = Assert.Single(SchConnectivity.Build(sheet));
+
+        Assert.Equal("GND", net.Name);
+        Assert.True(net.IsNamed);
+        Assert.Equal(2, net.Pins.Count);
+    }
+
+    [Fact]
+    public void A_global_label_names_a_net_as_a_local_one_does()
+    {
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-00000000010d")
+            + """
+        	(global_label "VBUS"
+        		(shape input)
+        		(at 71.12 53.34 0)
+        		(effects
+        			(font
+        				(size 1.27 1.27)
+        			)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-00000000010e")
+        	)
+        """);
+
+        var named = Assert.Single(SchConnectivity.Build(sheet), n => n.IsNamed);
+
+        Assert.Equal("VBUS", named.Name);
+        Assert.Contains(named.Pins, p => p.ToString() == "R1-2");
+    }
+
+    [Fact]
+    public void One_name_in_two_places_is_one_net()
+    {
+        // Two wires that never touch, each carrying the same label: KiCad reads that as one net, and so do we.
+        var sheet = Sheet(
+            Wire(50.8, 50.8, 71.12, 50.8, "0a1b2c3d-0000-4000-8000-00000000010f")
+            + Wire(50.8, 76.2, 71.12, 76.2, "0a1b2c3d-0000-4000-8000-000000000110")
+            + """
+        	(label "SDA"
+        		(at 50.8 50.8 0)
+        		(effects
+        			(font
+        				(size 1.27 1.27)
+        			)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000111")
+        	)
+        	(label "SDA"
+        		(at 50.8 76.2 0)
+        		(effects
+        			(font
+        				(size 1.27 1.27)
+        			)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000112")
+        	)
+        """);
+
+        var net = Assert.Single(SchConnectivity.Build(sheet));
+
+        Assert.Equal("SDA", net.Name);
+        Assert.Equal(2, net.Items.OfType<SchWire>().Count());
+    }
+
+    [Theory]
+    [InlineData("(power)")]
+    [InlineData("(power global)")]
+    public void A_power_symbol_is_known_by_its_marker_whichever_way_it_is_written(string marker)
+    {
+        // Both spellings are in the wild; reading only the newer one would miss over half of what is out there.
+        var library = SymbolLibrary.Parse(
+            "(kicad_symbol_lib\n\t(version 20250324)\n\t(generator \"anode\")\n"
+            + $"\t(symbol \"GND\"\n\t\t{marker}\n\t\t(property \"Value\" \"GND\"\n\t\t\t(at 0 0 0)\n\t\t)\n\t)\n)");
+
+        var symbol = library.Find("GND");
+
+        Assert.NotNull(symbol);
+        Assert.True(symbol!.IsPower);
+        Assert.Equal("GND", symbol.Value);
+    }
+
+    [Fact]
+    public void An_ordinary_part_is_not_power()
+    {
+        var sheet = Sheet(Resistor("R1", 50.8, 50.8));
+
+        Assert.False(sheet.LibrarySymbols["Device:R"].IsPower);
+    }
 }
