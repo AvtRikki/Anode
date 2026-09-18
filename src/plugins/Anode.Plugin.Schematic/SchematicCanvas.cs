@@ -55,7 +55,17 @@ public sealed class SchematicCanvas : Panel
         // A right drag pans the sheet; the menu belongs to a right click that stayed put, and never to a tool run.
         ContextRequested += (_, e) =>
         {
-            if (_tool is not null || Distance(_lastPoint, _pressPoint) > DragSlopPixels)
+            // While a tool is armed, a right click puts the pointer back instead of opening the menu — the way out
+            // that a hand reaches for first, and the one Esc offers from the keyboard.
+            if (_tool is not null)
+            {
+                CancelToolRun();
+                ToolCancelled?.Invoke();
+                e.Handled = true;
+                return;
+            }
+
+            if (Distance(_lastPoint, _pressPoint) > DragSlopPixels)
             {
                 e.Handled = true;
             }

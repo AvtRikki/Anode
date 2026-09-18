@@ -205,6 +205,15 @@ public sealed class SchematicDocument : DocumentBase
                 new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
             ],
         },
+
+        // A part chosen in the panel is a tool like any other, and must look like one: without this the pointer
+        // carried a part with nothing anywhere to say so, and the next click placed a second one.
+        .. _part is not null
+            ? new ToolDescriptor[]
+            {
+                new("sch.tool.symbol", "sch.tool.symbol", Icons.Component) { Activate = () => UseTool("sch.tool.symbol") },
+            }
+            : [],
     ];
 
     /// <summary>What can be done to the selected item, shown in the inspector's footer.</summary>
