@@ -139,6 +139,34 @@ public sealed class Schematic : INodeHost
     /// <summary>Top-level lists this model does not interpret. Kept in the file untouched.</summary>
     public IReadOnlyList<SList> OtherItems => _other;
 
+    /// <summary>
+    /// Group buses the sheet declares: a name and the members it stands for, as
+    /// <c>(bus_alias "DPHY" (members "D0_N" "D0_P" …))</c>. A bus named after one of these carries exactly these
+    /// nets, where a vector bus spells its members out in its own name.
+    /// </summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<string>> BusAliases
+    {
+        get
+        {
+            var aliases = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+            foreach (var alias in Root.Lists().Where(l => l.Head == "bus_alias"))
+            {
+                if (alias.Str(1) is not { Length: > 0 } name)
+                {
+                    continue;
+                }
+
+                var members = alias.Find("members") is { } list
+                    ? list.Skip(1).OfType<SAtom>().Select(a => a.Value).Where(m => m.Length > 0).ToList()
+                    : [];
+
+                aliases[name] = members;
+            }
+
+            return aliases;
+        }
+    }
+
     /// <summary>Everything drawn on the sheet, in a stable order.</summary>
     public IEnumerable<SchItem> Items =>
         _graphics.Cast<SchItem>().Concat(_wires).Concat(_busEntries).Concat(_sheets).Concat(_symbols)

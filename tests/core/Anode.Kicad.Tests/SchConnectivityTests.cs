@@ -367,4 +367,97 @@ public class SchConnectivityTests
 
         Assert.False(sheet.LibrarySymbols["Device:R"].IsPower);
     }
+
+    private static string BusLabel(string text, double x, double y, string uuid) => $"""
+        	(label "{text}"
+        		(at {x} {y} 0)
+        		(effects
+        			(font
+        				(size 1.27 1.27)
+        			)
+        		)
+        		(uuid "{uuid}")
+        	)
+        """;
+
+    [Fact]
+    public void A_bus_declares_the_nets_it_carries()
+    {
+        var sheet = Sheet(
+            """
+        	(bus
+        		(pts
+        			(xy 50.8 88.9) (xy 101.6 88.9)
+        		)
+        		(stroke
+        			(width 0)
+        			(type default)
+        		)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000120")
+        	)
+        """
+            + BusLabel("DQ[0..3]", 50.8, 88.9, "0a1b2c3d-0000-4000-8000-000000000121"));
+
+        var nets = SchConnectivity.Build(sheet);
+
+        // Four nets exist because the bus says they do, each named and none fused with another.
+        Assert.Equal(["DQ0", "DQ1", "DQ2", "DQ3"], nets.Select(n => n.Name));
+        Assert.All(nets, n => Assert.True(n.IsNamed));
+    }
+
+    [Fact]
+    public void A_wire_that_taps_a_bus_joins_the_member_it_names()
+    {
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000122")
+            + BusLabel("DQ1", 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000123")
+            + BusLabel("DQ[0..3]", 50.8, 88.9, "0a1b2c3d-0000-4000-8000-000000000124"));
+
+        var nets = SchConnectivity.Build(sheet);
+        var tapped = Assert.Single(nets, n => n.Name == "DQ1");
+
+        // The wire's own label put the part on DQ1; the bus is listed with it as what carries it.
+        Assert.Contains(tapped.Pins, p => p.ToString() == "R1-2");
+        Assert.Equal(2, tapped.Items.OfType<SchLabel>().Count());
+
+        // The members nobody tapped still exist, and carry nothing.
+        Assert.All(nets.Where(n => n.Name != "DQ1" && n.Name.StartsWith("DQ", StringComparison.Ordinal)),
+            n => Assert.Empty(n.Pins));
+    }
+
+    [Fact]
+    public void A_group_bus_carries_what_the_sheet_declared()
+    {
+        var sheet = Schematic.Parse("""
+            (kicad_sch
+            	(version 20260206)
+            	(generator "anode")
+            	(uuid "6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10")
+            	(paper "A4")
+            	(lib_symbols)
+            	(bus_alias "DPHY"
+            		(members "C_N" "C_P"
+            		)
+            	)
+            	(label "DPHY"
+            		(at 50.8 88.9 0)
+            		(effects
+            			(font
+            				(size 1.27 1.27)
+            			)
+            		)
+            		(uuid "0a1b2c3d-0000-4000-8000-000000000125")
+            	)
+            	(sheet_instances
+            		(path "/"
+            			(page "1")
+            		)
+            	)
+            	(embedded_fonts no)
+            )
+            """);
+
+        Assert.Equal(["C_N", "C_P"], SchConnectivity.Build(sheet).Select(n => n.Name));
+    }
 }

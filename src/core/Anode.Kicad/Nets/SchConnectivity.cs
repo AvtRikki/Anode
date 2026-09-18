@@ -85,21 +85,81 @@ public static class SchConnectivity
             }
         }
 
-        return Assemble(groups, segments, pins, naming);
+        return WithBuses(Assemble(groups, segments, pins, naming), sheet);
+    }
+
+    /// <summary>
+    /// The nets a bus declares. A bus carries several nets along one path, which the point-keyed reckoning above
+    /// cannot express: joining its members at the points the bus passes through would fuse them into one net, which
+    /// is the opposite of what a bus is.
+    ///
+    /// So a labelled bus is read as a declaration rather than a connection — these nets exist — and the wires that
+    /// tap it join their members by name, through the ordinary rules. A member already found on the sheet gains the
+    /// bus among its items; one nobody has tapped yet stands as a net with nothing on it.
+    /// </summary>
+    private static IReadOnlyList<SchNet> WithBuses(IReadOnlyList<SchNet> nets, Schematic sheet)
+    {
+        var aliases = sheet.BusAliases;
+        var declared = new List<(string Name, SchItem Bus)>();
+
+        foreach (var label in sheet.Labels)
+        {
+            var members = SchBusNames.Members(label.Text, aliases);
+            if (members.Count > 1)
+            {
+                declared.AddRange(members.Select(m => (m, (SchItem)label)));
+            }
+        }
+
+        if (declared.Count == 0)
+        {
+            return nets;
+        }
+
+        var byName = nets.ToDictionary(n => n.Name, StringComparer.Ordinal);
+        var result = new List<SchNet>(nets);
+
+        foreach (var (name, bus) in declared)
+        {
+            if (byName.TryGetValue(name, out var found))
+            {
+                if (!found.Items.Contains(bus))
+                {
+                    var items = new List<SchItem>(found.Items) { bus };
+                    var joined = found with { Items = items };
+                    result[result.IndexOf(found)] = joined;
+                    byName[name] = joined;
+                }
+
+                continue;
+            }
+
+            var declaredNet = new SchNet(name, true, [], [bus]);
+            byName[name] = declaredNet;
+            result.Add(declaredNet);
+        }
+
+        return [.. result.OrderByDescending(n => n.IsNamed).ThenBy(n => n.Name, StringComparer.Ordinal)];
     }
 
     /// <summary>
     /// Everything that gives a net a name, and where it says so: labels, and power symbols, which are nothing but a
     /// name for a net drawn as a symbol. A net-class flag names nothing — it carries rules, not identity.
+    ///
+    /// A label naming a bus is left out here: it names several nets at once, which is handled where buses are.
     /// </summary>
     private static List<(Vector2L Position, string Name, SchItem Item)> Names(Schematic sheet, IReadOnlyList<SchNetPin> pins)
     {
         var names = new List<(Vector2L, string, SchItem)>();
 
+        var aliases = sheet.BusAliases;
         foreach (var label in sheet.Labels.Where(l =>
             l.Kind is SchLabelKind.Local or SchLabelKind.Global or SchLabelKind.Hierarchical))
         {
-            names.Add((label.Position, label.Text, label));
+            if (SchBusNames.Members(label.Text, aliases).Count <= 1)
+            {
+                names.Add((label.Position, label.Text, label));
+            }
         }
 
         foreach (var pin in pins)
