@@ -1,6 +1,6 @@
 # Schematic editing
 
-Status, 2026-09-18: **stages 0–2 done, stage 3 half done.** Written 2026-09-16.
+Status, 2026-09-18: **stages 0–2 done, stage 3 all but two items, parts of stages 4 and 5.** Written 2026-09-16.
 
 - **Stage 0** — done: one command stack over tree nodes, `SchEdits`, `SchematicEditor`, incremental scene, undo and
   redo in the header.
@@ -10,12 +10,21 @@ Status, 2026-09-18: **stages 0–2 done, stage 3 half done.** Written 2026-09-16
 - **Stage 2** — done: wire and bus with junctions and splitting, labels of three kinds, no-connect, junction, bus
   entry, text, line, rectangle, circle. No arc tool, and runs are orthogonal rather than 45°.
 - **Stage 3** — the reading half is done: `.kicad_sym`, both library tables, the index with search and a cache, the
-  components panel with previews, and placing a part that carries its definition with it. Still missing: choosing a
-  unit of a multi-unit part, the alternate body style, changing a symbol, and "update from library".
-- **Stages 4–6** — not started.
+  components panel with previews, placing a part that carries its definition with it, and choosing which section of
+  a multi-section part is placed. Still missing: changing a symbol, and "update from library". The alternate body
+  style is left out on purpose: `body_style` is 1 in all 105 placements across the demo designs and no De Morgan
+  variant appears anywhere, so there is nothing to check an implementation against.
+- **Stage 4** — started: annotation, which leaves a part that already carries a number alone, and the
+  `(instances …)` block written on placement. Sheets and their pins, re-annotation that understands one file sitting
+  in the hierarchy twice, and field editing across the sheet are not done.
+- **Stage 5** — started: nets built from wires, junctions, labels of every kind, buses, power symbols and
+  no-connects; the net a selection sits on, shown in the inspector; and one check — a pin left alone on its net. The
+  pin-type matrix, duplicate references, missing power flags and sheet-pin checks are not done, nor the nets panel,
+  net highlighting, or netlist and BOM export.
+- **Stage 6** — not started.
 
-Known gaps outside the stages: dragging a part from the panel onto the sheet, `G` (drag keeping wires attached),
-breaking a wire, cleaning up collinear wires, aligning to grid, and a menu bar for Windows and Linux.
+Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
+aligning to grid, and a menu bar for Windows and Linux.
 
 The board can be edited; the schematic can only be looked at. This is the plan that closes that gap, in the order
 the work actually has to happen, with the reason each stage exists.
