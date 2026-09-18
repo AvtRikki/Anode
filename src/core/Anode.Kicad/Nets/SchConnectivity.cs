@@ -200,7 +200,10 @@ public static class SchConnectivity
             var toSheet = symbol.ToSheet;
             foreach (var pin in definition.PinsOf(symbol.Unit, symbol.BodyStyle))
             {
-                pins.Add(new SchNetPin(symbol, pin, toSheet.ApplyRounded(pin.EndPoint)));
+                // A pin's own point is where a wire meets it; its length runs from there towards the body, which is
+                // the other end entirely. Reading that far end put 162 of 182 pins on a real sheet nowhere near the
+                // wires that connect them.
+                pins.Add(new SchNetPin(symbol, pin, toSheet.ApplyRounded(pin.Position)));
             }
         }
 

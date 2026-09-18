@@ -173,7 +173,34 @@ public sealed class SchematicDocument : DocumentBase
         }
     }
 
-    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue())];
+    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. LoosePins()];
+
+    /// <summary>
+    /// Pins that lead nowhere. Deliberately quiet: a pin is only reported when its net has just the one pin, nobody
+    /// marked it no-connect, and the net has no name. A named net with a single pin is ordinary and correct — power
+    /// goes to a symbol, a label carries the signal off the sheet — and a check that complained about those would
+    /// teach its reader to stop looking.
+    /// </summary>
+    private IEnumerable<Issue> LoosePins()
+    {
+        foreach (var net in Nets)
+        {
+            if (net.IsNamed || net.IsNoConnect || net.Pins.Count != 1)
+            {
+                continue;
+            }
+
+            var pin = net.Pins[0];
+            yield return new Issue(
+                IssueSeverity.Warning,
+                Tr.T("sch.issue.loosePin.title"),
+                Tr.T("sch.issue.loosePin.detail", pin.ToString()),
+                Tr.T("sch.issue.loosePin.location",
+                    Units.NmToMm(pin.At.X).ToString("0.##", CultureInfo.InvariantCulture),
+                    Units.NmToMm(pin.At.Y).ToString("0.##", CultureInfo.InvariantCulture),
+                    Tr.T("sch.units.mm")));
+        }
+    }
 
     /// <summary>What the pointer can do on this sheet. The workbench floats these over the canvas.</summary>
     public override IReadOnlyList<ToolDescriptor> Tools =>

@@ -74,11 +74,11 @@ public class SchConnectivityTests
     public void A_wire_between_two_pins_makes_one_net()
     {
         // Two resistors 20 mm apart, their lower pins joined by a wire. The pin is drawn 3.81 out with a length of
-        // 1.27, so its free end sits 2.54 below the middle: 50.8 + 2.54 = 53.34.
+        // 1.27, so its free end sits 2.54 below the middle: 50.8 + 2.54 = 54.61.
         var sheet = Sheet(
             Resistor("R1", 50.8, 50.8)
             + Resistor("R2", 71.12, 50.8)
-            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000101"));
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000101"));
 
         var nets = SchConnectivity.Build(sheet);
         var joined = Assert.Single(nets, n => n.Pins.Count == 2);
@@ -93,10 +93,10 @@ public class SchConnectivityTests
     {
         var sheet = Sheet(
             Resistor("R1", 50.8, 50.8)
-            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000102")
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000102")
             + """
         	(label "VCC"
-        		(at 71.12 53.34 0)
+        		(at 71.12 54.61 0)
         		(effects
         			(font
         				(size 1.27 1.27)
@@ -149,10 +149,10 @@ public class SchConnectivityTests
 
         var pins = SchConnectivity.PinsOf(sheet);
 
-        // The library draws the pins 3.81 out with a length of 1.27, so their free ends sit 2.54 from the middle.
+        // The library draws the pins 3.81 from the middle, and that point is where a wire meets them.
         Assert.Equal(["R1-1", "R1-2"], pins.Select(p => p.ToString()).Order(StringComparer.Ordinal));
-        Assert.Contains(pins, p => p.At.Y == 48_260_000);
-        Assert.Contains(pins, p => p.At.Y == 53_340_000);
+        Assert.Contains(pins, p => p.At.Y == 46_990_000);
+        Assert.Contains(pins, p => p.At.Y == 54_610_000);
     }
 
     [Fact]
@@ -289,11 +289,11 @@ public class SchConnectivityTests
     {
         var sheet = Sheet(
             Resistor("R1", 50.8, 50.8)
-            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-00000000010d")
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-00000000010d")
             + """
         	(global_label "VBUS"
         		(shape input)
-        		(at 71.12 53.34 0)
+        		(at 71.12 54.61 0)
         		(effects
         			(font
         				(size 1.27 1.27)
@@ -410,8 +410,8 @@ public class SchConnectivityTests
     {
         var sheet = Sheet(
             Resistor("R1", 50.8, 50.8)
-            + Wire(50.8, 53.34, 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000122")
-            + BusLabel("DQ1", 71.12, 53.34, "0a1b2c3d-0000-4000-8000-000000000123")
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000122")
+            + BusLabel("DQ1", 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000123")
             + BusLabel("DQ[0..3]", 50.8, 88.9, "0a1b2c3d-0000-4000-8000-000000000124"));
 
         var nets = SchConnectivity.Build(sheet);
@@ -464,12 +464,12 @@ public class SchConnectivityTests
     [Fact]
     public void A_pin_marked_no_connect_says_so()
     {
-        // The mark sits on the resistor's lower pin, 2.54 below its middle.
+        // The mark sits on the resistor's lower pin, 3.81 below its middle — where a wire would meet it.
         var sheet = Sheet(
             Resistor("R1", 50.8, 50.8)
             + """
         	(no_connect
-        		(at 50.8 53.34)
+        		(at 50.8 54.61)
         		(uuid "0a1b2c3d-0000-4000-8000-000000000130")
         	)
         """);

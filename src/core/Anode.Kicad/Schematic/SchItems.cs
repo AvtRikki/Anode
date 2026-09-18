@@ -128,7 +128,11 @@ public sealed class SchPin(SList node) : SchItem(node)
 
     public long NumberHeight => Size(Node.Find("number"), 1_270_000);
 
-    /// <summary>Free end of the pin, where a wire connects, in symbol coordinates.</summary>
+    /// <summary>
+    /// The far end of the pin line, away from the point a wire meets — <see cref="SchItem.Position"/> is the
+    /// connection point, and the pin is drawn from there towards the body. Useful for drawing the line; not the
+    /// place to look for what a pin is wired to.
+    /// </summary>
     public Vector2L EndPoint
     {
         get

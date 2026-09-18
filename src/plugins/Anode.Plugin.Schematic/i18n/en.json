@@ -105,6 +105,11 @@
       "selected": "selected: {0}"
     },
     "issue": {
+      "loosePin": {
+        "title": "Pin leads nowhere",
+        "detail": "{0} is connected to nothing",
+        "location": "X {0} Y {1} {2}"
+      },
       "oldFormat": { "title": "Old format", "detail": "The file is older than KiCad 8; it may read differently." },
       "newFormat": { "title": "Newer format", "detail": "The sheet comes from a newer KiCad; unknown fields are preserved as they are." },
       "version": "version {0}",
