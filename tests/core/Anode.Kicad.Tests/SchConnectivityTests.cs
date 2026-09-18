@@ -460,4 +460,27 @@ public class SchConnectivityTests
 
         Assert.Equal(["C_N", "C_P"], SchConnectivity.Build(sheet).Select(n => n.Name));
     }
+
+    [Fact]
+    public void A_pin_marked_no_connect_says_so()
+    {
+        // The mark sits on the resistor's lower pin, 2.54 below its middle.
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + """
+        	(no_connect
+        		(at 50.8 53.34)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000130")
+        	)
+        """);
+
+        var nets = SchConnectivity.Build(sheet);
+        var marked = Assert.Single(nets, n => n.Pins.Any(p => p.ToString() == "R1-2"));
+
+        Assert.True(marked.IsNoConnect);
+
+        // The other pin carries no such mark, and a check about loose pins should still speak up about it.
+        var loose = Assert.Single(nets, n => n.Pins.Any(p => p.ToString() == "R1-1"));
+        Assert.False(loose.IsNoConnect);
+    }
 }

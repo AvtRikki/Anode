@@ -23,7 +23,14 @@ public sealed record SchNetPin(SymbolInstance Symbol, SchPin Pin, Vector2L At)
 /// </summary>
 /// <param name="Name">What the net is called: a label on it, or a name made from the first pin.</param>
 /// <param name="IsNamed">Whether a label gave it that name, as against one made up here.</param>
-public sealed record SchNet(string Name, bool IsNamed, IReadOnlyList<SchNetPin> Pins, IReadOnlyList<SchItem> Items);
+public sealed record SchNet(string Name, bool IsNamed, IReadOnlyList<SchNetPin> Pins, IReadOnlyList<SchItem> Items)
+{
+    /// <summary>
+    /// Somebody put a no-connect here, which says a pin is meant to lead nowhere. A check that complains about
+    /// unconnected pins must keep quiet about these: the mark exists precisely to say "I know".
+    /// </summary>
+    public bool IsNoConnect => Items.OfType<SchNoConnect>().Any();
+}
 
 /// <summary>
 /// Working out what is connected to what. The rule for whether two wires meet is the one the junction dots already
@@ -67,6 +74,11 @@ public static class SchConnectivity
             groups.Add(pin.At);
         }
 
+        foreach (var mark in sheet.NoConnects)
+        {
+            groups.Add(mark.Position);
+        }
+
         var naming = Names(sheet, pins);
         foreach (var (position, _, _) in naming)
         {
@@ -85,7 +97,7 @@ public static class SchConnectivity
             }
         }
 
-        return WithBuses(Assemble(groups, segments, pins, naming), sheet);
+        return WithBuses(Assemble(groups, segments, pins, naming, sheet.NoConnects), sheet);
     }
 
     /// <summary>
@@ -217,7 +229,8 @@ public static class SchConnectivity
         PointGroups groups,
         List<(Vector2L A, Vector2L B, SchWire Wire)> segments,
         IReadOnlyList<SchNetPin> pins,
-        List<(Vector2L Position, string Name, SchItem Item)> naming)
+        List<(Vector2L Position, string Name, SchItem Item)> naming,
+        IReadOnlyList<SchNoConnect> noConnects)
     {
         var pinsOf = new Dictionary<int, List<SchNetPin>>();
         var itemsOf = new Dictionary<int, List<SchItem>>();
@@ -235,6 +248,11 @@ public static class SchConnectivity
             {
                 items.Add(wire);
             }
+        }
+
+        foreach (var mark in noConnects)
+        {
+            Bucket(itemsOf, groups.Of(mark.Position)).Add(mark);
         }
 
         foreach (var (position, name, item) in naming)
