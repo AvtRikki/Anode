@@ -315,4 +315,49 @@ public class SchematicEditorTests
         Assert.Equal(B, label.Position);
         Assert.Single(sheet.Labels);
     }
+
+    [Fact]
+    public void A_deleted_item_stops_being_drawn()
+    {
+        var editor = Editor(out var sheet);
+        var wire = sheet.Wires.Single();
+        editor.SetSelection([wire]);
+
+        editor.DeleteSelection();
+
+        // The file is only half the answer: an item still listed by the scene is an item still on the screen, which
+        // is what "I deleted it and it did not go" looks like.
+        Assert.Empty(sheet.Wires);
+        Assert.DoesNotContain(editor.Scene.TopLevelItems, item => ReferenceEquals(item, wire));
+        Assert.Empty(editor.Scene.OwnersOf(wire));
+    }
+
+    [Fact]
+    public void A_rotated_item_is_drawn_once_not_twice()
+    {
+        var editor = Editor(out var sheet);
+        var wire = sheet.Wires.Single();
+        editor.SetSelection([wire]);
+
+        int before = editor.Scene.OwnersOf(wire).Count;
+        editor.Rotate(90);
+
+        // Rotation redraws the item; leaving the old primitives behind would double it.
+        Assert.Equal(before, editor.Scene.OwnersOf(wire).Count);
+        Assert.Single(editor.Scene.TopLevelItems, item => ReferenceEquals(item, wire));
+    }
+
+    [Fact]
+    public void An_edited_value_does_not_double_the_drawing()
+    {
+        var editor = Editor(out var sheet);
+        var label = SchNodes.Label(SchLabelKind.Local, "VCC", A);
+        editor.Apply("Place a label", [label], []);
+
+        int before = editor.Scene.OwnersOf(label).Count;
+        editor.Modify("Rename", [label], () => SchWrites.SetText(label, "+3V3"));
+
+        Assert.Equal(before, editor.Scene.OwnersOf(label).Count);
+        Assert.Single(editor.Scene.TopLevelItems, item => ReferenceEquals(item, label));
+    }
 }

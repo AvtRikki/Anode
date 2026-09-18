@@ -222,7 +222,7 @@ public sealed class SchematicEditor
             }
         });
 
-        Run(command, removedFromScene: true);
+        Execute(command, removedFromScene: true);
     }
 
     public void CancelMove()
@@ -253,7 +253,7 @@ public sealed class SchematicEditor
         }
 
         var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
-        Run(new ModifyNodesCommand("Rotate", items, () =>
+        Execute(new ModifyNodesCommand("Rotate", items, () =>
         {
             foreach (var item in items)
             {
@@ -277,7 +277,7 @@ public sealed class SchematicEditor
         }
 
         var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
-        Run(new ModifyNodesCommand(horizontal ? "Mirror horizontally" : "Mirror vertically", items, () =>
+        Execute(new ModifyNodesCommand(horizontal ? "Mirror horizontally" : "Mirror vertically", items, () =>
         {
             foreach (var item in items)
             {
@@ -297,7 +297,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Run(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        Execute(new AddNodesCommand(Sheet, items), removedFromScene: true);
         if (select)
         {
             SetSelection(items);
@@ -357,7 +357,7 @@ public sealed class SchematicEditor
             steps.Add(new AddNodesCommand(Sheet, add));
         }
 
-        Run(new CompositeCommand(name, steps));
+        Execute(new CompositeCommand(name, steps));
     }
 
     /// <summary>
@@ -371,7 +371,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Run(new ModifyNodesCommand(name, items, mutate));
+        Execute(new ModifyNodesCommand(name, items, mutate));
     }
 
     /// <summary>
@@ -379,7 +379,7 @@ public sealed class SchematicEditor
     /// copied into the sheet and the instance that draws from it — and one click made both, so one undo must take
     /// back both; composing them is the caller's business, running them is this.
     /// </summary>
-    public void Run(IEditCommand command) => Run(command, removedFromScene: true);
+    public void Run(IEditCommand command) => Execute(command, removedFromScene: true);
 
     public void DeleteSelection()
     {
@@ -394,7 +394,7 @@ public sealed class SchematicEditor
         // A dot is only a dot while the branch under it is there. Taking the branch away takes the dot with it, in
         // the same step, so one undo gives both back.
         var stale = SchJunctions.Stale(Sheet, items);
-        Run(new DeleteNodesCommand(Sheet, stale.Count == 0 ? items : [.. items, .. stale]));
+        Execute(new DeleteNodesCommand(Sheet, stale.Count == 0 ? items : [.. items, .. stale]));
     }
 
     /// <summary>
@@ -495,7 +495,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Run(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        Execute(new AddNodesCommand(Sheet, items), removedFromScene: true);
         SetSelection(items);
     }
 
@@ -550,7 +550,12 @@ public sealed class SchematicEditor
             .Then(Transform2D.Translation(anchor.X + dx, anchor.Y + dy));
     }
 
-    private void Run(IEditCommand command, bool removedFromScene = false)
+    /// <summary>
+    /// Applies a command and keeps the scene in step. Named apart from the public <see cref="Run"/> on purpose: when
+    /// both were called Run, every one-argument call inside this class quietly started meaning "the scene has
+    /// already been cleared", and items went on being drawn after they were deleted.
+    /// </summary>
+    private void Execute(IEditCommand command, bool removedFromScene = false)
     {
         var affected = command.Affected.OfType<SchItem>().ToList();
         if (!removedFromScene)
