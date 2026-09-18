@@ -101,7 +101,7 @@ public class SymbolsPanelTests
             Assert.True(panel is not null, "the components panel was not shown for a schematic");
 
             // The library lying beside the project is listed, without any table saying to look.
-            var row = panel!.GetVisualDescendants().OfType<Button>()
+            var row = panel!.GetVisualDescendants().OfType<ListBoxItem>()
                 .FirstOrDefault(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "R"));
             Assert.True(row is not null, "the part in the project's own library was not offered");
 
@@ -122,7 +122,7 @@ public class SymbolsPanelTests
             Assert.Contains(
                 panel.GetVisualDescendants().OfType<TextBlock>(),
                 t => t.Text is { } said && said.Contains("place R", StringComparison.Ordinal));
-            Assert.Contains(row.Classes, c => c == "selected");
+            Assert.True(row.IsSelected, "the armed part is not the row that reads as chosen");
 
             // Then the sheet: the part is dropped where the pointer says.
             var canvas = window.GetVisualDescendants().OfType<Control>()

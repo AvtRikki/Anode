@@ -137,7 +137,7 @@ public class SymbolSourcesTests
     /// <summary>The part names the panel is offering, in the order it offers them.</summary>
     private static IReadOnlyList<string> PartNames(Visual panel) =>
     [
-        .. panel.GetVisualDescendants().OfType<Button>()
+        .. panel.GetVisualDescendants().OfType<ListBoxItem>()
             .Select(b => b.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault()?.Text)
             .Where(t => t is "R" or "DB9")
             .OfType<string>()

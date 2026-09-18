@@ -86,7 +86,7 @@ public class PlacedSymbolTests
             }
 
             var panel = window.GetVisualDescendants().First(v => v.GetType().Name == "SymbolsPanel");
-            var row = panel.GetVisualDescendants().OfType<Button>()
+            var row = panel.GetVisualDescendants().OfType<ListBoxItem>()
                 .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "R"));
             Click(window, Middle(row, window), MouseButton.Left);
 

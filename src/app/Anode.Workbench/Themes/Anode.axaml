@@ -541,6 +541,25 @@
     <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
   </Style>
 
+  <!-- The parts list: rows that are built as they come into view, in the same hand as the palette's list. -->
+  <Style Selector="ListBox.parts">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="ListBox.parts > ListBoxItem">
+    <Setter Property="Padding" Value="11,5" />
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+  <Style Selector="ListBox.parts > ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBox.parts > ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource State.AccentWash}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+  <Style Selector="ListBox.parts > ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource Chrome.Hover}" />
+    <Setter Property="Foreground" Value="{DynamicResource Chrome.Text}" />
+  </Style>
+
   <Style Selector="GridSplitter.dock">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="MinWidth" Value="0" />

@@ -115,7 +115,8 @@ public sealed class SymbolIndex
 
         try
         {
-            row.Library = SymbolLibrary.Load(row.Path);
+            // Through the cache: the same libraries are wanted again every time a sheet is opened.
+            row.Library = SymbolLibraryCache.Load(row.Path);
         }
         catch (Exception ex) when (ex is IOException or KiCadFormatException or UnauthorizedAccessException)
         {

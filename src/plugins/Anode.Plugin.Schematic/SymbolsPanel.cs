@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using Anode.Kicad;
@@ -23,11 +25,12 @@ internal sealed class SymbolsPanel : ContentControl
     private readonly SymbolLibraryList _remembered;
     private readonly DisabledSources _disabled;
     private readonly TextBox _filter;
-    private readonly StackPanel _rows = new() { Spacing = 1 };
     private readonly TextBlock _summary;
     private readonly Button _sources;
     private readonly TextBlock _armed;
-    private readonly Dictionary<string, Button> _byLibId = [];
+    private readonly ListBox _list;
+    private readonly StackPanel _nothing = new() { Spacing = 4, Margin = new Thickness(11, 4) };
+    private bool _syncing;
     private SymbolChooser? _chooser;
     private SymbolIndex? _index;
     private string? _shownFor;
@@ -53,6 +56,17 @@ internal sealed class SymbolsPanel : ContentControl
         _armed.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
         _armed.TextTrimming = Avalonia.Media.TextTrimming.None;
         _armed.IsVisible = false;
+
+        // A ListBox builds only the rows in view, which is what makes a preview per row affordable and lets the
+        // list be as long as the libraries are.
+        _list = new ListBox { Classes = { "parts" }, ItemTemplate = RowTemplate() };
+        _list.SelectionChanged += (_, _) =>
+        {
+            if (!_syncing && _list.SelectedItem is SymbolChoice choice)
+            {
+                Sheet?.ChoosePart(choice.LibId, choice.Symbol);
+            }
+        };
 
         var add = Ui.TagButton(Tr.T("sch.symbols.add"), "outline", () => _ = AddLibraryAsync());
         add.HorizontalAlignment = HorizontalAlignment.Left;
@@ -88,7 +102,7 @@ internal sealed class SymbolsPanel : ContentControl
                     Padding = new Thickness(11, 10),
                     Child = add,
                 },
-                new ScrollViewer { Content = _rows },
+                new Panel { Children = { _list, _nothing } },
             },
         };
 
@@ -122,7 +136,8 @@ internal sealed class SymbolsPanel : ContentControl
         if (Sheet is null)
         {
             _chooser = null;
-            _rows.Children.Clear();
+            _list.ItemsSource = null;
+            _nothing.Children.Clear();
             _summary.Text = string.Empty;
             return;
         }
@@ -151,40 +166,38 @@ internal sealed class SymbolsPanel : ContentControl
 
     private void Show()
     {
-        _rows.Children.Clear();
+        _nothing.Children.Clear();
         if (_chooser is not { } chooser)
         {
+            _list.ItemsSource = null;
             return;
         }
 
         if (chooser.Results.Count == 0)
         {
-            bool anyLibrary = chooser.Query.Length > 0;
-            var empty = Ui.Text(Tr.T(anyLibrary ? "sch.symbols.empty" : "sch.symbols.none"), "dim");
-            empty.Margin = new Thickness(11, 4);
-            _rows.Children.Add(empty);
+            _list.ItemsSource = null;
+            _list.IsVisible = false;
+            _nothing.IsVisible = true;
 
-            if (!anyLibrary)
+            bool searching = chooser.Query.Length > 0;
+            _nothing.Children.Add(Ui.Text(Tr.T(searching ? "sch.symbols.empty" : "sch.symbols.none"), "dim"));
+
+            if (!searching)
             {
                 var hint = Ui.Text(Tr.T("sch.symbols.hint"), "faint");
                 hint.FontSize = 11.5;
                 hint.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
                 hint.TextTrimming = Avalonia.Media.TextTrimming.None;
-                hint.Margin = new Thickness(11, 2, 11, 4);
-                _rows.Children.Add(hint);
+                _nothing.Children.Add(hint);
             }
 
             _summary.Text = string.Empty;
             return;
         }
 
-        _byLibId.Clear();
-        foreach (var choice in chooser.Results)
-        {
-            var row = Row(choice);
-            _byLibId[choice.LibId] = row;
-            _rows.Children.Add(row);
-        }
+        _nothing.IsVisible = false;
+        _list.IsVisible = true;
+        _list.ItemsSource = chooser.Results;
 
         MarkChosen();
 
@@ -264,14 +277,22 @@ internal sealed class SymbolsPanel : ContentControl
     private static StringComparison PathComparison =>
         OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-    /// <summary>Shows which part is on the pointer: the row wears it, and a line says what to do next.</summary>
+    /// <summary>Shows which part is on the pointer: the row is selected, and a line says what to do next.</summary>
     private void MarkChosen()
     {
         string? chosen = Sheet?.ChosenPart;
 
-        foreach (var (libId, row) in _byLibId)
+        // Set under a guard: selecting a row is also how a part is armed, and this must not arm it again.
+        _syncing = true;
+        try
         {
-            row.Classes.Set("selected", string.Equals(libId, chosen, StringComparison.Ordinal));
+            _list.SelectedItem = chosen is null
+                ? null
+                : (_chooser?.Results.FirstOrDefault(r => string.Equals(r.LibId, chosen, StringComparison.Ordinal)));
+        }
+        finally
+        {
+            _syncing = false;
         }
 
         _armed.IsVisible = chosen is not null;
@@ -281,33 +302,56 @@ internal sealed class SymbolsPanel : ContentControl
         }
     }
 
-    private Button Row(SymbolChoice choice)
-    {
-        var lines = new StackPanel { Spacing = 1 };
-        lines.Children.Add(Ui.Text(choice.Name, "strong"));
-
-        var where = Ui.Mono(choice.Library, "dim");
-        lines.Children.Add(where);
-
-        if (choice.Description is { Length: > 0 } description)
+    /// <summary>
+    /// One part: its shape, its name, and where it came from. The preview is what makes the list scannable — a part
+    /// is recognised by its silhouette long before its name is read.
+    /// </summary>
+    private IDataTemplate RowTemplate() => new FuncDataTemplate<SymbolChoice>(
+        (choice, _) =>
         {
-            var text = Ui.Text(description, "faint");
-            text.FontSize = 11.5;
-            lines.Children.Add(text);
-        }
+            if (choice is null)
+            {
+                return null;
+            }
 
-        var button = new Button { Classes = { "row" }, Content = lines, HorizontalAlignment = HorizontalAlignment.Stretch };
-        button.HorizontalContentAlignment = HorizontalAlignment.Left;
-        button.Padding = new Thickness(11, 6);
-        button.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
-        ToolTip.SetTip(button, choice.LibId);
+            var lines = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
+            lines.Children.Add(Ui.Text(choice.Name, "strong"));
+            lines.Children.Add(Ui.Mono(choice.Library, "dim"));
 
-        var place = new MenuItem { Header = Tr.T("sch.symbols.place") };
-        place.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
-        button.ContextMenu = new ContextMenu { ItemsSource = new[] { place } };
+            if (choice.Description is { Length: > 0 } description)
+            {
+                var text = Ui.Text(description, "faint");
+                text.FontSize = 11.5;
+                lines.Children.Add(text);
+            }
 
-        return button;
-    }
+            var preview = new SymbolPreview
+            {
+                Symbol = choice.Symbol,
+                Width = 38,
+                Height = 38,
+                VerticalAlignment = VerticalAlignment.Center,
+            }.WithResource(SymbolPreview.StrokeProperty, ThemeKeys.ChromeText);
+
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                Children = { preview, lines },
+            };
+
+            var place = new MenuItem { Header = Tr.T("sch.symbols.place") };
+            place.Click += (_, _) => Sheet?.ChoosePart(choice.LibId, choice.Symbol);
+
+            return new Border
+            {
+                Background = Brushes.Transparent,
+                Child = row,
+                ContextMenu = new ContextMenu { ItemsSource = new[] { place } },
+                [ToolTip.TipProperty] = choice.LibId,
+            };
+        },
+        supportsRecycling: true);
 
     /// <summary>
     /// Adds a library to the project's own table — the file KiCad itself reads — and remembers it for every other
