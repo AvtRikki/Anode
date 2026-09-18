@@ -34,4 +34,7 @@
   <Folder Name="/tests/app/">
     <Project Path="tests/app/Anode.Workbench.Tests/Anode.Workbench.Tests.csproj" />
   </Folder>
+  <Folder Name="/tests/plugins/">
+    <Project Path="tests/plugins/Anode.Plugin.Schematic.Tests/Anode.Plugin.Schematic.Tests.csproj" />
+  </Folder>
 </Solution>

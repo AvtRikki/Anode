@@ -29,4 +29,9 @@
     <ProjectReference Include="..\..\core\Anode.Editing\Anode.Editing.csproj" />
     <ProjectReference Include="..\..\render\Anode.Render.Avalonia\Anode.Render.Avalonia.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- The inspector and the panels are internal; their tests live next to them. -->
+    <InternalsVisibleTo Include="Anode.Plugin.Schematic.Tests" />
+  </ItemGroup>
+
 </Project>
