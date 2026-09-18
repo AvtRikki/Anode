@@ -56,6 +56,21 @@ internal static class SchItemProperties
                     Writable("reference", symbol.Reference ?? None, v => edit(Name("reference"), () => SchWrites.SetField(symbol, "Reference", v))),
                     Writable("value", symbol.Value ?? None, v => edit(Name("value"), () => SchWrites.SetField(symbol, "Value", v))),
                     Computed("library", symbol.LibId),
+
+                    // Only a part drawn in sections can be asked which one it is; on the rest the row is noise.
+                    .. symbol.Definition is { UnitCount: > 1 } sectioned
+                        ? new[]
+                        {
+                            Writable("unit", symbol.Unit.ToString(CultureInfo.InvariantCulture), v =>
+                            {
+                                if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int unit)
+                                    && unit >= 1 && unit <= sectioned.UnitCount)
+                                {
+                                    edit(Name("unit"), () => SchWrites.SetUnit(symbol, unit));
+                                }
+                            }),
+                        }
+                        : [],
                     .. symbol.Footprint is { Length: > 0 } footprint
                         ? new[] { Writable("footprint", footprint, v => edit(Name("footprint"), () => SchWrites.SetField(symbol, "Footprint", v))) }
                         : [],

@@ -223,6 +223,14 @@ public sealed class LibSymbol : SchItem
         ? value
         : null;
 
+    /// <summary>
+    /// How many sections the part is drawn in — four for a quad gate, one for an ordinary part. Unit 0 is not a
+    /// section but the body common to all of them, so the count is the largest number used rather than how many
+    /// entries there are. A definition that <see cref="Extends"/> another carries no bodies of its own and so
+    /// reports one section, which is all it can say until the parent is resolved.
+    /// </summary>
+    public int UnitCount => Units.Count == 0 ? 1 : Math.Max(1, Units.Max(u => u.Unit));
+
     /// <summary>Graphics of one placed unit: its own plus the ones common to all units.</summary>
     public IEnumerable<SchGraphic> GraphicsOf(int unit, int bodyStyle) =>
         Units.Where(u => u.IsGraphic && Matches(u, unit, bodyStyle)).Select(u => _graphics[u.Index]);

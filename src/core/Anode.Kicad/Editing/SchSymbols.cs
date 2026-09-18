@@ -89,7 +89,10 @@ public static class SchSymbols
                 .Append(" (effects (font (size 1.27 1.27))))");
         }
 
-        foreach (var pin in definition.PinsOf(unit, 1))
+        // Every pin of the part, not only this section's: KiCad writes the whole list on each placed section — the
+        // four sections of the 74LS125 in the demos each carry all fourteen. Writing just the section's pins looked
+        // right for as long as everything we placed had a single section.
+        foreach (var pin in definition.Pins)
         {
             text.Append(" (pin ").Append(SEscape.Quote(pin.Number)).Append(" (uuid \"").Append(Guid.NewGuid()).Append("\"))");
         }

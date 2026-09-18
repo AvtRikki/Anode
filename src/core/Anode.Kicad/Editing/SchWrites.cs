@@ -54,6 +54,37 @@ public static class SchWrites
         }
     }
 
+    /// <summary>
+    /// Which section of a multi-unit part a placement is: gate B of a quad gate rather than gate A. Like the
+    /// designator, the number is kept twice — on the symbol and in the instance block — so both are written.
+    ///
+    /// The symbol's pin list is deliberately left alone. KiCad writes every pin of the whole part on each placed
+    /// section, which the four sections of the 74LS125 in the demo designs confirm: all fourteen pins on each.
+    /// </summary>
+    public static void SetUnit(SymbolInstance symbol, int unit)
+    {
+        if (unit < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(unit), unit, "Sections are numbered from one.");
+        }
+
+        if (symbol.Node.Find("unit") is { } own)
+        {
+            (own.AtomAt(1) ?? throw new KiCadFormatException("A symbol has no unit number.")).SetNumber(unit);
+        }
+
+        foreach (var path in symbol.Node.Find("instances")?.Lists().Where(l => l.Head == "project") ?? [])
+        {
+            foreach (var entry in path.Lists().Where(l => l.Head == "path"))
+            {
+                if (entry.Find("unit") is { } written)
+                {
+                    (written.AtomAt(1) ?? throw new KiCadFormatException("An instance has no unit number.")).SetNumber(unit);
+                }
+            }
+        }
+    }
+
     /// <summary>Moves the item to a point, keeping whatever angle it has.</summary>
     public static void SetPosition(SchItem item, Vector2L at)
     {

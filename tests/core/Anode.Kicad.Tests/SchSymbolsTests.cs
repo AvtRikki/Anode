@@ -1,6 +1,7 @@
 using System.Text;
 using Anode.Geometry;
 using Anode.Kicad.Editing;
+using Anode.Tests;
 
 namespace Anode.Kicad.Tests;
 
@@ -56,9 +57,54 @@ public class SchSymbolsTests
         )
         """;
 
+    /// <summary>
+    /// A part drawn in sections, the way a quad gate is: unit 0 carries what every section shares — the power pin —
+    /// and units 1 and 2 carry a gate each. Every multi-section part in the demo designs is shaped this way.
+    /// </summary>
+    private const string GateLibrary = """
+        (kicad_symbol_lib
+        	(version 20250324)
+        	(generator "anode")
+        	(symbol "G"
+        		(property "Reference" "U"
+        			(at 0 0 90)
+        		)
+        		(property "Value" "G"
+        			(at 0 0 90)
+        		)
+        		(symbol "G_0_1"
+        			(pin power_in line
+        				(at 0 7.62 270)
+        				(length 1.27)
+        				(name "VCC")
+        				(number "14")
+        			)
+        		)
+        		(symbol "G_1_1"
+        			(pin input line
+        				(at -5.08 0 0)
+        				(length 1.27)
+        				(name "A")
+        				(number "1")
+        			)
+        		)
+        		(symbol "G_2_1"
+        			(pin input line
+        				(at -5.08 0 0)
+        				(length 1.27)
+        				(name "A")
+        				(number "4")
+        			)
+        		)
+        	)
+        )
+        """;
+
     private static readonly Vector2L At = new(50_800_000, 44_450_000);
 
     private static LibSymbol Definition() => SymbolLibrary.Parse(Library).Find("R")!;
+
+    private static LibSymbol Gate() => SymbolLibrary.Parse(GateLibrary).Find("G")!;
 
     private static string Written(Schematic sheet) => Encoding.UTF8.GetString(sheet.Document.ToBytes());
 
@@ -82,7 +128,7 @@ public class SchSymbolsTests
     }
 
     [Fact]
-    public void A_placed_symbol_carries_a_pin_for_every_pin_of_its_unit()
+    public void A_placed_symbol_carries_a_pin_for_every_pin_of_the_part()
     {
         var sheet = Schematic.Parse(Sheet);
         sheet.Attach(Place(sheet), int.MaxValue);
@@ -166,5 +212,93 @@ public class SchSymbolsTests
 
         Assert.Equal("Device:R", Assert.Single(again.Symbols).LibId);
         Assert.Equal(text, Encoding.UTF8.GetString(again.Document.ToBytes()));
+    }
+
+    [Fact]
+    public void A_part_says_how_many_sections_it_is_drawn_in()
+    {
+        Assert.Equal(2, Gate().UnitCount);
+
+        // A part with one body is one section, not none: the count is what the inspector decides to ask about.
+        Assert.Equal(1, Definition().UnitCount);
+    }
+
+    [Fact]
+    public void A_placed_section_carries_every_pin_of_the_whole_part()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        sheet.Attach(
+            SchSymbols.Place(sheet, "Logic:G", Gate(), At, "U1", "project", SchSymbols.PathOf(sheet), unit: 2),
+            int.MaxValue);
+
+        // The shared power pin and both gates' inputs, on a placement of section 2 alone — which is what KiCad
+        // writes, and what the four sections of the 74LS125 in the demos each carry.
+        string text = Written(sheet);
+        Assert.Contains("(pin \"14\"", text, StringComparison.Ordinal);
+        Assert.Contains("(pin \"1\"", text, StringComparison.Ordinal);
+        Assert.Contains("(pin \"4\"", text, StringComparison.Ordinal);
+        Assert.Equal(3, Schematic.Parse(text).Symbols.Single().Node.Lists().Count(l => l.Head == "pin"));
+    }
+
+    [Fact]
+    public void The_section_of_a_placed_part_is_written_in_both_places()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        var symbol = SchSymbols.Place(sheet, "Logic:G", Gate(), At, "U1", "project", SchSymbols.PathOf(sheet));
+        sheet.Attach(symbol, int.MaxValue);
+
+        SchWrites.SetUnit(symbol, 2);
+
+        Assert.Equal(2, symbol.Unit);
+
+        // On the symbol and in the instance block, or the file contradicts itself — the designator's rule exactly.
+        string text = Written(sheet);
+        Assert.Equal(2, text.Split("(unit 2)").Length - 1);
+        Assert.DoesNotContain("(unit 1)", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Changing_the_section_and_undoing_it_gives_the_file_back()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        var symbol = SchSymbols.Place(sheet, "Logic:G", Gate(), At, "U1", "project", SchSymbols.PathOf(sheet));
+        sheet.Attach(symbol, int.MaxValue);
+        byte[] placed = sheet.Document.ToBytes();
+
+        var history = new UndoStack();
+        history.Execute(new ModifyNodesCommand("Section", [symbol], () => SchWrites.SetUnit(symbol, 2)));
+
+        Assert.NotEqual(placed, sheet.Document.ToBytes());
+
+        history.Undo();
+
+        Assert.Equal(1, symbol.Unit);
+        Assert.Equal(placed, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void A_section_below_the_first_is_refused()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        var symbol = Place(sheet);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => SchWrites.SetUnit(symbol, 0));
+    }
+
+    [Fact]
+    public void The_sections_of_a_real_quad_gate_are_counted_and_placed()
+    {
+        string path = Path.Combine(TestData.KiCadDir, "demos", "pic_programmer", "pic_programmer.kicad_sch");
+        Assert.SkipWhen(!File.Exists(path), TestData.SkipReason);
+
+        var sheet = Schematic.Load(path);
+        var gate = sheet.LibrarySymbols["pic_programmer:74LS125"];
+
+        // Four gates in the package, drawn as units 1-4 over a body (unit 0) they share. Every fixture I invented
+        // had a single section and agreed with the code whatever it did; this one is the part that disagrees.
+        Assert.Equal(4, gate.UnitCount);
+        Assert.Equal(
+            [1, 2, 3, 4],
+            sheet.Symbols.Where(s => s.LibId == "pic_programmer:74LS125").Select(s => s.Unit).Order());
     }
 }
