@@ -12,7 +12,8 @@ using Anode.Render;
 namespace Anode.Plugin.Schematic;
 
 /// <summary>Opens <c>.kicad_sch</c> files as document tabs.</summary>
-public sealed class SchematicDocumentType(ILog log) : IDocumentType
+// Nothing outside the plugin names this type: the workbench only ever sees the IDocumentType it registers.
+internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remembered) : IDocumentType
 {
     /// <summary>Panels and documents refer to the type by this id.</summary>
     public const string TypeId = "anode.schematic";
@@ -65,7 +66,7 @@ public sealed class SchematicDocumentType(ILog log) : IDocumentType
             }
 
             log.Info(Tr.T("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
-            return (IDocument)new SchematicDocument(schematic, scene, path);
+            return (IDocument)new SchematicDocument(schematic, scene, path, remembered);
         },
         cancellationToken);
 }
@@ -76,6 +77,8 @@ public sealed class SchematicDocument : DocumentBase
     private readonly List<IDisposable> _registrations = [];
     private readonly IReadOnlyList<SheetCheck> _checks;
     private readonly SchematicEditor _editor;
+    private readonly SymbolLibraryList _remembered;
+    private SymbolIndex? _libraries;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
     private IReadOnlyList<SchNet>? _nets;
@@ -87,11 +90,16 @@ public sealed class SchematicDocument : DocumentBase
     private string _frame = string.Empty;
     private double _zoom;
 
-    internal SchematicDocument(Anode.Kicad.Schematic schematic, SchematicScene scene, string path)
+    internal SchematicDocument(
+        Anode.Kicad.Schematic schematic,
+        SchematicScene scene,
+        string path,
+        SymbolLibraryList remembered)
     {
         Sheet = schematic;
         Scene = scene;
         FilePath = path;
+        _remembered = remembered;
         _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
@@ -251,8 +259,40 @@ public sealed class SchematicDocument : DocumentBase
     {
         SchSheet sheet when sheet.SheetFile is { Length: > 0 } file =>
             [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(file))],
+        SymbolInstance symbol when symbol.LibId is { Length: > 0 } libId =>
+            [new InspectorAction(Tr.T("sch.action.updateFromLibrary"), () => UpdateFromLibrary(libId))],
         _ => [],
     };
+
+    /// <summary>
+    /// Takes the sheet's copy of a definition from the library again — what a designer does once the part has been
+    /// fixed there. Every placement drawing from it is named in the change, so they all redraw, and one undo takes
+    /// the whole thing back.
+    /// </summary>
+    private void UpdateFromLibrary(string libId)
+    {
+        if (Sheet.LibrarySymbols.GetValueOrDefault(libId) is not { } current)
+        {
+            return;
+        }
+
+        if (Libraries.Find(libId) is not { } fresh)
+        {
+            _context?.Log.Error(Tr.T("sch.log.updateMissing", libId));
+            return;
+        }
+
+        _editor.Run(new ModifyNodesCommand(
+            Tr.T("sch.action.updateFromLibrary"),
+            SchSymbols.Affected(Sheet, libId),
+            () => SchSymbols.Update(Sheet, libId, fresh)));
+    }
+
+    /// <summary>
+    /// The libraries this sheet can reach, read once and kept: the project's table, what KiCad installed, and what
+    /// Anode was told to remember.
+    /// </summary>
+    private SymbolIndex Libraries => _libraries ??= ProjectLibraries.For(FilePath, _remembered.Load());
 
     /// <summary>Opens a child sheet as its own tab, beside this one.</summary>
     private void OpenSheet(string file)

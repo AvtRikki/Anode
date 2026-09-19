@@ -107,6 +107,58 @@ public static class SchSymbols
             ?? throw new KiCadFormatException("The placed symbol did not read back as a symbol.");
     }
 
+    /// <summary>
+    /// Replaces the sheet's copy of a definition with the library's current one, keeping every placement that draws
+    /// from it. The existing node is rewritten in place rather than swapped for a new one: undo restores snapshots
+    /// of the nodes it was given, so a definition replaced by a different node object would never come back.
+    ///
+    /// The wrapper is rebuilt for the same reason — it read its pins and graphics once, and they have just changed.
+    /// </summary>
+    /// <returns>False when the sheet has no copy of <paramref name="libId"/> to update.</returns>
+    public static bool Update(Schematic sheet, string libId, LibSymbol definition)
+    {
+        if (sheet.Root.Find("lib_symbols")?.Lists()
+                .FirstOrDefault(l => l.Head == "symbol" && string.Equals(l.Str(1), libId, StringComparison.Ordinal))
+            is not { } existing)
+        {
+            return false;
+        }
+
+        var fresh = SchNodes.Adopt(definition.Node);
+
+        // A library calls the symbol "R" where the sheet calls the same definition "Device:R".
+        (fresh.AtomAt(1) ?? throw new KiCadFormatException("The definition has no name.")).SetString(libId);
+        existing.RestoreFrom(fresh);
+
+        if (sheet.LibrarySymbols.GetValueOrDefault(libId) is { } wrapper)
+        {
+            wrapper.AfterRestore();
+        }
+        else
+        {
+            sheet.Register(new LibSymbol(existing));
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Everything a change to one definition touches: the definition itself, then every placement drawing from it.
+    /// The definition has to be in the list or undo cannot put it back — a command restores snapshots of the nodes
+    /// it was handed and of nothing else — and the placements have to be there so the sheet redraws them.
+    /// </summary>
+    public static IReadOnlyList<SchItem> Affected(Schematic sheet, string libId)
+    {
+        List<SchItem> items = [];
+        if (sheet.LibrarySymbols.GetValueOrDefault(libId) is { } definition)
+        {
+            items.Add(definition);
+        }
+
+        items.AddRange(sheet.Symbols.Where(s => string.Equals(s.LibId, libId, StringComparison.Ordinal)));
+        return items;
+    }
+
     /// <summary>The path of a flat sheet: the root's own uuid, which is what KiCad writes for a single-sheet design.</summary>
     public static string PathOf(Schematic sheet) => "/" + (sheet.Uuid ?? string.Empty);
 

@@ -14,13 +14,16 @@ public sealed class SchematicPlugin : IPlugin
     {
         Tr.Register(JsonTextCatalog.FromAssembly(Assembly.GetExecutingAssembly()));
 
-        context.Documents.Register(new SchematicDocumentType(context.Log));
+        // Libraries the user added by hand. Both the panel and the open sheet read them: the panel to offer parts,
+        // the sheet to take a definition from its library again.
+        var remembered = new SymbolLibraryList(context.DataDirectory);
+
+        context.Documents.Register(new SchematicDocumentType(context.Log, remembered));
 
         context.Project.Register(new SchematicStructure());
 
         // The parts a sheet can draw from. Same place as the inspector, so the two are tabs of one stack and each
         // gets the whole right side when it is the one showing — rather than halving it between them.
-        var remembered = new SymbolLibraryList(context.DataDirectory);
         var disabled = new DisabledSources(context.DataDirectory);
         context.Panels.Register(new PanelDescriptor(
             "sch.symbols",

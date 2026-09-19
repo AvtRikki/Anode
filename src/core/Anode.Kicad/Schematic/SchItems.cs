@@ -158,10 +158,25 @@ public sealed class LibSymbol : SchItem
     internal LibSymbol(SList node)
         : base(node)
     {
-        Name = node.Str(1) ?? string.Empty;
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Reads the bodies out of the node again. A definition can be rewritten under a live wrapper — by "update from
+    /// library", and by the undo that takes it back — and pins and graphics read once in the constructor would go on
+    /// describing the part as it used to be.
+    /// </summary>
+    public override void AfterRestore() => Rebuild();
+
+    private void Rebuild()
+    {
+        Name = Node.Str(1) ?? string.Empty;
+        _graphics.Clear();
+        _pins.Clear();
+        Units.Clear();
 
         // Bodies live in child symbols named "<symbol>_<unit>_<bodyStyle>"; unit 0 is common to every unit.
-        foreach (var unit in node.Lists().Where(l => l.Head == "symbol"))
+        foreach (var unit in Node.Lists().Where(l => l.Head == "symbol"))
         {
             var (number, style) = ParseUnit(unit.Str(1));
             foreach (var child in unit.Lists())
@@ -180,7 +195,7 @@ public sealed class LibSymbol : SchItem
         }
     }
 
-    public string Name { get; }
+    public string Name { get; private set; } = string.Empty;
 
     /// <summary>Which unit and body style each graphic (true) or pin (false) belongs to.</summary>
     private List<(int Unit, int Style, int Index, bool IsGraphic)> Units { get; } = [];

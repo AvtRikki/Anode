@@ -91,6 +91,7 @@
     "action": {
       "editSymbol": "Edit symbol",
       "openSheet": "Open sheet",
+      "updateFromLibrary": "Update from library",
       "editPins": "Edit pins"
     },
     "pin": {
@@ -159,7 +160,8 @@
     "log": {
       "created": "{0}: a new sheet.",
       "loaded": "{0}: {1} symbols, {2} primitives.",
-      "activated": "{0} {1}: .kicad_sch, sheet hierarchy."
+      "activated": "{0} {1}: .kicad_sch, sheet hierarchy.",
+      "updateMissing": "{0}: the library no longer has this part."
     }
   }
 }

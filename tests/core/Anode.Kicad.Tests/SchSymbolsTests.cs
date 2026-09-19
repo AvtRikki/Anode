@@ -301,4 +301,114 @@ public class SchSymbolsTests
             [1, 2, 3, 4],
             sheet.Symbols.Where(s => s.LibId == "pic_programmer:74LS125").Select(s => s.Unit).Order());
     }
+
+    /// <summary>The same resistor after someone added a wiper to it in the library.</summary>
+    private const string NewerLibrary = """
+        (kicad_symbol_lib
+        	(version 20250324)
+        	(generator "anode")
+        	(symbol "R"
+        		(property "Reference" "R"
+        			(at 2.032 0 90)
+        		)
+        		(property "Value" "R"
+        			(at 0 0 90)
+        		)
+        		(symbol "R_1_1"
+        			(pin passive line
+        				(at 0 3.81 270)
+        				(length 1.27)
+        				(name "~")
+        				(number "1")
+        			)
+        			(pin passive line
+        				(at 0 -3.81 90)
+        				(length 1.27)
+        				(name "~")
+        				(number "2")
+        			)
+        			(pin passive line
+        				(at 2.54 0 180)
+        				(length 1.27)
+        				(name "W")
+        				(number "3")
+        			)
+        		)
+        	)
+        )
+        """;
+
+    [Fact]
+    public void A_definition_is_updated_in_place_and_what_reads_it_follows()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+        var definition = sheet.LibrarySymbols["Device:R"];
+
+        Assert.Equal(2, definition.Pins.Count);
+
+        Assert.True(SchSymbols.Update(sheet, "Device:R", SymbolLibrary.Parse(NewerLibrary).Find("R")!));
+
+        // The sheet keeps handing out the same wrapper, so the wrapper has to describe the part as it is now.
+        Assert.Same(definition, sheet.LibrarySymbols["Device:R"]);
+        Assert.Equal(3, definition.Pins.Count);
+
+        // And it is still known by the name the sheet calls it, not the one the library used.
+        Assert.Equal("Device:R", definition.Name);
+    }
+
+    [Fact]
+    public void Updating_a_definition_and_undoing_it_gives_the_file_back()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+        sheet.Attach(Place(sheet), int.MaxValue);
+        byte[] original = sheet.Document.ToBytes();
+        var definition = sheet.LibrarySymbols["Device:R"];
+
+        var history = new UndoStack();
+        history.Execute(new ModifyNodesCommand(
+            "Update",
+            [definition],
+            () => SchSymbols.Update(sheet, "Device:R", SymbolLibrary.Parse(NewerLibrary).Find("R")!)));
+
+        Assert.Equal(3, definition.Pins.Count);
+        Assert.NotEqual(original, sheet.Document.ToBytes());
+
+        history.Undo();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+
+        // The wrapper follows the undo as well; a definition read once would still be showing the third pin.
+        Assert.Equal(2, definition.Pins.Count);
+    }
+
+    [Fact]
+    public void A_definition_the_sheet_does_not_carry_is_not_updated()
+    {
+        var sheet = Schematic.Parse(Sheet);
+
+        Assert.False(SchSymbols.Update(sheet, "Device:R", Definition()));
+    }
+
+    [Fact]
+    public void A_change_to_a_definition_touches_it_and_every_placement_of_it()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+        sheet.Attach(Place(sheet, "R1"), int.MaxValue);
+        sheet.Attach(Place(sheet, "R2"), int.MaxValue);
+
+        // A part of another kind, to be sure the list is about this definition and not about everything placed.
+        SchSymbols.Ensure(sheet, "Logic:G", Gate());
+        sheet.Attach(
+            SchSymbols.Place(sheet, "Logic:G", Gate(), At, "U1", "project", SchSymbols.PathOf(sheet)),
+            int.MaxValue);
+
+        var affected = SchSymbols.Affected(sheet, "Device:R");
+
+        // The definition itself leads: without it in the list, undo has no snapshot of the body that was replaced.
+        Assert.Same(sheet.LibrarySymbols["Device:R"], affected[0]);
+        Assert.Equal(["R1", "R2"], affected.Skip(1).Cast<SymbolInstance>().Select(s => s.Reference));
+    }
 }
