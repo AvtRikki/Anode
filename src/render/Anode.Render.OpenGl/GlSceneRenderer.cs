@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Anode.Geometry;
 using Anode.Kicad;
 using Silk.NET.OpenGL;
+using SkiaSharp;
 
 namespace Anode.Render.OpenGl;
 
@@ -24,7 +25,13 @@ public sealed unsafe class GlSceneRenderer : IDisposable
     private readonly GlProgram _segments;
     private readonly GlProgram _circles;
     private readonly GlProgram _fill;
+    private readonly GlProgram _image;
     private readonly uint _quadVbo;
+    private readonly uint _imageVao;
+    private readonly uint _imageVbo;
+
+    /// <summary>Pictures uploaded once and kept by the identity of their bytes; zero marks one that would not decode.</summary>
+    private readonly Dictionary<byte[], uint> _textures = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<LayerGeometry, GpuBatch> _batches = [];
     private readonly List<(LayerGeometry Layer, GpuBatch Batch)> _preview = [];
     private readonly List<float> _dynamic = [];
@@ -46,6 +53,22 @@ public sealed unsafe class GlSceneRenderer : IDisposable
         _circles = GlShaders.Build(gl, dialect, GlShaders.CircleVertex, GlShaders.CircleFragment,
             (GlShaders.Corner, "a_corner"), (GlShaders.Attr1, "a_c"), (GlShaders.Attr2, "a_r"));
         _fill = GlShaders.Build(gl, dialect, GlShaders.FillVertex, GlShaders.FillFragment, (GlShaders.Attr1, "a_pos"));
+        _image = GlShaders.Build(gl, dialect, GlShaders.ImageVertex, GlShaders.ImageFragment,
+            (GlShaders.Attr1, "a_pos"), (GlShaders.Attr2, "a_uv"));
+        gl.UseProgram(_image.Handle);
+        gl.Uniform1(gl.GetUniformLocation(_image.Handle, "u_tex"), 0);
+
+        // One quad, rewritten per picture: position and texture coordinate for each corner.
+        _imageVao = gl.GenVertexArray();
+        gl.BindVertexArray(_imageVao);
+        _imageVbo = gl.GenBuffer();
+        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _imageVbo);
+        gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(16 * sizeof(float)), null, BufferUsageARB.DynamicDraw);
+        gl.EnableVertexAttribArray(GlShaders.Attr1);
+        gl.VertexAttribPointer(GlShaders.Attr1, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), null);
+        gl.EnableVertexAttribArray(GlShaders.Attr2);
+        gl.VertexAttribPointer(GlShaders.Attr2, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        gl.BindVertexArray(0);
 
         _quadVbo = gl.GenBuffer();
         gl.BindBuffer(BufferTargetARB.ArrayBuffer, _quadVbo);
@@ -67,6 +90,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
         ReleaseBatches(_batches);
         ReleaseHighlight();
         ReleasePreview();
+        ReleaseTextures();
         _scene = scene;
     }
 
@@ -119,6 +143,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
 
             var color = dimmed && !layer.IsDecoration ? layer.Color.WithAlpha(Math.Min(layer.Color.A, DimAlpha)) : layer.Color;
             Draw(batch, color, view, Transform2D.Identity);
+            DrawImages(layer, dimmed && !layer.IsDecoration, view);
         }
 
         uploaded |= UpdateHighlight(view);
@@ -180,6 +205,86 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             _gl.DrawArraysInstanced(PrimitiveType.TriangleStrip, 0, 4, (uint)batch.SegmentCount);
             _drawCalls++;
         }
+    }
+
+    /// <summary>A layer's pictures, over its strokes; each fades only with the rest of the layer when the view dims.</summary>
+    private void DrawImages(LayerGeometry layer, bool dimmed, ViewState view)
+    {
+        if (layer.Images.Count == 0)
+        {
+            return;
+        }
+
+        _gl.BindVertexArray(_imageVao);
+        _gl.ActiveTexture(TextureUnit.Texture0);
+        foreach (var picture in layer.Images)
+        {
+            uint texture = Texture(picture.Encoded);
+            if (texture == 0)
+            {
+                continue;
+            }
+
+            var b = picture.Bounds;
+            float x0 = (float)b.MinX, y0 = (float)b.MinY, x1 = (float)b.MaxX, y1 = (float)b.MaxY;
+            _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _imageVbo);
+            _gl.BufferSubData(BufferTargetARB.ArrayBuffer, 0, (ReadOnlySpan<float>)[x0, y0, 0, 0, x1, y0, 1, 0, x0, y1, 0, 1, x1, y1, 1, 1]);
+
+            Use(_image, new ColorRgba(255, 255, 255, dimmed ? DimAlpha : (byte)255), view, Transform2D.Identity);
+            _gl.BindTexture(TextureTarget.Texture2D, texture);
+            _gl.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
+            _drawCalls++;
+        }
+
+        _gl.BindTexture(TextureTarget.Texture2D, 0);
+    }
+
+    /// <summary>The picture as a texture, decoded and uploaded the first time it is drawn, with mipmaps for zooming out.</summary>
+    private uint Texture(byte[] encoded)
+    {
+        if (_textures.TryGetValue(encoded, out uint texture))
+        {
+            return texture;
+        }
+
+        using var decoded = SKBitmap.Decode(encoded);
+        if (decoded is null || decoded.Width == 0 || decoded.Height == 0)
+        {
+            _textures[encoded] = 0;
+            return 0;
+        }
+
+        // RGBA with straight alpha, as the blend function expects.
+        var info = new SKImageInfo(decoded.Width, decoded.Height, SKColorType.Rgba8888, SKAlphaType.Unpremul);
+        var bytes = new byte[info.BytesSize];
+        fixed (byte* p = bytes)
+        {
+            using var image = SKImage.FromBitmap(decoded);
+            image.ReadPixels(info, (nint)p, info.RowBytes, 0, 0);
+        }
+
+        texture = _gl.GenTexture();
+        _gl.BindTexture(TextureTarget.Texture2D, texture);
+        _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+        _gl.TexImage2D<byte>(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)info.Width, (uint)info.Height, 0,
+            PixelFormat.Rgba, PixelType.UnsignedByte, bytes);
+        _gl.GenerateMipmap(TextureTarget.Texture2D);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+        _textures[encoded] = texture;
+        return texture;
+    }
+
+    private void ReleaseTextures()
+    {
+        foreach (uint texture in _textures.Values.Where(t => t != 0))
+        {
+            _gl.DeleteTexture(texture);
+        }
+
+        _textures.Clear();
     }
 
     private void Use(GlProgram program, ColorRgba color, ViewState view, Transform2D xform)
@@ -488,9 +593,13 @@ public sealed unsafe class GlSceneRenderer : IDisposable
         _grid.Release(_gl);
         _box.Release(_gl);
         _gl.DeleteBuffer(_quadVbo);
+        ReleaseTextures();
+        _gl.DeleteBuffer(_imageVbo);
+        _gl.DeleteVertexArray(_imageVao);
         _segments.Dispose();
         _circles.Dispose();
         _fill.Dispose();
+        _image.Dispose();
     }
 
     private sealed class GpuBatch(int version)

@@ -106,7 +106,8 @@ public sealed class SchematicScene : IRenderScene
             var copy = collect ? new LayerGeometry(layer.Name) { Color = layer.Color } : null;
             int count = layer.Lines.RemoveAll(p => Take(p.Owner, p, copy?.Lines))
                 + layer.Circles.RemoveAll(p => Take(p.Owner, p, copy?.Circles))
-                + layer.Polygons.RemoveAll(p => Take(p.Owner, p, copy?.Polygons));
+                + layer.Polygons.RemoveAll(p => Take(p.Owner, p, copy?.Polygons))
+                + layer.Images.RemoveAll(p => Take(p.Owner, p, copy?.Images));
 
             if (count > 0)
             {
@@ -228,6 +229,11 @@ public sealed class SchematicScene : IRenderScene
         foreach (var polygon in layer.Polygons)
         {
             bounds = bounds.Union(polygon.Bounds);
+        }
+
+        foreach (var image in layer.Images)
+        {
+            bounds = bounds.Union(image.Bounds);
         }
 
         return bounds;

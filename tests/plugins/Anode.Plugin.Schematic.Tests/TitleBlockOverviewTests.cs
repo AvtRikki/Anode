@@ -17,7 +17,6 @@ public class TitleBlockOverviewTests
     public void A_title_block_field_is_written_from_the_overview_and_undone()
     {
         Assert.SkipWhen(TestData.AnySchematic() is null, TestData.SkipReason);
-        using var strings = Tr.Register(JsonTextCatalog.FromAssembly(typeof(SchematicDocument).Assembly));
 
         var sheet = KicadSchematic.Load(TestData.AnySchematic()!);
         string data = Directory.CreateTempSubdirectory("anode-title-").FullName;
@@ -45,7 +44,6 @@ public class TitleBlockOverviewTests
     public void Every_field_is_offered_even_when_empty()
     {
         Assert.SkipWhen(TestData.AnySchematic() is null, TestData.SkipReason);
-        using var strings = Tr.Register(JsonTextCatalog.FromAssembly(typeof(SchematicDocument).Assembly));
 
         var sheet = KicadSchematic.Parse("""
             (kicad_sch
@@ -73,7 +71,6 @@ public class TitleBlockOverviewTests
     public void A_comment_is_written_from_the_overview_and_a_fifth_shows_only_once_it_exists()
     {
         Assert.SkipWhen(TestData.AnySchematic() is null, TestData.SkipReason);
-        using var strings = Tr.Register(JsonTextCatalog.FromAssembly(typeof(SchematicDocument).Assembly));
 
         var sheet = KicadSchematic.Load(TestData.AnySchematic()!);
         string data = Directory.CreateTempSubdirectory("anode-title-").FullName;

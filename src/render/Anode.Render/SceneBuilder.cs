@@ -47,6 +47,7 @@ public static class SceneBuilder
         layer.Lines.Clear();
         layer.Polygons.Clear();
         layer.Circles.Clear();
+        layer.Images.Clear();
         AddPage(scene);
         scene.Commit();
     }
@@ -72,8 +73,14 @@ public static class SceneBuilder
         }
 
         string paperName = board.Root.Find("paper")?.AtomAt(1)?.Value ?? "A4";
-        DrawingSheet.Draw(paper, board.TitleBlock, paperName, scene.Frame, Stroke, outline =>
-            layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)));
+        DrawingSheet.Draw(
+            paper,
+            board.TitleBlock,
+            paperName,
+            scene.Frame,
+            Stroke,
+            outline => layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)),
+            (centre, size, image) => layer.Images.Add(SchematicSceneBuilder.Picture(scene.ToScene(centre), size, image)));
     }
 
     /// <summary>

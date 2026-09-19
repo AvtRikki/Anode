@@ -81,6 +81,45 @@ public class DrawingSheetFileTests
     public void Older_percent_codes_become_the_variables_they_stand_for(string written, string read) =>
         Assert.Equal(read, DrawingSheetFile.ConvertLegacyCodes(written));
 
+    /// <summary>A 6 × 3 pixel PNG that says it is 600 pixels to the inch (23622 per metre).</summary>
+    private const string Png600 = "iVBORw0KGgoAAAANSUhEUgAAAAYAAAADCAIAAAA/Y+msAAAACXBIWXMAAFxGAABcRgEUlENBAAAAEUlEQVR4nGP4z8CAhtD52IUAEUQR788PiNkAAAAASUVORK5CYII=";
+
+    [Fact]
+    public void A_picture_reads_with_its_size_from_its_own_header()
+    {
+        var bitmap = Assert.IsType<WksBitmap>(Assert.Single(DrawingSheetFile.Parse($"""
+            (kicad_wks (bitmap (name "logo") (pos 30 20) (scale 2) (data "{Png600[..40]}" "{Png600[40..]}")))
+            """).Items));
+
+        Assert.Equal(new PngInfo(6, 3, 600), bitmap.Png);
+
+        // Pixels × 25.4 × scale / PPI: 6 px at 600 PPI, twice as large, is 0.508 mm.
+        Assert.Equal(0.508, bitmap.SizeMm!.Value.Width, 6);
+        Assert.Equal(0.254, bitmap.SizeMm!.Value.Height, 6);
+    }
+
+    [Fact]
+    public void An_older_picture_in_hex_reads_the_same()
+    {
+        var bitmap = Assert.IsType<WksBitmap>(Assert.Single(DrawingSheetFile.Parse("""
+            (page_layout (bitmap (pos 30 20) (scale 1) (pngdata
+              (data "89 50 4E 47 0D 0A 1A 0A 00 00 00 0D 49 48 44 52 00 00 00 06 00 00 00 03 08 02 00 00 00 3F 63 E9 AC 00 00 00 09 70 48 59 73 00 00 5C 46 00 00")
+              (data "5C 46 01 14 94 43 41 00 00 00 11 49 44 41 54 78 9C 63 F8 CF C0 80 86 D0 F9 D8 85 00 11 44 11 EF CF 0F 88 D9 00 00 00 00 49 45 4E 44 AE 42 60 82"))))
+            """).Items));
+
+        Assert.Equal(Convert.FromBase64String(Png600), bitmap.Image);
+    }
+
+    [Fact]
+    public void A_picture_that_is_not_a_PNG_has_no_size_and_is_counted_out()
+    {
+        var bitmap = Assert.IsType<WksBitmap>(Assert.Single(DrawingSheetFile.Parse(
+            "(kicad_wks (bitmap (pos 30 20) (data \"R0lGODlhAQABAAAAACw=\")))").Items));
+
+        Assert.NotNull(bitmap.Image);
+        Assert.Null(bitmap.SizeMm);
+    }
+
     [Fact]
     public void Something_else_is_refused()
     {

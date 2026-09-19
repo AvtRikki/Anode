@@ -18,6 +18,10 @@ public sealed class SkiaSceneRenderer : IDisposable
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _layerPaint = new();
+    private readonly SKPaint _imagePaint = new();
+
+    /// <summary>Pictures, decoded once and kept by the identity of their bytes: every copy of a logo shares one.</summary>
+    private readonly Dictionary<byte[], SKImage?> _images = new(ReferenceEqualityComparer.Instance);
     private readonly Lock _lock = new();
 
     private (IReadOnlySet<int>? Owners, Net? Net) _highlightKey;
@@ -66,6 +70,7 @@ public sealed class SkiaSceneRenderer : IDisposable
 
             var color = layer.Color;
             DrawLayer(canvas, GetCache(_cache, layer), dimmed && !layer.IsDecoration ? color.WithAlpha(Math.Min(color.A, DimAlpha)) : color, minWorldWidth);
+            DrawImages(canvas, layer, dimmed && !layer.IsDecoration);
         }
 
         if (_highlight is not null)
@@ -100,6 +105,35 @@ public sealed class SkiaSceneRenderer : IDisposable
         if (view.SelectionBox is { } box)
         {
             DrawSelectionBox(canvas, view, box);
+        }
+    }
+
+    /// <summary>
+    /// A layer's pictures, over its strokes, in their own colours: a picture keeps what it shows, only fading with
+    /// the rest of the layer when the view is dimmed.
+    /// </summary>
+    private void DrawImages(SKCanvas canvas, LayerGeometry layer, bool dimmed)
+    {
+        if (layer.Images.Count == 0)
+        {
+            return;
+        }
+
+        _imagePaint.Color = new SKColor(0, 0, 0, dimmed ? DimAlpha : (byte)255);
+        var sampling = new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear);
+        foreach (var picture in layer.Images)
+        {
+            if (!_images.TryGetValue(picture.Encoded, out var image))
+            {
+                image = SKImage.FromEncodedData(picture.Encoded);
+                _images[picture.Encoded] = image;
+            }
+
+            if (image is not null)
+            {
+                var b = picture.Bounds;
+                canvas.DrawImage(image, new SKRect((float)b.MinX, (float)b.MinY, (float)b.MaxX, (float)b.MaxY), sampling, _imagePaint);
+            }
         }
     }
 
@@ -312,6 +346,13 @@ public sealed class SkiaSceneRenderer : IDisposable
             _stroke.Dispose();
             _fill.Dispose();
             _layerPaint.Dispose();
+            _imagePaint.Dispose();
+            foreach (var image in _images.Values)
+            {
+                image?.Dispose();
+            }
+
+            _images.Clear();
         }
     }
 

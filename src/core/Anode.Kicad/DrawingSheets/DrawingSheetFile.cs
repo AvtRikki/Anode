@@ -102,10 +102,67 @@ public sealed class WksPolygon : WksItem
     public IReadOnlyList<IReadOnlyList<(double X, double Y)>> Outlines { get; init; } = [];
 }
 
-/// <summary>An embedded picture. Read so the file is understood, not drawn yet.</summary>
+/// <summary>
+/// An embedded picture, centred on <see cref="WksItem.Start"/>. KiCad keeps it as an image file; a PNG is drawn,
+/// its size on the page following from its pixels and its resolution — pixels × 25.4 × scale / PPI millimetres.
+/// </summary>
 public sealed class WksBitmap : WksItem
 {
     public double Scale { get; init; } = 1;
+
+    /// <summary>The image file as stored; null when the item carried none that could be read.</summary>
+    public byte[]? Image { get; init; }
+
+    /// <summary>Width, height and resolution read from the image; null for anything but a PNG.</summary>
+    public PngInfo? Png => Image is { } bytes ? PngInfo.Read(bytes) : null;
+
+    /// <summary>Size on the page in millimetres; null when the image is not a PNG.</summary>
+    public (double Width, double Height)? SizeMm => Png is { } png
+        ? (png.Width * 25.4 * Scale / png.Ppi, png.Height * 25.4 * Scale / png.Ppi)
+        : null;
+}
+
+/// <summary>What a PNG says about itself in its header: pixels, and pixels per inch (KiCad's 300 when it does not say).</summary>
+public sealed record PngInfo(int Width, int Height, int Ppi)
+{
+    private static ReadOnlySpan<byte> Signature => [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+
+    public static PngInfo? Read(byte[] data)
+    {
+        if (data.Length < 33 || !data.AsSpan(0, 8).SequenceEqual(Signature))
+        {
+            return null;
+        }
+
+        int width = BigEndian(data, 16), height = BigEndian(data, 20), ppi = 300;
+        for (int at = 8; at + 12 <= data.Length;)
+        {
+            int length = BigEndian(data, at);
+            string type = System.Text.Encoding.ASCII.GetString(data, at + 4, 4);
+
+            // Pixels per metre, unit 1; KiCad reads it through wx as pixels per centimetre and rounds the inch figure.
+            if (type == "pHYs" && length >= 9 && at + 17 <= data.Length && data[at + 16] == 1)
+            {
+                int perMetre = BigEndian(data, at + 8);
+                if (perMetre > 0)
+                {
+                    ppi = (int)Math.Round(perMetre / 100.0 * 2.54, MidpointRounding.AwayFromZero);
+                }
+            }
+
+            if (type is "IDAT" or "IEND" || length < 0)
+            {
+                break;
+            }
+
+            at += 12 + length;
+        }
+
+        return width > 0 && height > 0 ? new PngInfo(width, height, Math.Max(1, ppi)) : null;
+    }
+
+    private static int BigEndian(byte[] data, int at) =>
+        (data[at] << 24) | (data[at + 1] << 16) | (data[at + 2] << 8) | data[at + 3];
 }
 
 /// <summary>
@@ -190,6 +247,7 @@ public sealed class DrawingSheetFile
                         Pages = Pages(child),
                         Start = Point(child.Find("pos")),
                         Scale = child.ChildDouble("scale") ?? 1,
+                        Image = ImageOf(child),
                         Repeat = Repeat(child),
                         IncrementX = child.ChildDouble("incrx") ?? 0,
                         IncrementY = child.ChildDouble("incry") ?? 0,
@@ -360,6 +418,40 @@ public sealed class DrawingSheetFile
     private static int Repeat(SList node) => Math.Clamp((int)(node.ChildDouble("repeat") ?? 1), 1, 100);
 
     private static IEnumerable<SAtom> Atoms(SList? list) => list?.OfType<SAtom>() ?? [];
+
+    /// <summary>
+    /// The image bytes of a bitmap: base64 in quoted lines under <c>(data …)</c>, as KiCad writes today, or the older
+    /// <c>(pngdata (data "89 50 4E …") …)</c> with each byte as two hex digits.
+    /// </summary>
+    private static byte[]? ImageOf(SList bitmap)
+    {
+        try
+        {
+            if (bitmap.Find("data") is { } data)
+            {
+                return Convert.FromBase64String(string.Concat(Atoms(data).Skip(1).Select(a => a.Value)));
+            }
+
+            if (bitmap.Find("pngdata") is { } legacy)
+            {
+                var bytes = new List<byte>();
+                foreach (var line in legacy.Lists().Where(l => l.Head == "data"))
+                {
+                    foreach (string pair in (line.Str(1) ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        bytes.Add(Convert.ToByte(pair, 16));
+                    }
+                }
+
+                return [.. bytes];
+            }
+        }
+        catch (FormatException)
+        {
+        }
+
+        return null;
+    }
 
     private static double Number(SList node, int index) =>
         node.AtomAt(index)?.TryGetDouble(out double value) == true ? value : 0;

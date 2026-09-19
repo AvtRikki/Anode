@@ -1,5 +1,6 @@
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.DrawingSheets;
 using Anode.Kicad.Editing;
 using Anode.Tests;
 using SkiaSharp;
@@ -117,6 +118,52 @@ public class DrawingSheetRenderTests
         {
             Directory.Delete(folder, recursive: true);
         }
+    }
+
+    [Fact]
+    public void A_picture_in_a_drawing_sheet_is_drawn_where_and_as_large_as_it_says()
+    {
+        string? path = TestData.AnySchematic();
+        Assert.SkipWhen(path is null, TestData.SkipReason);
+
+        // A 400 × 120 px picture at KiCad's default 300 PPI: 33.87 × 10.16 mm, centred 75 mm left of and 25 mm up
+        // from the bottom-right corner of the frame — the empty band at the top of the title block.
+        byte[] png = Logo(400, 120);
+        string text = DrawingSheetFile.DefaultText.TrimEnd()[..^1]
+            + $"(bitmap (name \"logo\") (pos 75 25) (scale 1) (data \"{Convert.ToBase64String(png)}\")))";
+        var template = DrawingSheetFile.Parse(text);
+
+        var sheet = Schematic.Load(path!);
+        var scene = SchematicSceneBuilder.Build(sheet, frame: new SheetFrameText(Path.GetFileName(path!)) { Template = template });
+        var frame = Assert.Single(scene.Layers, l => l.Name == LayerStyle.Sch.Frame);
+        var picture = Assert.Single(frame.Images);
+
+        Assert.Equal(png, picture.Encoded);
+        Assert.Equal(400 * 25.4 / 300, picture.Bounds.Width, 3);
+        Assert.Equal(120 * 25.4 / 300, picture.Bounds.Height, 3);
+
+        // Centred on its position: the frame's right edge is 10 mm in from the paper's, its bottom likewise.
+        var paper = scene.BoardOutline;
+        Assert.Equal(paper.MaxX - 10 - 75, (picture.Bounds.MinX + picture.Bounds.MaxX) / 2, 3);
+        Assert.Equal(paper.MaxY - 10 - 25, (picture.Bounds.MinY + picture.Bounds.MaxY) / 2, 3);
+
+        Render(scene, path!, "drawing-sheet-picture");
+    }
+
+    /// <summary>A picture that shows it is one: a coloured band with a word on it.</summary>
+    private static byte[] Logo(int width, int height)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(width, height));
+        var canvas = surface.Canvas;
+        using var paint = new SKPaint { Shader = SKShader.CreateLinearGradient(new SKPoint(0, 0), new SKPoint(width, 0),
+            [new SKColor(0x00, 0x88, 0xb0), new SKColor(0xd6, 0x00, 0x6c)], SKShaderTileMode.Clamp) };
+        canvas.DrawRect(0, 0, width, height, paint);
+        using var font = new SKFont(SKTypeface.Default, height * 0.6f);
+        using var ink = new SKPaint { Color = SKColors.White, IsAntialias = true };
+        canvas.DrawText("ANODE", width / 2f, height * 0.72f, SKTextAlign.Center, font, ink);
+        using var image = surface.Snapshot();
+        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+        return data.ToArray();
     }
 
     private static void Render(SchematicScene scene, string path, string name) =>

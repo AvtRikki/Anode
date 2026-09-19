@@ -46,9 +46,17 @@ public static class SchematicSceneBuilder
         layer.Lines.Clear();
         layer.Polygons.Clear();
         layer.Circles.Clear();
+        layer.Images.Clear();
 
         new Builder(scene).AddDrawingSheet(DrawingSheet.PaperOf(scene.Schematic.Root));
         scene.Commit();
+    }
+
+    /// <summary>A picture centred on a scene point, its size given in nanometres.</summary>
+    internal static ImagePrim Picture(System.Numerics.Vector2 centre, Vector2D sizeNm, byte[] image)
+    {
+        double w = sizeNm.X / Units.NmPerMm / 2, h = sizeNm.Y / Units.NmPerMm / 2;
+        return new ImagePrim(new RectD(centre.X - w, centre.Y - h, centre.X + w, centre.Y + h), image, OutlineLoops.NoOwner);
     }
 
     /// <summary>Draws items again after an edit, into a scene they were removed from.</summary>
@@ -94,7 +102,8 @@ public static class SchematicSceneBuilder
                 scene.Schematic.Paper,
                 scene.Frame,
                 (a, b, width) => layer.Lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), (float)(width / Mm), OutlineLoops.NoOwner)),
-                outline => layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)));
+                outline => layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)),
+                (centre, size, image) => layer.Images.Add(Picture(scene.ToScene(centre), size, image)));
         }
 
         public void Add(SchItem item)

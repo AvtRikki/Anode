@@ -16,10 +16,10 @@ public sealed class LayerGeometry(string name)
     public bool IsCopper { get; } = LayerStyle.IsCopper(name);
 
     /// <summary>
-    /// Drawn but never picked, selected or dimmed: the board body under the layers, and the paper a sheet is drawn
-    /// on. Both are the ground the drawing sits on rather than part of it — dimming them makes the whole view blink.
+    /// Drawn but never picked, selected or dimmed: the board body under the layers, the paper a sheet is drawn on, and
+    /// the page frame around a board. All are the ground the drawing sits on rather than part of it — dimming them
+    /// makes the whole view blink.
     /// </summary>
-    /// <summary>Background: never dimmed and never picked. The page frame is paper, not part of the board.</summary>
     public bool IsDecoration { get; } = name is LayerStyle.BoardBody or LayerStyle.Sch.Sheet or LayerStyle.PageFrame;
 
     public int DrawOrder { get; } = LayerStyle.DrawOrder(name);
@@ -30,7 +30,9 @@ public sealed class LayerGeometry(string name)
 
     public List<PolygonPrim> Polygons { get; } = [];
 
-    public int PrimitiveCount => Lines.Count + Circles.Count + Polygons.Count;
+    public List<ImagePrim> Images { get; } = [];
+
+    public int PrimitiveCount => Lines.Count + Circles.Count + Polygons.Count + Images.Count;
 
     public RectD Bounds { get; internal set; } = RectD.Empty;
 
@@ -150,7 +152,8 @@ public sealed class BoardScene : IRenderScene
             var copy = collect ? new LayerGeometry(layer.Name) { Color = layer.Color } : null;
             int count = layer.Lines.RemoveAll(p => Take(p.Owner, p, copy?.Lines))
                         + layer.Circles.RemoveAll(p => Take(p.Owner, p, copy?.Circles))
-                        + layer.Polygons.RemoveAll(p => Take(p.Owner, p, copy?.Polygons));
+                        + layer.Polygons.RemoveAll(p => Take(p.Owner, p, copy?.Polygons))
+                        + layer.Images.RemoveAll(p => Take(p.Owner, p, copy?.Images));
 
             if (count > 0)
             {
@@ -260,6 +263,11 @@ public sealed class BoardScene : IRenderScene
         foreach (var p in layer.Polygons)
         {
             r = r.Union(p.Bounds);
+        }
+
+        foreach (var image in layer.Images)
+        {
+            r = r.Union(image.Bounds);
         }
 
         return r;

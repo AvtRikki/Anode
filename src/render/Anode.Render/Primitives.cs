@@ -31,6 +31,13 @@ public readonly record struct ColorRgba(byte R, byte G, byte B, byte A = 255)
     public static ColorRgba Rgb(byte r, byte g, byte b) => new(r, g, b);
 }
 
+/// <summary>
+/// A picture: an encoded image file (PNG) stretched over <see cref="Bounds"/> in scene millimetres — a logo in a
+/// drawing sheet. Backends decode it once and keep it by the identity of <see cref="Encoded"/>, so every copy of one
+/// picture shares a single decoded image.
+/// </summary>
+public readonly record struct ImagePrim(RectD Bounds, byte[] Encoded, int Owner);
+
 /// <summary>Stroke with round caps: tracks, graphic lines, tessellated arcs.</summary>
 public readonly record struct LinePrim(Vector2 A, Vector2 B, float Width, int Owner);
 

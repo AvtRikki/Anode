@@ -159,6 +159,33 @@ internal static class GlShaders
         }
         """;
 
+    public const string ImageVertex = Common + """
+
+        in vec2 a_pos;
+        in vec2 a_uv;
+        out vec2 v_uv;
+
+        void main()
+        {
+            v_uv = a_uv;
+            gl_Position = toClip(xf(a_pos));
+        }
+        """;
+
+    /// <summary>A picture in its own colours; the colour uniform only carries how far it is faded.</summary>
+    public const string ImageFragment = """
+        uniform vec4 u_color;
+        uniform sampler2D u_tex;
+        in vec2 v_uv;
+        out vec4 fragColor;
+
+        void main()
+        {
+            vec4 c = texture(u_tex, v_uv);
+            fragColor = vec4(c.rgb, c.a * u_color.a);
+        }
+        """;
+
     public static GlProgram Build(GL gl, GlslDialect dialect, string vertex, string fragment, params (uint Location, string Name)[] attributes)
     {
         string header = dialect switch

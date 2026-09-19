@@ -74,14 +74,16 @@ public static partial class DrawingSheet
     /// <param name="paper">The paper, in nanometres.</param>
     /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
     /// <param name="fill">Receives every filled outline, in nanometres; outlines are dropped when null.</param>
-    /// <returns>How many items could not be drawn — pictures, for now.</returns>
+    /// <param name="picture">Receives every picture: its centre and size in nanometres, and the image file.</param>
+    /// <returns>How many items could not be drawn: pictures that are not PNGs, or that had nowhere to go.</returns>
     public static int Draw(
         Vector2L paper,
         SchTitleBlock block,
         string paperName,
         SheetFrameText frame,
         Action<Vector2D, Vector2D, double> segment,
-        Action<IReadOnlyList<Vector2D>>? fill = null)
+        Action<IReadOnlyList<Vector2D>>? fill = null,
+        Action<Vector2D, Vector2D, byte[]>? picture = null)
     {
         var sheet = frame.Template ?? DrawingSheetFile.Default;
         var setup = sheet.Setup;
@@ -147,6 +149,20 @@ public static partial class DrawingSheet
 
                 case WksPolygon polygon:
                     DrawPolygon(polygon, j => At(polygon.Start, polygon, j), Inside, segment, fill);
+                    break;
+
+                case WksBitmap { Image: { } image, SizeMm: var (width, height) } bitmap when picture is not null:
+                    for (int j = 0; j < bitmap.Repeat; j++)
+                    {
+                        var at = At(bitmap.Start, bitmap, j);
+                        if (j > 0 && !(Inside(at) && Inside(At(default, bitmap, j))))
+                        {
+                            continue;
+                        }
+
+                        picture(at * Mm, new Vector2D(width, height) * Mm, image);
+                    }
+
                     break;
 
                 default:

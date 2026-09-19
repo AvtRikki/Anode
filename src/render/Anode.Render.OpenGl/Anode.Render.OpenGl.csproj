@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <PackageReference Include="Silk.NET.OpenGL" Version="2.23.0" />
+    <!-- Decodes the pictures a drawing sheet carries; the application already ships it for Avalonia. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
 </Project>

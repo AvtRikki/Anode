@@ -28,9 +28,6 @@ public class NetHighlightTests
             .First(n => sheet.Junctions.Any(j => n.Items.OfType<SchWire>().Any(w => Touches(w, j.Position))));
         var wire = net.Items.OfType<SchWire>().First();
 
-        // The status bar reads through the plugin's own catalog, which a test has to register itself.
-        using var strings = Tr.Register(JsonTextCatalog.FromAssembly(typeof(SchematicDocument).Assembly));
-
         document.HighlightNet(wire);
 
         var lit = Assert.IsAssignableFrom<IReadOnlySet<int>>(document.LitNet);
