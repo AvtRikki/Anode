@@ -92,6 +92,7 @@
       "editSymbol": "Edit symbol",
       "openSheet": "Open sheet",
       "updateFromLibrary": "Update from library",
+      "changeSymbol": "Change to {0}",
       "editPins": "Edit pins"
     },
     "pin": {

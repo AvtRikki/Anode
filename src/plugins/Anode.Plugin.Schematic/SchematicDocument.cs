@@ -260,9 +260,47 @@ public sealed class SchematicDocument : DocumentBase
         SchSheet sheet when sheet.SheetFile is { Length: > 0 } file =>
             [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(file))],
         SymbolInstance symbol when symbol.LibId is { Length: > 0 } libId =>
-            [new InspectorAction(Tr.T("sch.action.updateFromLibrary"), () => UpdateFromLibrary(libId))],
+        [
+            new InspectorAction(Tr.T("sch.action.updateFromLibrary"), () => UpdateFromLibrary(libId)),
+
+            // Swapping needs something to swap to, and that is whatever the components panel has chosen.
+            .. _part is { } chosen && !string.Equals(chosen.LibId, libId, StringComparison.Ordinal)
+                ? new[]
+                {
+                    new InspectorAction(
+                        Tr.T("sch.action.changeSymbol", chosen.LibId),
+                        () => ChangeTo(symbol, chosen.LibId, chosen.Definition))
+                    {
+                        IsPrimary = true,
+                    },
+                }
+                : [],
+        ],
         _ => [],
     };
+
+    /// <summary>
+    /// Swaps the selected placement for the part chosen in the components panel. Two changes in one step — the new
+    /// definition copied into the sheet and the placement rewritten — so that one undo takes back both.
+    /// </summary>
+    private void ChangeTo(SymbolInstance symbol, string libId, LibSymbol definition)
+    {
+        string label = Tr.T("sch.action.changeSymbol", libId);
+        try
+        {
+            _editor.Run(new CompositeCommand(
+                label,
+                [
+                    new AddLibrarySymbolCommand(Sheet, libId, definition),
+                    new ModifyNodesCommand(label, [symbol], () => SchSymbols.Change(Sheet, symbol, libId, definition)),
+                ]));
+        }
+        catch (Exception ex) when (ex is KiCadFormatException or InvalidOperationException or NotSupportedException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+            _context?.Workbench.ShowBanner(new Banner(ex.Message, IsAlert: true));
+        }
+    }
 
     /// <summary>
     /// Takes the sheet's copy of a definition from the library again — what a designer does once the part has been
@@ -461,7 +499,9 @@ public sealed class SchematicDocument : DocumentBase
             };
         }
 
-        OnPropertiesChanged(nameof(ActiveToolId), nameof(StatusFields));
+        // The inspector too: what the footer offers a selected part depends on which part the panel has chosen, and
+        // choosing one is this. Without it the swap would not be offered until the symbol was selected a second time.
+        OnPropertiesChanged(nameof(ActiveToolId), nameof(StatusFields), nameof(Selection));
     }
 
     public override Task<bool> SaveAsync(string? path = null)

@@ -143,6 +143,61 @@ public static class SchSymbols
     }
 
     /// <summary>
+    /// Swaps a placement for another part. What belongs to the placement stays — where it stands, which way it
+    /// faces, its uuid, its instance block and its designator — and what belongs to the part comes from the new
+    /// definition: its value, datasheet, description and its pins.
+    ///
+    /// The footprint is kept when the placement already carries one, because a board may be laid out around it.
+    /// A section number the new part does not have falls back to the first.
+    /// </summary>
+    public static void Change(Schematic sheet, SymbolInstance symbol, string libId, LibSymbol definition)
+    {
+        Ensure(sheet, libId, definition);
+
+        (symbol.Node.Find("lib_id")?.AtomAt(1)
+            ?? throw new KiCadFormatException("A placed symbol has no lib_id.")).SetString(libId);
+
+        foreach (string field in Ordered)
+        {
+            // The designator is the designer's, and a footprint that is already chosen outlives the symbol.
+            if (field is "Reference" || (field is "Footprint" && symbol.Field("Footprint") is { Length: > 0 }))
+            {
+                continue;
+            }
+
+            if (Property(symbol.Node, field)?.AtomAt(2) is { } value)
+            {
+                value.SetString(Property(definition.Node, field)?.Str(2) ?? string.Empty);
+            }
+        }
+
+        // The old part's pins go with it; KiCad writes every pin of the new part, whichever section is placed.
+        foreach (var pin in symbol.Node.Lists().Where(l => l.Head == "pin").ToList())
+        {
+            symbol.Node.Remove(pin);
+        }
+
+        int at = symbol.Node.Find("instances") is { } instances ? symbol.Node.IndexOf(instances) : symbol.Node.Count;
+        foreach (var pin in definition.Pins)
+        {
+            symbol.Node.Insert(
+                at++,
+                SchNodes.Adopt(SDocument.Parse($"(pin {SEscape.Quote(pin.Number)} (uuid \"{Guid.NewGuid()}\"))").Root));
+        }
+
+        if (symbol.Unit > definition.UnitCount)
+        {
+            SchWrites.SetUnit(symbol, 1);
+        }
+
+        // The symbol answers its fields from the list it read once, and the properties have just changed under it.
+        symbol.AfterRestore();
+    }
+
+    private static SList? Property(SList owner, string name) => owner.Lists()
+        .FirstOrDefault(l => l.Head == "property" && string.Equals(l.Str(1), name, StringComparison.Ordinal));
+
+    /// <summary>
     /// Everything a change to one definition touches: the definition itself, then every placement drawing from it.
     /// The definition has to be in the list or undo cannot put it back — a command restores snapshots of the nodes
     /// it was handed and of nothing else — and the placements have to be there so the sheet redraws them.

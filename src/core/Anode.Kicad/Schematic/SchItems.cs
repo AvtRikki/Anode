@@ -295,7 +295,20 @@ public sealed class SymbolInstance : SchItem
         : base(node)
     {
         _schematic = schematic;
-        foreach (var property in node.Lists().Where(l => l.Head == "property"))
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Reads the fields out of the node again. <see cref="Field"/> answers from this list rather than the tree, so a
+    /// change that adds or drops a property — swapping the part for another one, and the undo that takes it back —
+    /// would otherwise leave the symbol reporting the designator and value it used to carry.
+    /// </summary>
+    public override void AfterRestore() => Rebuild();
+
+    private void Rebuild()
+    {
+        _fields.Clear();
+        foreach (var property in Node.Lists().Where(l => l.Head == "property"))
         {
             _fields.Add(new SchField(property));
         }
@@ -423,7 +436,22 @@ public sealed class SchSheet : SchItem
     internal SchSheet(SList node)
         : base(node)
     {
-        foreach (var child in node.Lists())
+        Rebuild();
+    }
+
+    /// <summary>
+    /// Reads the fields and pins out of the node again. The name and the file are answered from that list rather
+    /// than the tree, so a change that adds or drops one — a pin following a hierarchical label, and the undo that
+    /// takes it back — would otherwise leave the sheet reporting what it used to hold.
+    /// </summary>
+    public override void AfterRestore() => Rebuild();
+
+    private void Rebuild()
+    {
+        _fields.Clear();
+        _pins.Clear();
+
+        foreach (var child in Node.Lists())
         {
             if (child.Head == "property")
             {

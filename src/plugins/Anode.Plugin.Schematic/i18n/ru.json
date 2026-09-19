@@ -92,6 +92,7 @@
       "editSymbol": "Править символ",
       "openSheet": "Открыть лист",
       "updateFromLibrary": "Обновить из библиотеки",
+      "changeSymbol": "Заменить на {0}",
       "editPins": "Править выводы"
     },
     "pin": {

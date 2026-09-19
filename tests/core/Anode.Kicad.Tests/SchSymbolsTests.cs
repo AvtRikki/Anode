@@ -411,4 +411,88 @@ public class SchSymbolsTests
         Assert.Same(sheet.LibrarySymbols["Device:R"], affected[0]);
         Assert.Equal(["R1", "R2"], affected.Skip(1).Cast<SymbolInstance>().Select(s => s.Reference));
     }
+
+    [Fact]
+    public void A_placement_can_be_swapped_for_another_part()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+        var symbol = Place(sheet, "R1");
+        sheet.Attach(symbol, int.MaxValue);
+
+        SchSymbols.Change(sheet, symbol, "Logic:G", Gate());
+
+        Assert.Equal("Logic:G", symbol.LibId);
+        Assert.True(sheet.LibrarySymbols.ContainsKey("Logic:G"));
+
+        // The designator belongs to the designer and stays; the value describes the part and follows it.
+        Assert.Equal("R1", symbol.Reference);
+        Assert.Equal("G", symbol.Value);
+
+        // Every pin of the part that is there now, and none of the part that was.
+        string text = Written(sheet);
+        Assert.Contains("(pin \"14\"", text, StringComparison.Ordinal);
+        Assert.Equal(3, Schematic.Parse(text).Symbols.Single().Node.Lists().Count(l => l.Head == "pin"));
+    }
+
+    [Fact]
+    public void A_footprint_that_is_already_chosen_survives_the_swap()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+        var symbol = Place(sheet, "R1");
+        sheet.Attach(symbol, int.MaxValue);
+        SchWrites.SetField(symbol, "Footprint", "Resistor_SMD:R_0402");
+
+        SchSymbols.Change(sheet, symbol, "Logic:G", Gate());
+
+        // A board may already be laid out around it, so the swap leaves it alone.
+        Assert.Equal("Resistor_SMD:R_0402", symbol.Footprint);
+    }
+
+    [Fact]
+    public void A_section_the_new_part_does_not_have_falls_back_to_the_first()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Logic:G", Gate());
+        var symbol = SchSymbols.Place(
+            sheet, "Logic:G", Gate(), At, "U1", "project", SchSymbols.PathOf(sheet), unit: 2);
+        sheet.Attach(symbol, int.MaxValue);
+
+        SchSymbols.Change(sheet, symbol, "Device:R", Definition());
+
+        Assert.Equal(1, symbol.Unit);
+    }
+
+    [Fact]
+    public void Swapping_a_part_and_undoing_it_gives_the_file_back()
+    {
+        var sheet = Schematic.Parse(Sheet);
+        SchSymbols.Ensure(sheet, "Device:R", Definition());
+
+        // Both definitions are in the sheet before the swap. One that also copies a definition in is two changes,
+        // and composing them is the caller's business: a command restores only the nodes it was handed.
+        SchSymbols.Ensure(sheet, "Logic:G", Gate());
+        var symbol = Place(sheet, "R1");
+        sheet.Attach(symbol, int.MaxValue);
+        byte[] original = sheet.Document.ToBytes();
+
+        var history = new UndoStack();
+        history.Execute(new ModifyNodesCommand(
+            "Change",
+            [symbol],
+            () => SchSymbols.Change(sheet, symbol, "Logic:G", Gate())));
+
+        Assert.Equal("G", symbol.Value);
+        Assert.NotEqual(original, sheet.Document.ToBytes());
+
+        history.Undo();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+
+        // The symbol gained a pin, so its node changed shape and the fields it answers from were rebuilt wholesale.
+        // Without AfterRestore it would still be reporting the part it used to be.
+        Assert.Equal("R", symbol.Value);
+        Assert.Equal("R1", symbol.Reference);
+    }
 }

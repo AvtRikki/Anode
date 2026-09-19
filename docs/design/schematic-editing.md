@@ -1,6 +1,6 @@
 # Schematic editing
 
-Status, 2026-09-18: **stages 0–2 done, stage 3 all but two items, parts of stages 4 and 5.** Written 2026-09-16.
+Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026-09-16.
 
 - **Stage 0** — done: one command stack over tree nodes, `SchEdits`, `SchematicEditor`, incremental scene, undo and
   redo in the header.
@@ -9,11 +9,12 @@ Status, 2026-09-18: **stages 0–2 done, stage 3 all but two items, parts of sta
   stroke is still not editable.
 - **Stage 2** — done: wire and bus with junctions and splitting, labels of three kinds, no-connect, junction, bus
   entry, text, line, rectangle, circle. No arc tool, and runs are orthogonal rather than 45°.
-- **Stage 3** — the reading half is done: `.kicad_sym`, both library tables, the index with search and a cache, the
-  components panel with previews, placing a part that carries its definition with it, and choosing which section of
-  a multi-section part is placed. Still missing: changing a symbol, and "update from library". The alternate body
-  style is left out on purpose: `body_style` is 1 in all 105 placements across the demo designs and no De Morgan
-  variant appears anywhere, so there is nothing to check an implementation against.
+- **Stage 3** — done: `.kicad_sym`, both library tables, the index with search and a cache, the components panel
+  with previews, placing a part that carries its definition with it, choosing which section of a multi-section part
+  is placed, taking a definition from its library again, and swapping a placement for another part. The alternate
+  body style is left out on purpose: `body_style` is 1 in all 105 placements across the demo designs and no De
+  Morgan variant appears anywhere, so there is nothing to check an implementation against. The two inspector
+  actions are thin wrappers over tested core writes; the buttons themselves have no test of their own.
 - **Stage 4** — started: annotation, which leaves a part that already carries a number alone, and the
   `(instances …)` block written on placement. Sheets and their pins, re-annotation that understands one file sitting
   in the hierarchy twice, and field editing across the sheet are not done.
