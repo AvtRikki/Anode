@@ -26,6 +26,9 @@ public static class LayerStyle
     public static class Sch
     {
         public const string Sheet = "#SchSheet";
+
+        /// <summary>The frame around the drawing and its title block — KiCad's drawing sheet.</summary>
+        public const string Frame = "#SchFrame";
         public const string Wire = "#SchWire";
         public const string Bus = "#SchBus";
         public const string Symbol = "#SchSymbol";
@@ -78,6 +81,7 @@ public static class LayerStyle
 
         // A schematic is an impression too: dark strokes on the sheet, cyan for what carries a name.
         [Sch.Sheet] = ColorRgba.Rgb(0xf8, 0xf4, 0xf4),
+        [Sch.Frame] = new(0x20, 0x1e, 0x1d, 170),
         [Sch.Wire] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
         [Sch.Bus] = ColorRgba.Rgb(0x00, 0x88, 0xb0),
         [Sch.Symbol] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
@@ -126,6 +130,9 @@ public static class LayerStyle
         ["B.Fab"] = ColorRgba.Rgb(88, 93, 132),
         [PlatedHoles] = ColorRgba.Rgb(227, 183, 46),
         [NonPlatedHoles] = ColorRgba.Rgb(26, 196, 210),
+
+        // KiCad's own drawing-sheet colour.
+        [Sch.Frame] = ColorRgba.Rgb(132, 0, 0),
     };
 
     private static readonly string[] BackOrder = ["B.Adhes", "B.Paste", "B.SilkS", "B.Mask", "B.Fab", "B.CrtYd"];
@@ -189,6 +196,7 @@ public static class LayerStyle
         {
             BoardBody or Sch.Sheet => -1_000,
             Sch.SymbolFill => -500,
+            Sch.Frame => 5,
             Sch.Wire => 10,
             Sch.Bus => 11,
             Sch.Symbol => 20,

@@ -30,6 +30,10 @@ public class SchHierarchyTests
         Assert.Equal(2, amplifiers.Select(a => a.Path).Distinct().Count());
         Assert.All(amplifiers, a => Assert.StartsWith(instances[0].Path + "/", a.Path, StringComparison.Ordinal));
         Assert.Equal(["ampli_ht_horizontal", "ampli_ht_vertical"], amplifiers.Select(a => a.Name).Order());
+
+        // The path as the frame prints it, the way KiCad writes ${SHEETPATH}.
+        Assert.Equal("/", instances[0].Trail);
+        Assert.Equal(["/ampli_ht_horizontal/", "/ampli_ht_vertical/"], amplifiers.Select(a => a.Trail).Order());
     }
 
     [Fact]

@@ -30,8 +30,9 @@ Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
 
 With nothing selected the inspector describes the document itself: a sheet its paper, title block, contents, nets
 and checks; a board its size, layers, placement and routing. The sheet's title, revision, date and company can be
-written there. Not yet: the title block's comments, the board's title block, and drawing the title block in the
-sheet's frame.
+written there, and the frame around the drawing is KiCad's default drawing sheet — double border, 50 mm scale,
+title block — redrawn when the title block changes. Not yet: editing the title block's comments (they are drawn),
+the board's title block, and drawing sheets other than the default (.kicad_wks).
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

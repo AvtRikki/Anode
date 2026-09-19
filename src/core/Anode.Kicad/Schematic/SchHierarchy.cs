@@ -7,7 +7,8 @@ namespace Anode.Kicad;
 /// </summary>
 /// <param name="Name">The sheet's name as the sheet symbol above it gives it; the root is named after its file.</param>
 /// <param name="Depth">Zero for the root.</param>
-public sealed record SheetInstance(string File, string Path, string Name, int Depth);
+/// <param name="Trail">The names on the way down, as KiCad prints a sheet's path: "/" for the root, "/amp/" below it.</param>
+public sealed record SheetInstance(string File, string Path, string Name, int Depth, string Trail = "/");
 
 /// <summary>The appearances of every sheet in a design, walked down from its root.</summary>
 public static class SchHierarchy
@@ -32,14 +33,14 @@ public static class SchHierarchy
         string root = Path.GetFullPath(rootFile);
         if (Load(root) is { Uuid: { Length: > 0 } uuid } sheet)
         {
-            Visit(root, sheet, "/" + uuid, Path.GetFileNameWithoutExtension(root), 0);
+            Visit(root, sheet, "/" + uuid, Path.GetFileNameWithoutExtension(root), 0, "/");
         }
 
         return found;
 
-        void Visit(string file, Schematic sheet, string path, string name, int depth)
+        void Visit(string file, Schematic sheet, string path, string name, int depth, string trail)
         {
-            found.Add(new SheetInstance(file, path, name, depth));
+            found.Add(new SheetInstance(file, path, name, depth, trail));
             if (depth >= MaxDepth)
             {
                 return;
@@ -55,7 +56,8 @@ public static class SchHierarchy
                 string target = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, relative));
                 if (Load(target) is { } next)
                 {
-                    Visit(target, next, path + "/" + id, child.SheetName ?? relative, depth + 1);
+                    string childName = child.SheetName ?? relative;
+                    Visit(target, next, path + "/" + id, childName, depth + 1, trail + childName + "/");
                 }
             }
         }

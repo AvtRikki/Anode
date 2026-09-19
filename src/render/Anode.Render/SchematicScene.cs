@@ -31,6 +31,9 @@ public sealed class SchematicScene : IRenderScene
     /// </summary>
     public string? SheetPath { get; set; }
 
+    /// <summary>What the frame prints besides the title block; see <see cref="SheetFrameText"/>.</summary>
+    public SheetFrameText Frame { get; set; } = new();
+
     /// <summary>Sheet point (nm) that maps to scene (0, 0).</summary>
     public Vector2L OriginNm { get; }
 

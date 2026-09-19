@@ -59,34 +59,60 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
         () =>
         {
             var schematic = Anode.Kicad.Schematic.Load(path);
-            var appearances = Appearances(path, schematic);
-            var scene = SchematicSceneBuilder.Build(schematic, appearances.FirstOrDefault()?.Path);
+            var design = Design(path, schematic);
+            string full = Path.GetFullPath(path);
+            var appearances = design.Where(i => string.Equals(i.File, full, StringComparison.Ordinal)).ToList();
+            string? shown = appearances.FirstOrDefault()?.Path;
+            var scene = SchematicSceneBuilder.Build(schematic, shown, FrameFor(path, design, shown));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 SceneTriangulator.Triangulate(scene);
             }
 
             log.Info(Tr.T("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
-            return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances);
+            return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design);
         },
         cancellationToken);
 
     /// <summary>
-    /// Every place this sheet appears in its project, found by walking down from the project's root sheet — the only
-    /// way to learn a sheet's paths, since a file does not know who places it. A sheet with no project around it is
-    /// its own root. One the root never reaches has no appearance at all, and its own fields are all there is to show.
+    /// Every sheet place in the project, walked down from its root sheet — the only way to learn a sheet's paths,
+    /// since a file does not know who places it. A sheet with no project around it is its own root. One the root
+    /// never reaches has no place at all, and its own fields are all there is to show.
     /// </summary>
-    private static IReadOnlyList<SheetInstance> Appearances(string path, Anode.Kicad.Schematic schematic)
+    private static IReadOnlyList<SheetInstance> Design(string path, Anode.Kicad.Schematic schematic)
     {
         string full = Path.GetFullPath(path);
         if (ProjectRoot(full) is { } root)
         {
-            return [.. SchHierarchy.Walk(root).Where(i => string.Equals(i.File, full, StringComparison.Ordinal))];
+            return SchHierarchy.Walk(root);
         }
 
         return schematic.Uuid is { Length: > 0 } uuid
             ? [new SheetInstance(full, "/" + uuid, Path.GetFileNameWithoutExtension(full), 0)]
             : [];
+    }
+
+    /// <summary>
+    /// What the frame prints besides the title block: the file, the place in the design as KiCad writes it, and the
+    /// page — this place's position in the walk from the root, of all the places there are.
+    /// </summary>
+    internal static SheetFrameText FrameFor(string? path, IReadOnlyList<SheetInstance> design, string? instance)
+    {
+        int index = -1;
+        for (int i = 0; i < design.Count; i++)
+        {
+            if (design[i].Path == instance)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        return new SheetFrameText(
+            Path.GetFileName(path ?? string.Empty),
+            index >= 0 ? design[index].Trail : "/",
+            index >= 0 ? index + 1 : 1,
+            Math.Max(1, design.Count));
     }
 
     /// <summary>The root sheet of the project around <paramref name="path"/>: named after its .kicad_pro, as KiCad names it.</summary>
@@ -107,6 +133,9 @@ public sealed class SchematicDocument : DocumentBase
     private readonly SchematicEditor _editor;
     private readonly SymbolLibraryList _remembered;
     private readonly IReadOnlyList<SheetInstance> _appearances;
+
+    /// <summary>Every sheet place in the project, root first; the frame numbers its pages from it.</summary>
+    private readonly IReadOnlyList<SheetInstance> _design;
 
     /// <summary>The project's other sheets, read for the design-wide checks and kept while their files are unchanged.</summary>
     private readonly Dictionary<string, (DateTime Written, Anode.Kicad.Schematic? Sheet)> _neighbours = new(StringComparer.Ordinal);
@@ -138,18 +167,21 @@ public sealed class SchematicDocument : DocumentBase
         SchematicScene scene,
         string path,
         SymbolLibraryList remembered,
-        IReadOnlyList<SheetInstance>? appearances = null)
+        IReadOnlyList<SheetInstance>? appearances = null,
+        IReadOnlyList<SheetInstance>? design = null)
     {
         Sheet = schematic;
         Scene = scene;
         FilePath = path;
         _remembered = remembered;
         _appearances = appearances ?? [];
+        _design = design ?? _appearances;
         _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
         _editor.History.Changed += ForgetDerived;
         _editor.History.Changed += RefreshNetHighlight;
+        _editor.History.Changed += RedrawFrame;
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -571,6 +603,8 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         Scene.SheetPath = instance;
+        Scene.Frame = SchematicDocumentType.FrameFor(FilePath, _design, instance);
+        SchematicSceneBuilder.RedrawFrame(Scene);
         _overview = null;
         _editor.Redraw([.. Sheet.Symbols]);
         _canvas?.Redraw();
@@ -968,6 +1002,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor.History.Changed -= OnHistoryChanged;
         _editor.History.Changed -= ForgetDerived;
         _editor.History.Changed -= RefreshNetHighlight;
+        _editor.History.Changed -= RedrawFrame;
         Tr.Changed -= OnLanguageChanged;
         base.Dispose();
     }
@@ -1076,6 +1111,16 @@ public sealed class SchematicDocument : DocumentBase
     public void Redraw() => _canvas?.Redraw();
 
     private void OnSelectionChanged() => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
+
+    /// <summary>
+    /// The frame prints the title block, which any edit may have changed and which no item on the sheet owns; it is
+    /// one layer of a few hundred strokes, so it is simply drawn again.
+    /// </summary>
+    private void RedrawFrame()
+    {
+        SchematicSceneBuilder.RedrawFrame(Scene);
+        _canvas?.Redraw();
+    }
 
     /// <summary>What was worked out from the sheet as it was: its nets, and the design-wide designator check.</summary>
     private void ForgetDerived()
