@@ -88,8 +88,13 @@ public static class SchematicSceneBuilder
         public void AddDrawingSheet(Vector2L paper)
         {
             var layer = scene.Layer(LayerStyle.Sch.Frame);
-            DrawingSheet.Draw(paper, scene.Schematic.TitleBlock, scene.Schematic.Paper, scene.Frame, (a, b, width) =>
-                layer.Lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), (float)(width / Mm), OutlineLoops.NoOwner)));
+            DrawingSheet.Draw(
+                paper,
+                scene.Schematic.TitleBlock,
+                scene.Schematic.Paper,
+                scene.Frame,
+                (a, b, width) => layer.Lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), (float)(width / Mm), OutlineLoops.NoOwner)),
+                outline => layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)));
         }
 
         public void Add(SchItem item)

@@ -142,6 +142,7 @@
       "warnings": "Warnings"
     },
     "issue": {
+      "drawingSheet": { "title": "Drawing sheet not found", "detail": "{0} could not be read; the default frame is drawn instead." },
       "duplicate": {
         "title": "Designator used twice",
         "detail": "{0} names {1} parts: {2}",

@@ -1,6 +1,8 @@
 using System.Globalization;
 using Anode.Geometry;
+using System.Text.RegularExpressions;
 using Anode.Kicad;
+using Anode.Kicad.DrawingSheets;
 using Anode.Render.Fonts;
 using Anode.Sexpr;
 
@@ -11,7 +13,7 @@ namespace Anode.Render;
 /// strokes on the page. Written once for both kinds of file: a sheet and a board keep their paper and title block
 /// the same way, and each scene only says where the strokes go.
 /// </summary>
-public static class DrawingSheet
+public static partial class DrawingSheet
 {
     /// <summary>The drawing sheet's line and text pen: KiCad's 0.15 mm.</summary>
     public const long LineWidth = 150_000;
@@ -55,14 +57,6 @@ public static class DrawingSheet
             : new Vector2L(Units.MmToNm(width), Units.MmToNm(height));
     }
 
-    private enum Corner
-    {
-        RightBottom,
-        LeftTop,
-        LeftBottom,
-        RightTop,
-    }
-
     /// <summary>
     /// KiCad's default drawing sheet, item for item from its built-in description: a double border 2 mm apart,
     /// a tick every 50 mm numbered along the top and bottom and lettered down the sides, and the title block in
@@ -71,112 +65,272 @@ public static class DrawingSheet
     /// </summary>
     /// <param name="paper">The paper, in nanometres.</param>
     /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
-    public static void Draw(Vector2L paper, SchTitleBlock block, string paperName, SheetFrameText frame, Action<Vector2D, Vector2D, double> segment)
+    /// <summary>
+    /// Draws a drawing sheet — the frame's template, or KiCad's default — the way KiCad does: every item from its
+    /// corner of the area inside the margins, each repeat moved by its increment and dropped past the first where it
+    /// would leave that area, repeated labels counting up from their last character, and <c>${NAME}</c> filled in from
+    /// the title block, the page and the project, or left as written when nothing answers to it.
+    /// </summary>
+    /// <param name="paper">The paper, in nanometres.</param>
+    /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
+    /// <param name="fill">Receives every filled outline, in nanometres; outlines are dropped when null.</param>
+    /// <returns>How many items could not be drawn — pictures, for now.</returns>
+    public static int Draw(
+        Vector2L paper,
+        SchTitleBlock block,
+        string paperName,
+        SheetFrameText frame,
+        Action<Vector2D, Vector2D, double> segment,
+        Action<IReadOnlyList<Vector2D>>? fill = null)
     {
-        const double margin = 10;
-        double right = (paper.X / Mm) - margin, bottom = (paper.Y / Mm) - margin;
+        var sheet = frame.Template ?? DrawingSheetFile.Default;
+        var setup = sheet.Setup;
+        double left = setup.LeftMargin, top = setup.TopMargin;
+        double right = (paper.X / Mm) - setup.RightMargin, bottom = (paper.Y / Mm) - setup.BottomMargin;
+        bool firstPage = frame.Page <= 1;
+        int skipped = 0;
 
-        Vector2D At(double x, double y, Corner corner = Corner.RightBottom) => corner switch
+        Vector2D At(WksPoint p, WksItem item, int copy)
         {
-            Corner.LeftTop => new Vector2D(margin + x, margin + y) * Mm,
-            Corner.LeftBottom => new Vector2D(margin + x, bottom - y) * Mm,
-            Corner.RightTop => new Vector2D(right - x, margin + y) * Mm,
-            _ => new Vector2D(right - x, bottom - y) * Mm,
-        };
-
-        bool Inside(Vector2D p) =>
-            p.X >= (margin * Mm) - 1 && p.X <= (right * Mm) + 1 && p.Y >= (margin * Mm) - 1 && p.Y <= (bottom * Mm) + 1;
-
-        void Segment(Vector2D a, Vector2D b) => segment(a, b, LineWidth);
-
-        void Box(Vector2D a, Vector2D b)
-        {
-            Segment(a, new Vector2D(b.X, a.Y));
-            Segment(new Vector2D(b.X, a.Y), b);
-            Segment(b, new Vector2D(a.X, b.Y));
-            Segment(new Vector2D(a.X, b.Y), a);
+            double x = p.X + (item.IncrementX * copy), y = p.Y + (item.IncrementY * copy);
+            return p.Corner switch
+            {
+                WksCorner.LeftTop => new Vector2D(left + x, top + y),
+                WksCorner.LeftBottom => new Vector2D(left + x, bottom - y),
+                WksCorner.RightTop => new Vector2D(right - x, top + y),
+                _ => new Vector2D(right - x, bottom - y),
+            };
         }
 
-        // The border, twice, and the scale along its edges.
-        Box(At(0, 0, Corner.LeftTop), At(0, 0));
-        Box(At(2, 2, Corner.LeftTop), At(2, 2));
+        bool Inside(Vector2D mm) => mm.X >= left && mm.X <= right && mm.Y >= top && mm.Y <= bottom;
 
-        foreach (var corner in new[] { Corner.LeftTop, Corner.LeftBottom })
+        foreach (var item in sheet.Items)
         {
-            for (int i = 0; i < 30; i++)
+            if ((item.Pages == WksPages.FirstOnly && !firstPage) || (item.Pages == WksPages.NotOnFirst && firstPage))
             {
-                var (a, b) = (At(50 + (50 * i), 2, corner), At(50 + (50 * i), 0, corner));
-                if (Inside(a) && Inside(b))
+                continue;
+            }
+
+            switch (item)
+            {
+                case WksLine line:
                 {
-                    Segment(a, b);
-                }
-            }
+                    double pen = (line.LineWidth != 0 ? line.LineWidth : setup.LineWidth) * Mm;
+                    for (int j = 0; j < line.Repeat; j++)
+                    {
+                        var (a, b) = (At(line.Start, line, j), At(line.End, line, j));
+                        if (j > 0 && !(Inside(a) && Inside(b)))
+                        {
+                            continue;
+                        }
 
-            for (int i = 0; i < 100 && Inside(At(25 + (50 * i), 1, corner)); i++)
-            {
-                FrameText(segment, (i + 1).ToString(CultureInfo.InvariantCulture), At(25 + (50 * i), 1, corner), 1.3, TextHAlign.Left);
+                        if (line.IsRectangle)
+                        {
+                            segment(a * Mm, new Vector2D(b.X, a.Y) * Mm, pen);
+                            segment(new Vector2D(b.X, a.Y) * Mm, b * Mm, pen);
+                            segment(b * Mm, new Vector2D(a.X, b.Y) * Mm, pen);
+                            segment(new Vector2D(a.X, b.Y) * Mm, a * Mm, pen);
+                        }
+                        else
+                        {
+                            segment(a * Mm, b * Mm, pen);
+                        }
+                    }
+
+                    break;
+                }
+
+                case WksText text:
+                    DrawText(text, setup, Expand(text.Text, block, paperName, frame), j => At(text.Start, text, j),
+                        j => At(default, text, j), Inside, segment);
+                    break;
+
+                case WksPolygon polygon:
+                    DrawPolygon(polygon, j => At(polygon.Start, polygon, j), Inside, segment, fill);
+                    break;
+
+                default:
+                    skipped++;
+                    break;
             }
         }
 
-        foreach (var corner in new[] { Corner.LeftTop, Corner.RightTop })
+        return skipped;
+    }
+
+    private static void DrawText(
+        WksText text,
+        WksSetup setup,
+        string full,
+        Func<int, Vector2D> start,
+        Func<int, Vector2D> end,
+        Func<Vector2D, bool> inside,
+        Action<Vector2D, Vector2D, double> segment)
+    {
+        full = Unescape(full);
+        bool multiline = full.Contains('\n');
+
+        double width = text.Width != 0 ? text.Width : setup.TextWidth;
+        double height = text.Height != 0 ? text.Height : setup.TextHeight;
+        var align = text.HorizontalAlign switch { "center" => TextHAlign.Center, "right" => TextHAlign.Right, _ => TextHAlign.Left };
+        var valign = text.VerticalAlign switch { "top" => TextVAlign.Top, "bottom" => TextVAlign.Bottom, _ => TextVAlign.Center };
+
+        // Squeezed, never stretched, to the box a template allows it.
+        if (text.MaxLength > 0 || text.MaxHeight > 0)
         {
-            for (int i = 0; i < 30; i++)
+            var probe = new StrokeTextStyle(width * Mm, height * Mm, 0, align, valign, 0, false, text.Italic, 1.0);
+            string[] lines = full.Split('\n');
+            double measured = lines.Max(l => StrokeTextLayout.MeasureLine(StrokeFont.Default, l, probe)) / Mm;
+            double tall = height * (1 + ((lines.Length - 1) * 1.62));
+            if (text.MaxLength > 0 && measured > text.MaxLength)
             {
-                var (a, b) = (At(0, 50 + (50 * i), corner), At(2, 50 + (50 * i), corner));
-                if (Inside(a) && Inside(b))
-                {
-                    Segment(a, b);
-                }
+                width *= text.MaxLength / measured;
             }
 
-            for (int i = 0; i < 26 && Inside(At(1, 25 + (50 * i), corner)); i++)
+            if (text.MaxHeight > 0 && tall > text.MaxHeight)
             {
-                FrameText(segment, ((char)('A' + i)).ToString(), At(1, 25 + (50 * i), corner), 1.3, TextHAlign.Center);
+                height *= text.MaxHeight / tall;
             }
         }
 
-        // The title block.
-        Box(At(110, 34), At(2, 2));
-        Segment(At(110, 5.5), At(2, 5.5));
-        Segment(At(110, 8.5), At(2, 8.5));
-        Segment(At(110, 12.5), At(2, 12.5));
-        Segment(At(110, 18.5), At(2, 18.5));
-        Segment(At(90, 8.5), At(90, 5.5));
-        Segment(At(26, 8.5), At(26, 2));
+        double pen = text.Bold ? Math.Min(width, height) / 5 : text.LineWidth != 0 ? text.LineWidth : setup.TextLineWidth;
+        var style = new StrokeTextStyle(width * Mm, height * Mm, pen * Mm, align, valign, text.Rotation, false, text.Italic, 1.0);
 
-        FrameText(segment, "Date: " + block.Date, At(87, 6.9));
-        FrameText(segment, frame.Application, At(109, 4.1));
-        FrameText(segment, "Rev: " + block.Revision, At(24, 6.9), bold: true);
-        FrameText(segment, "Size: " + paperName, At(109, 6.9));
-        FrameText(segment, $"Id: {frame.Page}/{frame.PageCount}", At(24, 4.1));
-        FrameText(segment, "Title: " + block.Title, At(109, 10.7), size: 2, bold: true, italic: true);
-        FrameText(segment, "File: " + frame.FileName, At(109, 14.3));
-        FrameText(segment, "Sheet: " + frame.SheetPath, At(109, 17));
-        FrameText(segment, block.Company ?? string.Empty, At(109, 20), bold: true);
-        for (int i = 1; i <= 4; i++)
+        for (int j = 0; j < text.Repeat; j++)
         {
-            FrameText(segment, block.Comment(i), At(109, 20 + (3 * i)));
+            if (j > 0 && !(inside(start(j)) && inside(end(j))))
+            {
+                continue;
+            }
+
+            // Each copy after the first counts on from the label as written, as KiCad's do.
+            string label = j > 0 && text.Repeat > 1 && !multiline ? Increment(text.Text, j * text.IncrementLabel) : full;
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            StrokeTextLayout.Layout(StrokeFont.Default, label, start(j) * Mm, style, (a, b) => segment(a, b, pen * Mm));
         }
     }
 
-    /// <summary>Drawing-sheet text: KiCad's 1.5 mm default, left-aligned and centred on its line unless said otherwise.</summary>
-    private static void FrameText(
+    private static void DrawPolygon(
+        WksPolygon polygon,
+        Func<int, Vector2D> start,
+        Func<Vector2D, bool> inside,
         Action<Vector2D, Vector2D, double> segment,
-        string value,
-        Vector2D anchorNm,
-        double size = 1.5,
-        TextHAlign align = TextHAlign.Left,
-        bool bold = false,
-        bool italic = false)
+        Action<IReadOnlyList<Vector2D>>? fill)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        var outlines = polygon.Outlines.Select(o => o.Select(c => Rotate(c.X, c.Y, polygon.Rotation)).ToList()).ToList();
+        var corners = outlines.SelectMany(o => o).ToList();
+        if (corners.Count == 0)
         {
             return;
         }
 
-        double height = size * Mm;
-        double pen = bold ? height / 5 : LineWidth;
-        var style = new StrokeTextStyle(height, height, pen, align, TextVAlign.Center, 0, false, italic, 1.0);
-        StrokeTextLayout.Layout(StrokeFont.Default, value, anchorNm, style, (a, b) => segment(a, b, pen));
+        var min = new Vector2D(corners.Min(c => c.X), corners.Min(c => c.Y));
+        var max = new Vector2D(corners.Max(c => c.X), corners.Max(c => c.Y));
+        double pen = polygon.LineWidth * Mm;
+
+        for (int j = 0; j < polygon.Repeat; j++)
+        {
+            var at = start(j);
+            if (j > 0 && !(inside(at + min) && inside(at + max)))
+            {
+                continue;
+            }
+
+            foreach (var outline in outlines)
+            {
+                var points = outline.Select(c => (at + c) * Mm).ToList();
+                fill?.Invoke(points);
+                if (pen > 0)
+                {
+                    for (int i = 0; i < points.Count; i++)
+                    {
+                        segment(points[i], points[(i + 1) % points.Count], pen);
+                    }
+                }
+            }
+        }
     }
+
+    /// <summary>KiCad's RotatePoint, in the drawing sheet's y-down frame.</summary>
+    private static Vector2D Rotate(double x, double y, double degrees)
+    {
+        double r = degrees * Math.PI / 180, sin = Math.Sin(r), cos = Math.Cos(r);
+        return new Vector2D((x * cos) + (y * sin), (y * cos) - (x * sin));
+    }
+
+    /// <summary>"1" moved on by 3 is "4", and by 9 is "10"; "A" moved on by 2 is "C".</summary>
+    public static string Increment(string label, int by)
+    {
+        if (label.Length == 0)
+        {
+            return label;
+        }
+
+        char last = label[^1];
+        return last is >= '0' and <= '9'
+            ? label[..^1] + (by + (last - '0')).ToString(CultureInfo.InvariantCulture)
+            : label[..^1] + (char)(by + last);
+    }
+
+    /// <summary>A backslash-n written in a template is a line break; a doubled backslash is one backslash.</summary>
+    private static string Unescape(string text)
+    {
+        if (!text.Contains('\\'))
+        {
+            return text;
+        }
+
+        var result = new System.Text.StringBuilder(text.Length);
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length && text[i + 1] is 'n' or '\\')
+            {
+                result.Append(text[++i] == 'n' ? '\n' : '\\');
+            }
+            else
+            {
+                result.Append(text[i]);
+            }
+        }
+
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// Fills in <c>${NAME}</c>: the page's own names first, then the title block, then the project's variables. A
+    /// title block field may itself name a variable, so its value is filled in once more.
+    /// </summary>
+    public static string Expand(string text, SchTitleBlock block, string paperName, SheetFrameText frame, int depth = 0) =>
+        depth > 3 ? text : VariablePattern().Replace(text, m =>
+        {
+            string name = m.Groups[1].Value;
+            string? value = name switch
+            {
+                "KICAD_VERSION" => frame.Application,
+                "#" => frame.Page.ToString(CultureInfo.InvariantCulture),
+                "##" => frame.PageCount.ToString(CultureInfo.InvariantCulture),
+                "SHEETNAME" => frame.SheetName,
+                "SHEETPATH" => frame.SheetPath,
+                "FILENAME" or "FILEPATH" => frame.FileName,
+                "PAPER" => paperName,
+                "LAYER" => string.Empty,
+                "ISSUE_DATE" => block.Date ?? string.Empty,
+                "CURRENT_DATE" => DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                "REVISION" => block.Revision ?? string.Empty,
+                "TITLE" => block.Title ?? string.Empty,
+                "COMPANY" => block.Company ?? string.Empty,
+                _ when name.StartsWith("COMMENT", StringComparison.Ordinal)
+                    && int.TryParse(name.AsSpan(7), NumberStyles.None, CultureInfo.InvariantCulture, out int n) => block.Comment(n),
+                _ => frame.Variables.TryGetValue(name, out var variable) ? variable : null,
+            };
+
+            return value is null ? m.Value : Expand(value, block, paperName, frame, depth + 1);
+        });
+
+    [GeneratedRegex(@"\$\{([^}]+)\}")]
+    private static partial Regex VariablePattern();
 }

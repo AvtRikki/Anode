@@ -63,14 +63,18 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             string full = Path.GetFullPath(path);
             var appearances = design.Where(i => string.Equals(i.File, full, StringComparison.Ordinal)).ToList();
             string? shown = appearances.FirstOrDefault()?.Path;
-            var scene = SchematicSceneBuilder.Build(schematic, shown, FrameFor(path, design, shown));
+            var frame = SheetFrameText.ForProject(path, board: false, out string? missing);
+            var scene = SchematicSceneBuilder.Build(schematic, shown, FrameFor(frame, design, shown));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 SceneTriangulator.Triangulate(scene);
             }
 
             log.Info(Tr.T("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
-            return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design);
+            return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design)
+            {
+                DrawingSheetMissing = missing,
+            };
         },
         cancellationToken);
 
@@ -96,7 +100,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
     /// What the frame prints besides the title block: the file, the place in the design as KiCad writes it, and the
     /// page — this place's position in the walk from the root, of all the places there are.
     /// </summary>
-    internal static SheetFrameText FrameFor(string? path, IReadOnlyList<SheetInstance> design, string? instance)
+    internal static SheetFrameText FrameFor(SheetFrameText project, IReadOnlyList<SheetInstance> design, string? instance)
     {
         int index = -1;
         for (int i = 0; i < design.Count; i++)
@@ -108,11 +112,13 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             }
         }
 
-        return new SheetFrameText(
-            Path.GetFileName(path ?? string.Empty),
-            index >= 0 ? design[index].Trail : "/",
-            index >= 0 ? index + 1 : 1,
-            Math.Max(1, design.Count));
+        return project with
+        {
+            SheetPath = index >= 0 ? design[index].Trail : "/",
+            SheetName = index > 0 ? design[index].Name : string.Empty,
+            Page = index >= 0 ? index + 1 : 1,
+            PageCount = Math.Max(1, design.Count),
+        };
     }
 
     /// <summary>The root sheet of the project around <paramref name="path"/>: named after its .kicad_pro, as KiCad names it.</summary>
@@ -269,7 +275,23 @@ public sealed class SchematicDocument : DocumentBase
         }
     }
 
-    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. Duplicates(), .. LoosePins()];
+    public override IReadOnlyList<Issue> Issues =>
+        [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue(), .. Duplicates(), .. LoosePins()];
+
+    /// <summary>The drawing sheet the project names, when it is missing or will not read; the default is drawn instead.</summary>
+    internal string? DrawingSheetMissing { get; init; }
+
+    private IEnumerable<Issue> DrawingSheetIssue()
+    {
+        if (DrawingSheetMissing is { } path)
+        {
+            yield return new Issue(
+                IssueSeverity.Warning,
+                Tr.T("sch.issue.drawingSheet.title"),
+                Tr.T("sch.issue.drawingSheet.detail", Path.GetFileName(path)),
+                path);
+        }
+    }
 
     /// <summary>
     /// Designators used twice anywhere in the design, reported on the sheets that carry one of them. The whole
@@ -603,7 +625,7 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         Scene.SheetPath = instance;
-        Scene.Frame = SchematicDocumentType.FrameFor(FilePath, _design, instance);
+        Scene.Frame = SchematicDocumentType.FrameFor(Scene.Frame, _design, instance);
         SchematicSceneBuilder.RedrawFrame(Scene);
         _overview = null;
         _editor.Redraw([.. Sheet.Symbols]);

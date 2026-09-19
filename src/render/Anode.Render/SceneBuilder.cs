@@ -72,7 +72,8 @@ public static class SceneBuilder
         }
 
         string paperName = board.Root.Find("paper")?.AtomAt(1)?.Value ?? "A4";
-        DrawingSheet.Draw(paper, board.TitleBlock, paperName, scene.Frame, Stroke);
+        DrawingSheet.Draw(paper, board.TitleBlock, paperName, scene.Frame, Stroke, outline =>
+            layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)));
     }
 
     /// <summary>

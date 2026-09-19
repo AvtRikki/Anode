@@ -24,8 +24,8 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
         () =>
         {
             var board = Board.Load(path);
-            // A board is one page: its file, no place in a hierarchy, page one of one.
-            var scene = SceneBuilder.Build(board, new SheetFrameText(Path.GetFileName(path), string.Empty));
+            // A board is one page, framed with the drawing sheet its project names for boards.
+            var scene = SceneBuilder.Build(board, SheetFrameText.ForProject(path, board: true, out string? missing));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 // GPU upload needs triangles; compute them here instead of stalling the first frame.
@@ -33,7 +33,7 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
             }
 
             log.Info(Tr.T("pcb.log.loaded", Path.GetFileName(path), board.Footprints.Count, scene.PrimitiveCount));
-            return (IDocument)new PcbDocument(board, scene, path);
+            return (IDocument)new PcbDocument(board, scene, path) { DrawingSheetMissing = missing };
         },
         cancellationToken);
 }
@@ -214,7 +214,22 @@ public sealed class PcbDocument : DocumentBase
         }
     }
 
-    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue())];
+    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue()];
+
+    /// <summary>The drawing sheet the project names, when it is missing or will not read; the default is drawn instead.</summary>
+    internal string? DrawingSheetMissing { get; init; }
+
+    private IEnumerable<Issue> DrawingSheetIssue()
+    {
+        if (DrawingSheetMissing is { } path)
+        {
+            yield return new Issue(
+                IssueSeverity.Warning,
+                Tr.T("pcb.issue.drawingSheet.title"),
+                Tr.T("pcb.issue.drawingSheet.detail", Path.GetFileName(path)),
+                path);
+        }
+    }
 
     public override Task<bool> SaveAsync(string? path = null)
     {

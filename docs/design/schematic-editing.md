@@ -33,8 +33,10 @@ and checks; a board its size, layers, placement and routing. The sheet's title, 
 written there, and the frame around the drawing is KiCad's default drawing sheet — double border, 50 mm scale,
 title block — redrawn when the title block changes. The comment lines are written there too: the four the default
 sheet prints always, the rest of KiCad's nine when a file uses them. A board's title block is written from its own
-overview the same way, and the board is drawn on its page with the same drawing sheet. Not yet: drawing sheets other
-than the default (.kicad_wks).
+overview the same way, and the board is drawn on its page with the same drawing sheet. A project's own drawing
+sheet (.kicad_wks, named per editor in the .kicad_pro) is drawn in place of the default, with the project's text
+variables; a missing one falls back to the default and says so in the checks. Not yet: pictures in a drawing sheet,
+per-text colours and fonts, and editing a drawing sheet.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

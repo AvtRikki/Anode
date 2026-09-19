@@ -65,6 +65,60 @@ public class DrawingSheetRenderTests
         Assert.NotEqual(before, page.Lines);
     }
 
+    [Fact]
+    public void A_schematic_is_framed_with_the_drawing_sheet_its_project_names()
+    {
+        string path = Path.Combine(TestData.KiCadDir, "demos", "vme-wren", "vme-wren.kicad_sch");
+        Assert.SkipWhen(!File.Exists(path), TestData.SkipReason);
+
+        var frame = SheetFrameText.ForProject(path, board: false, out string? missing);
+        Assert.Null(missing);
+        Assert.NotNull(frame.Template);
+        Assert.Equal("BE-CEM", frame.Variables["DIVGRP"]);
+
+        var scene = SchematicSceneBuilder.Build(Schematic.Load(path), frame: frame);
+        Render(scene, path, "custom-sheet");
+    }
+
+    [Fact]
+    public void A_board_is_framed_with_the_drawing_sheet_its_project_names()
+    {
+        string path = Path.Combine(TestData.KiCadDir, "demos", "interf_u", "interf_u.kicad_pcb");
+        Assert.SkipWhen(!File.Exists(path) || !File.Exists(Path.ChangeExtension(path, ".kicad_pro")), TestData.SkipReason);
+
+        var frame = SheetFrameText.ForProject(path, board: true, out string? missing);
+        Assert.Null(missing);
+        Assert.NotNull(frame.Template);
+
+        var scene = SceneBuilder.Build(Board.Load(path), frame);
+        var page = Assert.Single(scene.Layers, l => l.Name == LayerStyle.PageFrame);
+
+        // The logo is an outline the page fills.
+        Assert.NotEmpty(page.Polygons);
+        Render(scene, page.Bounds, path, "custom-board-page", corner: false);
+        Render(scene, page.Bounds, path, "custom-board-corner", corner: true);
+    }
+
+    [Fact]
+    public void A_drawing_sheet_that_is_missing_falls_back_and_says_so()
+    {
+        string folder = Directory.CreateTempSubdirectory("anode-wks-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "p.kicad_pro"), """{ "schematic": { "page_layout_descr_file": "gone.kicad_wks" } }""");
+            string sheet = Path.Combine(folder, "p.kicad_sch");
+
+            var frame = SheetFrameText.ForProject(sheet, board: false, out string? missing);
+
+            Assert.Null(frame.Template);
+            Assert.Equal(Path.Combine(folder, "gone.kicad_wks"), missing);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static void Render(SchematicScene scene, string path, string name) =>
         Render(scene, scene.BoardOutline, path, name, corner: true);
 

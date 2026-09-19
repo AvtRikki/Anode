@@ -44,6 +44,12 @@ FILES=(
   demos/complex_hierarchy/ampli_ht.kicad_sch
   qa/data/eeschema/netlists/test_multiunit_reannotate_5/test_multiunit_reannotate_5.kicad_sch
   qa/data/eeschema/netlists/test_multiunit_reannotate_5/test_multiunit_reannotate_5.kicad_pro
+  demos/vme-wren/vme-wren.kicad_pro
+  demos/vme-wren/vme-wren.kicad_sch
+  demos/vme-wren/cern-ohl-left.kicad_wks
+  demos/interf_u/interf_u.kicad_pro
+  demos/interf_u/pagelayout_logo.kicad_wks
+  qa/data/cli/basic_test/custom_ds.kicad_wks
   demos/pic_programmer/pic_programmer.kicad_sch
   demos/video/video.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod

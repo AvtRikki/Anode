@@ -70,6 +70,7 @@
       "warnings": "Warnings"
     },
     "issue": {
+      "drawingSheet": { "title": "Drawing sheet not found", "detail": "{0} could not be read; the default frame is drawn instead." },
       "oldFormat": { "title": "Old format", "detail": "The file is older than KiCad 8; saving may change its structure." },
       "newFormat": { "title": "Newer format", "detail": "The board comes from a newer KiCad; unknown fields are preserved as they are." },
       "version": "version {0}",
