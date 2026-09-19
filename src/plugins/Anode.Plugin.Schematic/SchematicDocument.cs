@@ -111,6 +111,15 @@ public sealed class SchematicDocument : DocumentBase
     /// <summary>The project's other sheets, read for the design-wide checks and kept while their files are unchanged.</summary>
     private readonly Dictionary<string, (DateTime Written, Anode.Kicad.Schematic? Sheet)> _neighbours = new(StringComparer.Ordinal);
     private IReadOnlyList<(string Reference, IReadOnlyList<DesignatorUse> Uses)>? _duplicates;
+
+    /// <summary>An item on the lit net. The net is found again from it after every edit, since edits reshape nets.</summary>
+    private SchItem? _netAnchor;
+
+    /// <summary>The scene owners of the lit net, as handed to the canvas; null when no net is lit.</summary>
+    internal IReadOnlySet<int>? LitNet { get; private set; }
+
+    /// <summary>The editor under the tab, for the plugin's own tests.</summary>
+    internal SchematicEditor Editor => _editor;
     private SymbolIndex? _libraries;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
@@ -139,6 +148,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
         _editor.History.Changed += ForgetDerived;
+        _editor.History.Changed += RefreshNetHighlight;
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -187,6 +197,11 @@ public sealed class SchematicDocument : DocumentBase
             else if (_editor.Selection.Count > 1)
             {
                 fields.Add(new StatusField(Tr.T("sch.status.selected", Tr.T("sch.selection.multi", _editor.Selection.Count))));
+            }
+
+            if (HighlightedNet is { } lit)
+            {
+                fields.Add(new StatusField(Tr.T("sch.status.net", lit.Name)));
             }
 
             if (_frame.Length > 0)
@@ -391,8 +406,87 @@ public sealed class SchematicDocument : DocumentBase
                 }
                 : [],
         ],
+        _ when NetOf(item) is not null =>
+        [
+            SameNet(item)
+                ? new InspectorAction(Tr.T("sch.action.unhighlightNet"), () => HighlightNet(null))
+                : new InspectorAction(Tr.T("sch.action.highlightNet"), () => HighlightNet(item)),
+        ],
         _ => [],
     };
+
+    /// <summary>
+    /// Lights the net of what is selected, or puts it out when that net is already lit — backquote, as in KiCad.
+    /// </summary>
+    private void ToggleNetHighlight()
+    {
+        var anchor = _editor.Selection.FirstOrDefault(i => NetOf(i) is not null);
+        HighlightNet(anchor is not null && !SameNet(anchor) ? anchor : null);
+    }
+
+    internal void HighlightNet(SchItem? anchor)
+    {
+        _netAnchor = anchor;
+        RefreshNetHighlight();
+        OnPropertiesChanged(nameof(StatusFields), nameof(Selection));
+    }
+
+    private bool SameNet(SchItem item) => HighlightedNet is { } net && net.Items.Contains(item);
+
+    private SchNet? HighlightedNet =>
+        _netAnchor is { IsAttached: true } anchor ? Nets.FirstOrDefault(n => n.Items.Contains(anchor)) : null;
+
+    /// <summary>
+    /// Hands the canvas the owners of the lit net: its wires, labels and marks, and the junction dots on its wires,
+    /// which the net itself does not list but without which it would read as broken. Symbols stay dim — a pin is
+    /// drawn as part of its symbol, and lighting every part a ground net touches would light the whole sheet.
+    /// </summary>
+    private void RefreshNetHighlight()
+    {
+        if (HighlightedNet is not { } net)
+        {
+            _netAnchor = null;
+            LitNet = null;
+            if (_canvas is { } idle)
+            {
+                idle.HighlightedOwners = null;
+            }
+
+            return;
+        }
+
+        var wires = net.Items.OfType<SchWire>().ToList();
+        var owners = new HashSet<int>();
+        foreach (var item in net.Items.Where(i => i is not SymbolInstance)
+                     .Concat(Sheet.Junctions.Where(j => wires.Any(w => OnWire(j.Position, w)))))
+        {
+            owners.UnionWith(Scene.OwnersOf(item));
+        }
+
+        LitNet = owners;
+        if (_canvas is { } canvas)
+        {
+            canvas.HighlightedOwners = owners;
+        }
+    }
+
+    private static bool OnWire(Vector2L point, SchWire wire)
+    {
+        var points = wire.Points;
+        for (int i = 1; i < points.Length; i++)
+        {
+            var (a, b) = (points[i - 1], points[i]);
+            long cross = ((b.X - a.X) * (point.Y - a.Y)) - ((b.Y - a.Y) * (point.X - a.X));
+            if (cross == 0
+                && point.X >= Math.Min(a.X, b.X) && point.X <= Math.Max(a.X, b.X)
+                && point.Y >= Math.Min(a.Y, b.Y) && point.Y <= Math.Max(a.Y, b.Y))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Swaps the selected placement for the part chosen in the components panel. Two changes in one step — the new
@@ -814,6 +908,12 @@ public sealed class SchematicDocument : DocumentBase
                 // The values live in the inspector, so E puts the caret in the first one that can be written.
                 Execute = () => context.Workbench.FocusInspector(),
             },
+            new("sch.net.highlight", "sch.command.highlightNet")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "`", MenuKey = "menu.view", MenuOrder = 30,
+                CanExecute = () => _netAnchor is not null || _editor.Selection.Any(i => NetOf(i) is not null),
+                Execute = ToggleNetHighlight,
+            },
             new("sch.annotate", "sch.command.annotate")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
@@ -865,6 +965,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor.SelectionChanged -= OnSelectionChanged;
         _editor.History.Changed -= OnHistoryChanged;
         _editor.History.Changed -= ForgetDerived;
+        _editor.History.Changed -= RefreshNetHighlight;
         Tr.Changed -= OnLanguageChanged;
         base.Dispose();
     }
@@ -873,6 +974,8 @@ public sealed class SchematicDocument : DocumentBase
     {
         var canvas = new SchematicCanvas { Editor = _editor };
         canvas.ToolCancelled += () => UseTool(null);
+        canvas.HighlightNetRequested += ToggleNetHighlight;
+        canvas.HighlightCleared += () => HighlightNet(null);
         canvas.PartDropped = (part, at) => DropPart(part.LibId, part.Symbol, at);
         canvas.ContextMenu = SheetMenu();
         _canvas = canvas;

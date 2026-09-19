@@ -47,6 +47,7 @@
       "mirrorVertical": "Mirror vertically",
       "properties": "Properties",
       "annotate": "Number the parts",
+      "highlightNet": "Highlight net",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
     },
@@ -93,6 +94,8 @@
       "openSheet": "Open sheet",
       "updateFromLibrary": "Update from library",
       "changeSymbol": "Change to {0}",
+      "highlightNet": "Highlight net",
+      "unhighlightNet": "Clear highlight",
       "editPins": "Edit pins"
     },
     "pin": {
@@ -104,7 +107,8 @@
     "status": {
       "cursor": "X {0} Y {1} {2}",
       "symbols": "{0} {1}",
-      "selected": "selected: {0}"
+      "selected": "selected: {0}",
+      "net": "net {0}"
     },
     "issue": {
       "duplicate": {

@@ -28,6 +28,9 @@ public sealed class SchematicCanvas : Panel
     private readonly Camera2D _camera = new();
     private readonly ISceneSurface _surface;
     private ISchTool? _tool;
+    private IReadOnlySet<int>? _highlighted;
+    private IReadOnlySet<int>? _lit;
+    private (IReadOnlySet<int>? Selected, IReadOnlySet<int>? Net) _litFrom;
     private Gesture _gesture;
     private Point _lastPoint;
     private Point _pressPoint;
@@ -150,7 +153,49 @@ public sealed class SchematicCanvas : Panel
     /// <summary>A part was dropped on the sheet; the document is the one that knows how to put it down.</summary>
     public Func<SymbolChoice, Point, bool>? PartDropped { get; set; }
 
+    /// <summary>The key that highlights the net of what is selected was pressed — backquote, as in KiCad.</summary>
+    public event Action? HighlightNetRequested;
+
+    /// <summary>Esc with nothing left to cancel: the highlighted net goes back to normal with the selection.</summary>
+    public event Action? HighlightCleared;
+
+    /// <summary>
+    /// Owners drawn lit besides the selection: a highlighted net. The renderer dims everything else, which is how a
+    /// net stands out in KiCad too. Pass a new set when it changes; the renderer caches by reference.
+    /// </summary>
+    public IReadOnlySet<int>? HighlightedOwners
+    {
+        get => _highlighted;
+        set
+        {
+            _highlighted = value;
+            Present();
+        }
+    }
+
     public void Redraw() => Present();
+
+    /// <summary>
+    /// The selection with the highlighted net added. Built only when either changes, so the renderer, which keys its
+    /// highlight cache on the set it is handed, sees the same set from frame to frame.
+    /// </summary>
+    private IReadOnlySet<int> Lit(IReadOnlySet<int> selected)
+    {
+        if (_highlighted is not { Count: > 0 } net)
+        {
+            return selected;
+        }
+
+        if (!ReferenceEquals(selected, _litFrom.Selected) || !ReferenceEquals(net, _litFrom.Net) || _lit is null)
+        {
+            var lit = new HashSet<int>(selected);
+            lit.UnionWith(net);
+            _lit = lit;
+            _litFrom = (selected, net);
+        }
+
+        return _lit;
+    }
 
     public void ZoomToFit()
     {
@@ -503,9 +548,13 @@ public sealed class SchematicCanvas : Panel
                 else
                 {
                     editor?.SetSelection([]);
+                    HighlightCleared?.Invoke();
                 }
 
                 Present();
+                break;
+            case Key.OemTilde:
+                HighlightNetRequested?.Invoke();
                 break;
             case Key.Delete or Key.Back:
                 editor?.DeleteSelection();
@@ -652,7 +701,7 @@ public sealed class SchematicCanvas : Panel
             _camera.ViewportWidth,
             _camera.ViewportHeight,
             _camera.FlipX,
-            editor.SelectedOwners,
+            Lit(editor.SelectedOwners),
             RenderScaling: TopLevel.GetTopLevel(this)?.RenderScaling ?? 1)
         {
             Preview = move?.Preview is { } moved ? moved : _tool?.Preview is { } drawn ? [drawn] : null,

@@ -24,7 +24,8 @@ Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
 - **Stage 5** — started: nets built from wires, junctions, labels of every kind, buses, power symbols and
   no-connects; the net a selection sits on, shown in the inspector; and two checks — a pin left alone on its net, and
   a designator used twice anywhere in the design, compared per place in the hierarchy. The pin-type matrix, missing
-  power flags and sheet-pin checks are not done, nor the nets panel, net highlighting, or netlist and BOM export.
+  power flags and sheet-pin checks are not done, nor the nets panel or netlist and BOM export. A net can be lit
+  (backquote, or the inspector's footer): its wires, labels and dots stand out and the rest of the sheet dims.
 - **Stage 6** — not started.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,

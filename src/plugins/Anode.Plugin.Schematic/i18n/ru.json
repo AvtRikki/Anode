@@ -47,6 +47,7 @@
       "mirrorVertical": "Отразить по вертикали",
       "properties": "Свойства",
       "annotate": "Пронумеровать детали",
+      "highlightNet": "Подсветить цепь",
       "fit": "Вписать лист в окно",
       "openSheet": "Открыть дочерний лист"
     },
@@ -93,6 +94,8 @@
       "openSheet": "Открыть лист",
       "updateFromLibrary": "Обновить из библиотеки",
       "changeSymbol": "Заменить на {0}",
+      "highlightNet": "Подсветить цепь",
+      "unhighlightNet": "Снять подсветку",
       "editPins": "Править выводы"
     },
     "pin": {
@@ -105,7 +108,8 @@
     "status": {
       "cursor": "X {0} Y {1} {2}",
       "symbols": "{0} {1}",
-      "selected": "выделено: {0}"
+      "selected": "выделено: {0}",
+      "net": "цепь {0}"
     },
     "issue": {
       "duplicate": {
