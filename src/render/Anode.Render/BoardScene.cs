@@ -20,7 +20,7 @@ public sealed class LayerGeometry(string name)
     /// the page frame around a board. All are the ground the drawing sits on rather than part of it — dimming them
     /// makes the whole view blink.
     /// </summary>
-    public bool IsDecoration { get; } = name is LayerStyle.BoardBody or LayerStyle.Sch.Sheet or LayerStyle.PageFrame;
+    public bool IsDecoration { get; } = LayerStyle.BaseOf(name) is LayerStyle.BoardBody or LayerStyle.Sch.Sheet or LayerStyle.PageFrame;
 
     public int DrawOrder { get; } = LayerStyle.DrawOrder(name);
 

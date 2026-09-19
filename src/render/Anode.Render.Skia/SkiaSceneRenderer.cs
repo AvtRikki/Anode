@@ -154,6 +154,11 @@ public sealed class SkiaSceneRenderer : IDisposable
             canvas.DrawPath(polygons, _fill);
         }
 
+        if (cache.Holed is { } holed)
+        {
+            canvas.DrawPath(holed, _fill);
+        }
+
         if (cache.Circles is { } circles)
         {
             canvas.DrawPath(circles, _fill);
@@ -298,14 +303,27 @@ public sealed class SkiaSceneRenderer : IDisposable
         {
             if ((filter is null || filter(polygon.Owner)) && polygon.Points.Length >= 3)
             {
-                var path = cache.Polygons ??= new SKPath { FillType = SKPathFillType.Winding };
-                path.MoveTo(polygon.Points[0].X, polygon.Points[0].Y);
-                for (int i = 1; i < polygon.Points.Length; i++)
+                // A polygon with holes goes in as one path of several rings, filled even-odd so its holes stay
+                // open whichever way they run; a simple one keeps the shared winding path.
+                var path = polygon.HoleStarts.Length == 0
+                    ? cache.Polygons ??= new SKPath { FillType = SKPathFillType.Winding }
+                    : cache.Holed ??= new SKPath { FillType = SKPathFillType.EvenOdd };
+                foreach (var ring in polygon.Rings)
                 {
-                    path.LineTo(polygon.Points[i].X, polygon.Points[i].Y);
-                }
+                    var points = polygon.Points.AsSpan(ring);
+                    if (points.Length < 3)
+                    {
+                        continue;
+                    }
 
-                path.Close();
+                    path.MoveTo(points[0].X, points[0].Y);
+                    for (int i = 1; i < points.Length; i++)
+                    {
+                        path.LineTo(points[i].X, points[i].Y);
+                    }
+
+                    path.Close();
+                }
             }
         }
 
@@ -366,7 +384,10 @@ public sealed class SkiaSceneRenderer : IDisposable
 
         public SKPath? Polygons { get; set; }
 
-        public bool IsEmpty => Lines.Count == 0 && Circles is null && Polygons is null;
+        /// <summary>Polygons with holes, filled even-odd.</summary>
+        public SKPath? Holed { get; set; }
+
+        public bool IsEmpty => Lines.Count == 0 && Circles is null && Polygons is null && Holed is null;
 
         public void Dispose()
         {
@@ -377,6 +398,7 @@ public sealed class SkiaSceneRenderer : IDisposable
 
             Circles?.Dispose();
             Polygons?.Dispose();
+            Holed?.Dispose();
         }
     }
 }

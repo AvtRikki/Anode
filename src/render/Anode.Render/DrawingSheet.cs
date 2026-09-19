@@ -1,6 +1,6 @@
 using System.Globalization;
-using Anode.Geometry;
 using System.Text.RegularExpressions;
+using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.DrawingSheets;
 using Anode.Render.Fonts;
@@ -58,32 +58,16 @@ public static partial class DrawingSheet
     }
 
     /// <summary>
-    /// KiCad's default drawing sheet, item for item from its built-in description: a double border 2 mm apart,
-    /// a tick every 50 mm numbered along the top and bottom and lettered down the sides, and the title block in
-    /// the bottom-right corner. Distances are in millimetres from a corner of the area inside the 10 mm margins,
-    /// the bottom-right one unless said otherwise; repeated items stop where they would leave that area.
-    /// </summary>
-    /// <param name="paper">The paper, in nanometres.</param>
-    /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
-    /// <summary>
     /// Draws a drawing sheet — the frame's template, or KiCad's default — the way KiCad does: every item from its
     /// corner of the area inside the margins, each repeat moved by its increment and dropped past the first where it
     /// would leave that area, repeated labels counting up from their last character, and <c>${NAME}</c> filled in from
-    /// the title block, the page and the project, or left as written when nothing answers to it.
+    /// the title block, the page and the project, or left as written when nothing answers to it. Text with a colour
+    /// of its own keeps it; text naming an installed face is drawn in that face's outlines, and in the stroke font
+    /// when this machine does not have it.
     /// </summary>
     /// <param name="paper">The paper, in nanometres.</param>
-    /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
-    /// <param name="fill">Receives every filled outline, in nanometres; outlines are dropped when null.</param>
-    /// <param name="picture">Receives every picture: its centre and size in nanometres, and the image file.</param>
-    /// <returns>How many items could not be drawn: pictures that are not PNGs, or that had nowhere to go.</returns>
-    public static int Draw(
-        Vector2L paper,
-        SchTitleBlock block,
-        string paperName,
-        SheetFrameText frame,
-        Action<Vector2D, Vector2D, double> segment,
-        Action<IReadOnlyList<Vector2D>>? fill = null,
-        Action<Vector2D, Vector2D, byte[]>? picture = null)
+    /// <returns>How many items could not be drawn: pictures that are not PNGs.</returns>
+    public static int Draw(Vector2L paper, SchTitleBlock block, string paperName, SheetFrameText frame, IDrawingSheetSink sink)
     {
         var sheet = frame.Template ?? DrawingSheetFile.Default;
         var setup = sheet.Setup;
@@ -128,14 +112,14 @@ public static partial class DrawingSheet
 
                         if (line.IsRectangle)
                         {
-                            segment(a * Mm, new Vector2D(b.X, a.Y) * Mm, pen);
-                            segment(new Vector2D(b.X, a.Y) * Mm, b * Mm, pen);
-                            segment(b * Mm, new Vector2D(a.X, b.Y) * Mm, pen);
-                            segment(new Vector2D(a.X, b.Y) * Mm, a * Mm, pen);
+                            sink.Stroke(a * Mm, new Vector2D(b.X, a.Y) * Mm, pen, null);
+                            sink.Stroke(new Vector2D(b.X, a.Y) * Mm, b * Mm, pen, null);
+                            sink.Stroke(b * Mm, new Vector2D(a.X, b.Y) * Mm, pen, null);
+                            sink.Stroke(new Vector2D(a.X, b.Y) * Mm, a * Mm, pen, null);
                         }
                         else
                         {
-                            segment(a * Mm, b * Mm, pen);
+                            sink.Stroke(a * Mm, b * Mm, pen, null);
                         }
                     }
 
@@ -144,14 +128,14 @@ public static partial class DrawingSheet
 
                 case WksText text:
                     DrawText(text, setup, Expand(text.Text, block, paperName, frame), j => At(text.Start, text, j),
-                        j => At(default, text, j), Inside, segment);
+                        j => At(default, text, j), Inside, sink);
                     break;
 
                 case WksPolygon polygon:
-                    DrawPolygon(polygon, j => At(polygon.Start, polygon, j), Inside, segment, fill);
+                    DrawPolygon(polygon, j => At(polygon.Start, polygon, j), Inside, sink);
                     break;
 
-                case WksBitmap { Image: { } image, SizeMm: var (width, height) } bitmap when picture is not null:
+                case WksBitmap { Image: { } image, SizeMm: var (width, height) } bitmap:
                     for (int j = 0; j < bitmap.Repeat; j++)
                     {
                         var at = At(bitmap.Start, bitmap, j);
@@ -160,7 +144,7 @@ public static partial class DrawingSheet
                             continue;
                         }
 
-                        picture(at * Mm, new Vector2D(width, height) * Mm, image);
+                        sink.Picture(at * Mm, new Vector2D(width, height) * Mm, image);
                     }
 
                     break;
@@ -174,6 +158,20 @@ public static partial class DrawingSheet
         return skipped;
     }
 
+    /// <summary>The same drawing handed to plain callbacks, colours and holes aside.</summary>
+    /// <param name="segment">Receives every stroke: its ends in nanometres on the page, and its pen width.</param>
+    /// <param name="fill">Receives every filled outline, in nanometres; outlines are dropped when null.</param>
+    /// <param name="picture">Receives every picture: its centre and size in nanometres, and the image file.</param>
+    public static int Draw(
+        Vector2L paper,
+        SchTitleBlock block,
+        string paperName,
+        SheetFrameText frame,
+        Action<Vector2D, Vector2D, double> segment,
+        Action<IReadOnlyList<Vector2D>>? fill = null,
+        Action<Vector2D, Vector2D, byte[]>? picture = null) =>
+        Draw(paper, block, paperName, frame, new CallbackSink(segment, fill, picture));
+
     private static void DrawText(
         WksText text,
         WksSetup setup,
@@ -181,10 +179,11 @@ public static partial class DrawingSheet
         Func<int, Vector2D> start,
         Func<int, Vector2D> end,
         Func<Vector2D, bool> inside,
-        Action<Vector2D, Vector2D, double> segment)
+        IDrawingSheetSink sink)
     {
         full = Unescape(full);
         bool multiline = full.Contains('\n');
+        ColorRgba? colour = text.Color is var (r, g, b, a) ? new ColorRgba(r, g, b, (byte)Math.Round(a * 255)) : null;
 
         double width = text.Width != 0 ? text.Width : setup.TextWidth;
         double height = text.Height != 0 ? text.Height : setup.TextHeight;
@@ -226,7 +225,18 @@ public static partial class DrawingSheet
                 continue;
             }
 
-            StrokeTextLayout.Layout(StrokeFont.Default, label, start(j) * Mm, style, (a, b) => segment(a, b, pen * Mm));
+            if (text.Face is { } face
+                && OutlineText.Layout(face, text.Bold, text.Italic, label, start(j) * Mm, width * Mm, height * Mm, align, valign, text.Rotation) is { } shapes)
+            {
+                foreach (var shape in shapes)
+                {
+                    sink.Fill(shape.Outline, shape.Holes, colour);
+                }
+
+                continue;
+            }
+
+            StrokeTextLayout.Layout(StrokeFont.Default, label, start(j) * Mm, style, (p, q) => sink.Stroke(p, q, pen * Mm, colour));
         }
     }
 
@@ -234,8 +244,7 @@ public static partial class DrawingSheet
         WksPolygon polygon,
         Func<int, Vector2D> start,
         Func<Vector2D, bool> inside,
-        Action<Vector2D, Vector2D, double> segment,
-        Action<IReadOnlyList<Vector2D>>? fill)
+        IDrawingSheetSink sink)
     {
         var outlines = polygon.Outlines.Select(o => o.Select(c => Rotate(c.X, c.Y, polygon.Rotation)).ToList()).ToList();
         var corners = outlines.SelectMany(o => o).ToList();
@@ -259,16 +268,29 @@ public static partial class DrawingSheet
             foreach (var outline in outlines)
             {
                 var points = outline.Select(c => (at + c) * Mm).ToList();
-                fill?.Invoke(points);
+                sink.Fill(points, [], null);
                 if (pen > 0)
                 {
                     for (int i = 0; i < points.Count; i++)
                     {
-                        segment(points[i], points[(i + 1) % points.Count], pen);
+                        sink.Stroke(points[i], points[(i + 1) % points.Count], pen, null);
                     }
                 }
             }
         }
+    }
+
+    private sealed class CallbackSink(
+        Action<Vector2D, Vector2D, double> segment,
+        Action<IReadOnlyList<Vector2D>>? fill,
+        Action<Vector2D, Vector2D, byte[]>? picture) : IDrawingSheetSink
+    {
+        public void Stroke(Vector2D a, Vector2D b, double width, ColorRgba? colour) => segment(a, b, width);
+
+        public void Fill(IReadOnlyList<Vector2D> outline, IReadOnlyList<IReadOnlyList<Vector2D>> holes, ColorRgba? colour) =>
+            fill?.Invoke(outline);
+
+        public void Picture(Vector2D centre, Vector2D size, byte[] image) => picture?.Invoke(centre, size, image);
     }
 
     /// <summary>KiCad's RotatePoint, in the drawing sheet's y-down frame.</summary>
@@ -349,4 +371,17 @@ public static partial class DrawingSheet
 
     [GeneratedRegex(@"\$\{([^}]+)\}")]
     private static partial Regex VariablePattern();
+}
+
+/// <summary>
+/// Where a drawing sheet's strokes, fills and pictures go, all in nanometres on the page. A colour of null means the
+/// sheet's own; a text with a colour of its own hands it over.
+/// </summary>
+public interface IDrawingSheetSink
+{
+    void Stroke(Vector2D a, Vector2D b, double width, ColorRgba? colour);
+
+    void Fill(IReadOnlyList<Vector2D> outline, IReadOnlyList<IReadOnlyList<Vector2D>> holes, ColorRgba? colour);
+
+    void Picture(Vector2D centre, Vector2D size, byte[] image);
 }

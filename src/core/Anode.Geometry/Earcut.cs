@@ -3,26 +3,38 @@ using System.Numerics;
 namespace Anode.Geometry;
 
 /// <summary>
-/// Ear-clipping triangulation for a single simple polygon (no separate hole rings), following the
-/// algorithm of mapbox/earcut (ISC license): z-order hashed ear tests, then local self-intersection
-/// cure and polygon splitting as fallbacks. KiCad zone fills are already fractured into single outlines
-/// whose holes are joined by zero-width bridges, which these fallbacks handle.
+/// Ear-clipping triangulation following the algorithm of mapbox/earcut (ISC license): z-order hashed ear tests,
+/// then local self-intersection cure and polygon splitting as fallbacks. KiCad zone fills are already fractured
+/// into single outlines whose holes are joined by zero-width bridges, which these fallbacks handle; separate hole
+/// rings — the counters of a letter — are joined to the outline first, by earcut's own bridges.
 /// </summary>
 public static class Earcut
 {
     /// <summary>Appends triangle vertex indices (three per triangle) into <paramref name="triangles"/>.</summary>
-    public static void Triangulate(ReadOnlySpan<Vector2> points, List<int> triangles)
+    public static void Triangulate(ReadOnlySpan<Vector2> points, List<int> triangles) => Triangulate(points, [], triangles);
+
+    /// <summary>
+    /// Triangulates an outline with holes: <paramref name="points"/> holds the outline, then each hole, and
+    /// <paramref name="holeStarts"/> says where each hole begins. Indices refer to <paramref name="points"/>.
+    /// </summary>
+    public static void Triangulate(ReadOnlySpan<Vector2> points, ReadOnlySpan<int> holeStarts, List<int> triangles)
     {
         int n = points.Length;
-        if (n < 3)
+        int outerLength = holeStarts.Length > 0 ? holeStarts[0] : n;
+        if (outerLength < 3)
         {
             return;
         }
 
-        var outer = LinkedList(points);
+        var outer = LinkedList(points, 0, outerLength, clockwise: true);
         if (outer is null || outer.Next == outer.Prev)
         {
             return;
+        }
+
+        if (holeStarts.Length > 0)
+        {
+            outer = EliminateHoles(points, holeStarts, outer);
         }
 
         double minX = 0, minY = 0, invSize = 0;
@@ -31,7 +43,7 @@ public static class Earcut
             minX = double.MaxValue;
             minY = double.MaxValue;
             double maxX = double.MinValue, maxY = double.MinValue;
-            foreach (var p in points)
+            foreach (var p in points[..outerLength])
             {
                 minX = Math.Min(minX, p.X);
                 minY = Math.Min(minY, p.Y);
@@ -289,19 +301,20 @@ public static class Earcut
         }
     }
 
-    private static Node? LinkedList(ReadOnlySpan<Vector2> points)
+    /// <summary>A ring of <paramref name="points"/> from <paramref name="start"/> up to <paramref name="end"/>, turned the way asked.</summary>
+    private static Node? LinkedList(ReadOnlySpan<Vector2> points, int start, int end, bool clockwise)
     {
         Node? last = null;
-        if (SignedArea(points) > 0)
+        if (clockwise == (SignedArea(points[start..end]) > 0))
         {
-            for (int i = 0; i < points.Length; i++)
+            for (int i = start; i < end; i++)
             {
                 last = InsertNode(i, points[i].X, points[i].Y, last);
             }
         }
         else
         {
-            for (int i = points.Length - 1; i >= 0; i--)
+            for (int i = end - 1; i >= start; i--)
             {
                 last = InsertNode(i, points[i].X, points[i].Y, last);
             }
@@ -314,6 +327,141 @@ public static class Earcut
         }
 
         return last;
+    }
+
+    /// <summary>Joins every hole to the outline by a bridge from its leftmost point, leftmost holes first.</summary>
+    private static Node EliminateHoles(ReadOnlySpan<Vector2> points, ReadOnlySpan<int> holeStarts, Node outer)
+    {
+        var queue = new List<Node>(holeStarts.Length);
+        for (int i = 0; i < holeStarts.Length; i++)
+        {
+            int start = holeStarts[i];
+            int end = i < holeStarts.Length - 1 ? holeStarts[i + 1] : points.Length;
+            if (end - start > 0 && LinkedList(points, start, end, clockwise: false) is { } hole)
+            {
+                queue.Add(Leftmost(hole));
+            }
+        }
+
+        queue.Sort(CompareXySlope);
+        foreach (var hole in queue)
+        {
+            outer = EliminateHole(hole, outer);
+        }
+
+        return outer;
+    }
+
+    private static Node EliminateHole(Node hole, Node outer)
+    {
+        if (FindHoleBridge(hole, outer) is not { } bridge)
+        {
+            return outer;
+        }
+
+        var bridgeReverse = SplitPolygon(bridge, hole);
+        FilterPoints(bridgeReverse, bridgeReverse.Next);
+        return FilterPoints(bridge, bridge.Next) ?? outer;
+    }
+
+    /// <summary>The outline point a hole can be joined to without the bridge crossing anything.</summary>
+    private static Node? FindHoleBridge(Node hole, Node outer)
+    {
+        var p = outer;
+        double hx = hole.X, hy = hole.Y, qx = double.NegativeInfinity;
+        Node? m = null;
+
+        if (Equals(hole, p))
+        {
+            return p;
+        }
+
+        do
+        {
+            if (Equals(hole, p.Next))
+            {
+                return p.Next;
+            }
+
+            if (hy <= p.Y && hy >= p.Next.Y && p.Next.Y != p.Y)
+            {
+                double x = p.X + ((hy - p.Y) * (p.Next.X - p.X) / (p.Next.Y - p.Y));
+                if (x <= hx && x > qx)
+                {
+                    qx = x;
+                    m = p.X < p.Next.X ? p : p.Next;
+                    if (x == hx)
+                    {
+                        return m;
+                    }
+                }
+            }
+
+            p = p.Next;
+        }
+        while (p != outer);
+
+        if (m is null)
+        {
+            return null;
+        }
+
+        var stop = m;
+        double mx = m.X, my = m.Y, tanMin = double.PositiveInfinity;
+        p = m;
+        do
+        {
+            if (hx >= p.X && p.X >= mx && hx != p.X
+                && PointInTriangle(hy < my ? hx : qx, hy, mx, my, hy < my ? qx : hx, hy, p.X, p.Y))
+            {
+                double tan = Math.Abs(hy - p.Y) / (hx - p.X);
+                if (LocallyInside(p, hole)
+                    && (tan < tanMin || (tan == tanMin && (p.X > m.X || (p.X == m.X && SectorContainsSector(m, p))))))
+                {
+                    m = p;
+                    tanMin = tan;
+                }
+            }
+
+            p = p.Next;
+        }
+        while (p != stop);
+
+        return m;
+    }
+
+    private static bool SectorContainsSector(Node m, Node p) => Area(m.Prev, m, p.Prev) < 0 && Area(p.Next, m, m.Next) < 0;
+
+    private static Node Leftmost(Node start)
+    {
+        Node p = start, leftmost = start;
+        do
+        {
+            if (p.X < leftmost.X || (p.X == leftmost.X && p.Y < leftmost.Y))
+            {
+                leftmost = p;
+            }
+
+            p = p.Next;
+        }
+        while (p != start);
+
+        return leftmost;
+    }
+
+    private static int CompareXySlope(Node a, Node b)
+    {
+        double result = a.X - b.X;
+        if (result == 0)
+        {
+            result = a.Y - b.Y;
+            if (result == 0)
+            {
+                result = ((a.Next.Y - a.Y) / (a.Next.X - a.X)) - ((b.Next.Y - b.Y) / (b.Next.X - b.X));
+            }
+        }
+
+        return Math.Sign(result);
     }
 
     private static double SignedArea(ReadOnlySpan<Vector2> points)

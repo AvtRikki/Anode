@@ -36,7 +36,9 @@ sheet prints always, the rest of KiCad's nine when a file uses them. A board's t
 overview the same way, and the board is drawn on its page with the same drawing sheet. A project's own drawing
 sheet (.kicad_wks, named per editor in the .kicad_pro) is drawn in place of the default, with the project's text
 variables; a missing one falls back to the default and says so in the checks. Pictures in a drawing sheet are drawn
-by both renderers. Not yet: pictures other than PNG, per-text colours and fonts, and editing a drawing sheet.
+by both renderers, and a text keeps its own colour and, when this machine has it, its own face. Not yet: pictures
+other than PNG, a fallback face when the named one is missing (the stroke font stands in), and editing a drawing
+sheet.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

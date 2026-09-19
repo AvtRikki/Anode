@@ -22,6 +22,14 @@ public static class LayerStyle
     /// <summary>Pseudo-layer for the board body: the sheet inside the board outline, drawn under everything.</summary>
     public const string BoardBody = "#BoardBody";
 
+    /// <summary>
+    /// The layer a scene's own layer derives from: <c>#SchFrame/1E40FFFF</c>, the frame's text in a colour of its own,
+    /// belongs with <c>#SchFrame</c> — drawn in the same place, shown and hidden with it. Only the scene's own layers,
+    /// the ones starting with <c>#</c>, have such children; a KiCad layer name is returned as it is.
+    /// </summary>
+    public static string BaseOf(string name) =>
+        name.StartsWith('#') && name.IndexOf('/', StringComparison.Ordinal) is > 0 and var slash ? name[..slash] : name;
+
     /// <summary>The page a board is drawn on: its edge, and KiCad's drawing sheet with the title block.</summary>
     public const string PageFrame = "#PageFrame";
 
@@ -197,7 +205,7 @@ public static class LayerStyle
             return 2_000 + front;
         }
 
-        return layerName switch
+        return BaseOf(layerName) switch
         {
             BoardBody or Sch.Sheet => -1_000,
             PageFrame => -900,

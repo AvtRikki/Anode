@@ -92,6 +92,12 @@ public sealed class WksText : WksItem
     public double MaxLength { get; init; }
 
     public double MaxHeight { get; init; }
+
+    /// <summary>An installed typeface to draw the text in, as <c>(font (face "Arial"))</c>; null for KiCad's stroke font.</summary>
+    public string? Face { get; init; }
+
+    /// <summary>The text's own colour, <c>(font (color r g b a))</c>, alpha from 0 to 1; null for the sheet's.</summary>
+    public (byte R, byte G, byte B, double A)? Color { get; init; }
 }
 
 /// <summary>Filled outlines, placed at <see cref="WksItem.Start"/> and turned by <see cref="Rotation"/>: a logo, usually.</summary>
@@ -277,8 +283,16 @@ public sealed class DrawingSheetFile
     {
         double width = 0, height = 0, pen = node.ChildDouble("linewidth") ?? 0;
         bool bold = false, italic = false;
+        string? face = null;
+        (byte, byte, byte, double)? color = null;
         if (node.Find("font") is { } font)
         {
+            face = font.ChildString("face") is { Length: > 0 } named ? named : null;
+            if (font.Find("color") is { } rgba)
+            {
+                color = (Byte(rgba, 1), Byte(rgba, 2), Byte(rgba, 3), Math.Clamp(rgba.AtomAt(4)?.TryGetDouble(out double a) == true ? a : 1, 0, 1));
+            }
+
             bold = Atoms(font).Any(a => a.IsSymbol("bold"));
             italic = Atoms(font).Any(a => a.IsSymbol("italic"));
             if (font.Find("size") is { } size)
@@ -328,8 +342,12 @@ public sealed class DrawingSheetFile
             MaxLength = node.ChildDouble("maxlen") ?? 0,
             MaxHeight = node.ChildDouble("maxheight") ?? 0,
             LineWidth = pen,
+            Face = face,
+            Color = color,
         };
     }
+
+    private static byte Byte(SList node, int index) => (byte)Math.Clamp((int)Number(node, index), 0, 255);
 
     /// <summary>
     /// The percent codes of older drawing sheets, as the variables they became — KiCad converts every text it reads

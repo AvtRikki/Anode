@@ -150,6 +150,35 @@ public class DrawingSheetRenderTests
         Render(scene, path!, "drawing-sheet-picture");
     }
 
+    [Fact]
+    public void Text_in_a_drawing_sheet_keeps_its_face_and_colour()
+    {
+        string? path = TestData.AnySchematic();
+        Assert.SkipWhen(path is null, TestData.SkipReason);
+        string face = new[] { "Helvetica", "Arial", "DejaVu Sans" }.FirstOrDefault(Anode.Render.Fonts.OutlineText.IsInstalled) ?? "";
+        Assert.SkipWhen(face.Length == 0, "no common face installed");
+
+        // The default sheet, its title in an installed face, bold italic and blue, its company in the stroke font but red.
+        string text = DrawingSheetFile.DefaultText
+            .Replace("(tbtext \"Title: ${TITLE}\" (pos 109 10.7) (font (size 2 2) bold italic))",
+                $"(tbtext \"Title: ${{TITLE}}\" (pos 109 10.7) (font (face \"{face}\") (size 2 2) bold italic (color 30 64 255 1)))", StringComparison.Ordinal)
+            .Replace("(tbtext \"${COMPANY}\" (pos 109 20) (font bold))",
+                "(tbtext \"${COMPANY}\" (pos 109 20) (font bold (color 200 0 40 1)))", StringComparison.Ordinal);
+        Assert.Contains("(face", text, StringComparison.Ordinal);
+
+        var scene = SchematicSceneBuilder.Build(Schematic.Load(path!), frame: new SheetFrameText(Path.GetFileName(path!))
+        {
+            Template = DrawingSheetFile.Parse(text),
+        });
+
+        var blue = Assert.Single(scene.Layers, l => l.Name == LayerStyle.Sch.Frame + "/1E40FFFF");
+        Assert.NotEmpty(blue.Polygons);
+        Assert.Contains(blue.Polygons, p => p.HoleStarts.Length > 0);
+        Assert.NotEmpty(Assert.Single(scene.Layers, l => l.Name == LayerStyle.Sch.Frame + "/C80028FF").Lines);
+
+        Render(scene, path!, "drawing-sheet-fonts");
+    }
+
     /// <summary>A picture that shows it is one: a coloured band with a word on it.</summary>
     private static byte[] Logo(int width, int height)
     {

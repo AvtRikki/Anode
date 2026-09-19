@@ -44,8 +44,12 @@ public readonly record struct LinePrim(Vector2 A, Vector2 B, float Width, int Ow
 /// <summary>Filled disc: vias, round pads, holes.</summary>
 public readonly record struct CirclePrim(Vector2 Center, float Radius, int Owner);
 
-/// <summary>Filled simple polygon (implicitly closed): zone fills, pads, filled shapes.</summary>
-public sealed class PolygonPrim(Vector2[] points, int owner)
+/// <summary>
+/// Filled polygon (implicitly closed): zone fills, pads, filled shapes — and, with holes, the letters of an outline
+/// font, whose counters are rings of their own. <see cref="Points"/> holds the outline, then each hole.
+/// </summary>
+/// <param name="holeStarts">Where each hole begins in <paramref name="points"/>; none for a simple polygon.</param>
+public sealed class PolygonPrim(Vector2[] points, int owner, int[]? holeStarts = null)
 {
     private int[]? _triangles;
 
@@ -53,13 +57,38 @@ public sealed class PolygonPrim(Vector2[] points, int owner)
 
     public int Owner { get; } = owner;
 
+    public int[] HoleStarts { get; } = holeStarts ?? [];
+
+    /// <summary>Each ring as a range of <see cref="Points"/>: the outline first, then the holes.</summary>
+    public IEnumerable<Range> Rings
+    {
+        get
+        {
+            int start = 0;
+            foreach (int next in HoleStarts)
+            {
+                yield return start..next;
+                start = next;
+            }
+
+            yield return start..Points.Length;
+        }
+    }
+
     public bool IsTriangulated => _triangles is not null;
 
     /// <summary>
     /// Triangle indices into <see cref="Points"/>, computed on first access and cached.
     /// Large zone fills take hundreds of milliseconds; see <see cref="SceneTriangulator"/> to do it up front.
     /// </summary>
-    public int[] Triangles => _triangles ??= [.. Anode.Geometry.Earcut.Triangulate(Points)];
+    public int[] Triangles => _triangles ??= Triangulate();
+
+    private int[] Triangulate()
+    {
+        var triangles = new List<int>();
+        Anode.Geometry.Earcut.Triangulate(Points, HoleStarts, triangles);
+        return [.. triangles];
+    }
 
     public RectD Bounds
     {

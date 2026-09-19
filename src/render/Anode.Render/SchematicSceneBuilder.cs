@@ -42,21 +42,9 @@ public static class SchematicSceneBuilder
     /// </summary>
     public static void RedrawFrame(SchematicScene scene)
     {
-        var layer = scene.Layer(LayerStyle.Sch.Frame);
-        layer.Lines.Clear();
-        layer.Polygons.Clear();
-        layer.Circles.Clear();
-        layer.Images.Clear();
-
+        DrawingSheetLayers.Clear(LayerStyle.Sch.Frame, scene.Layers, scene.Layer);
         new Builder(scene).AddDrawingSheet(DrawingSheet.PaperOf(scene.Schematic.Root));
         scene.Commit();
-    }
-
-    /// <summary>A picture centred on a scene point, its size given in nanometres.</summary>
-    internal static ImagePrim Picture(System.Numerics.Vector2 centre, Vector2D sizeNm, byte[] image)
-    {
-        double w = sizeNm.X / Units.NmPerMm / 2, h = sizeNm.Y / Units.NmPerMm / 2;
-        return new ImagePrim(new RectD(centre.X - w, centre.Y - h, centre.X + w, centre.Y + h), image, OutlineLoops.NoOwner);
     }
 
     /// <summary>Draws items again after an edit, into a scene they were removed from.</summary>
@@ -95,15 +83,12 @@ public static class SchematicSceneBuilder
         /// <summary>KiCad's default drawing sheet on the frame's own layer; see <see cref="DrawingSheet"/>.</summary>
         public void AddDrawingSheet(Vector2L paper)
         {
-            var layer = scene.Layer(LayerStyle.Sch.Frame);
             DrawingSheet.Draw(
                 paper,
                 scene.Schematic.TitleBlock,
                 scene.Schematic.Paper,
                 scene.Frame,
-                (a, b, width) => layer.Lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), (float)(width / Mm), OutlineLoops.NoOwner)),
-                outline => layer.Polygons.Add(new PolygonPrim([.. outline.Select(scene.ToScene)], OutlineLoops.NoOwner)),
-                (centre, size, image) => layer.Images.Add(Picture(scene.ToScene(centre), size, image)));
+                new DrawingSheetLayers(LayerStyle.Sch.Frame, scene.Layer, scene.ToScene));
         }
 
         public void Add(SchItem item)

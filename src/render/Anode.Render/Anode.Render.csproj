@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\core\Anode.Kicad\Anode.Kicad.csproj" />
     <ProjectReference Include="..\..\core\Anode.Geometry\Anode.Geometry.csproj" />
+    <!-- The font engine behind outline (TrueType) text: glyph outlines only, nothing is drawn with it here. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
   </ItemGroup>
 
   <ItemGroup>

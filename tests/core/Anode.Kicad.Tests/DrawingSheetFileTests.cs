@@ -121,6 +121,21 @@ public class DrawingSheetFileTests
     }
 
     [Fact]
+    public void A_text_carries_its_face_and_colour()
+    {
+        var text = Assert.IsType<WksText>(Assert.Single(DrawingSheetFile.Parse(
+            "(kicad_wks (tbtext \"x\" (pos 1 1) (font (face \"Arial\") (size 2 2) bold (color 30 64 255 0.5))))").Items));
+
+        Assert.Equal("Arial", text.Face);
+        Assert.Equal(((byte)30, (byte)64, (byte)255, 0.5), text.Color);
+        Assert.True(text.Bold);
+
+        var plain = Assert.IsType<WksText>(Assert.Single(DrawingSheetFile.Parse("(kicad_wks (tbtext \"x\" (pos 1 1)))").Items));
+        Assert.Null(plain.Face);
+        Assert.Null(plain.Color);
+    }
+
+    [Fact]
     public void Something_else_is_refused()
     {
         Assert.Throws<KiCadFormatException>(() => DrawingSheetFile.Parse("(kicad_sch (version 1))"));

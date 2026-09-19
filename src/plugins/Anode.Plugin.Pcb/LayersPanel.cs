@@ -53,9 +53,11 @@ public sealed class LayersPanel : ContentControl
         }
         else
         {
-            foreach (var layer in document.Scene.Layers.Where(l => !l.IsCopper).OrderByDescending(l => l.DrawOrder))
+            // A layer the scene split by colour — the page's coloured text — is one row, shown and hidden together.
+            foreach (var group in document.Scene.Layers.Where(l => !l.IsCopper).OrderByDescending(l => l.DrawOrder)
+                         .GroupBy(l => LayerStyle.BaseOf(l.Name)))
             {
-                rows.Children.Add(Row(document, [layer], Title(layer.Name), null));
+                rows.Children.Add(Row(document, [.. group], Title(group.Key), null));
             }
         }
 
