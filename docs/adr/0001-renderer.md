@@ -83,6 +83,13 @@ and emitted by `SceneBuilder` as ordinary stroke segments. Both backends, hit-te
 therefore handle text with no special path; the Skia system-font text was removed.
 This raises the Jetson scene from 446k to 1.03M primitives: OpenGL median 5.2 ms, p95 10.2 ms, 31.5 MB of buffers.
 
+Text whose font names a face (KiCad 7+) is emitted as filled polygons with holes instead, laid out by
+`OutlineText` with KiCad's outline-font rules and HarfBuzz shaping over SkiaSharp glyph outlines. A board text
+is drawn from the `render_cache` KiCad saved beside it while that still shows the same text at the same angle,
+exactly as KiCad does, so a board looks as authored even without its faces; the editor moves that cache with the
+text. A face this machine lacks is stood in for (monospaced for monospaced, serif for serif, else the system sans)
+and reported in the checks.
+
 ## Follow-ups
 
 1. Layer transparency: render semi-transparent layers into an offscreen texture and composite.

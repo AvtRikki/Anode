@@ -107,9 +107,14 @@ public sealed class Text : BoardItem
 
     public long? Thickness => Font?.ChildNm("thickness");
 
-    public bool IsBold => Font?.ChildBool("bold") == true;
+    public bool IsBold => TextFont.Bold;
 
-    public bool IsItalic => Font?.ChildBool("italic") == true;
+    public bool IsItalic => TextFont.Italic;
+
+    /// <summary>The typeface the text is set in, or null for KiCad's stroke font.</summary>
+    public string? FontFace => TextFont.Face;
+
+    private TextFont TextFont => TextFont.Read(Effects);
 
     public bool IsMirrored => Effects?.Find("justify")?.HasSymbol("mirror") == true;
 
@@ -183,7 +188,31 @@ public sealed class Text : BoardItem
 
     public override Transform2D ToBoard => _footprint?.Transform ?? Transform2D.Identity;
 
+    /// <summary>
+    /// The letters KiCad drew for a text in a face, saved beside it: <c>(render_cache "text" angle (polygon (pts …)
+    /// (pts …)) …)</c> in board coordinates, the first ring of each polygon its outline and the rest its holes. Null
+    /// when the file has none.
+    /// </summary>
+    public TextRenderCache? RenderCache =>
+        Node.Find("render_cache") is { Count: > 2 } cache && cache.Str(1) is { } text && cache.AtomAt(2) is { } angle && angle.TryGetDouble(out double degrees)
+            ? new TextRenderCache(text, degrees, [.. cache.Lists().Where(l => l.Head == "polygon").Select(Glyph)])
+            : null;
+
+    private static TextRenderCache.Polygon Glyph(SList polygon)
+    {
+        var rings = polygon.Lists().Where(l => l.Head == "pts").Select(p => p.Points()).ToList();
+        return new TextRenderCache.Polygon(rings.Count > 0 ? rings[0] : [], rings.Skip(1).ToList());
+    }
+
     private SList? Effects => Node.Find("effects");
 
     private SList? Font => Effects?.Find("font");
+}
+
+/// <summary>What KiCad drew for a text in a face when it last saved the file; see <see cref="Text.RenderCache"/>.</summary>
+/// <param name="Text">The text as it was shown, variables filled in.</param>
+/// <param name="Angle">The angle it was drawn at, degrees.</param>
+public sealed record TextRenderCache(string Text, double Angle, IReadOnlyList<TextRenderCache.Polygon> Polygons)
+{
+    public sealed record Polygon(Vector2L[] Outline, IReadOnlyList<Vector2L[]> Holes);
 }

@@ -62,8 +62,8 @@ public static partial class DrawingSheet
     /// corner of the area inside the margins, each repeat moved by its increment and dropped past the first where it
     /// would leave that area, repeated labels counting up from their last character, and <c>${NAME}</c> filled in from
     /// the title block, the page and the project, or left as written when nothing answers to it. Text with a colour
-    /// of its own keeps it; text naming an installed face is drawn in that face's outlines, and in the stroke font
-    /// when this machine does not have it.
+    /// of its own keeps it; text naming a face is drawn in that face's outlines, or in a stand-in's when this machine
+    /// does not have it, as KiCad does.
     /// </summary>
     /// <param name="paper">The paper, in nanometres.</param>
     /// <returns>How many items could not be drawn: pictures that are not PNGs.</returns>
@@ -193,9 +193,11 @@ public static partial class DrawingSheet
         // Squeezed, never stretched, to the box a template allows it.
         if (text.MaxLength > 0 || text.MaxHeight > 0)
         {
-            var probe = new StrokeTextStyle(width * Mm, height * Mm, 0, align, valign, 0, false, text.Italic, 1.0);
+            var probe = new TextStyle(width * Mm, height * Mm, 0, align, valign, 0, false, text.Italic, 1.0);
             string[] lines = full.Split('\n');
-            double measured = lines.Max(l => StrokeTextLayout.MeasureLine(StrokeFont.Default, l, probe)) / Mm;
+            double measured = lines.Max(l => text.Face is { } f
+                ? OutlineText.MeasureLine(f, text.Bold, l, probe)
+                : StrokeTextLayout.MeasureLine(StrokeFont.Default, l, probe)) / Mm;
             double tall = height * (1 + ((lines.Length - 1) * 1.62));
             if (text.MaxLength > 0 && measured > text.MaxLength)
             {
@@ -209,7 +211,7 @@ public static partial class DrawingSheet
         }
 
         double pen = text.Bold ? Math.Min(width, height) / 5 : text.LineWidth != 0 ? text.LineWidth : setup.TextLineWidth;
-        var style = new StrokeTextStyle(width * Mm, height * Mm, pen * Mm, align, valign, text.Rotation, false, text.Italic, 1.0);
+        var style = new TextStyle(width * Mm, height * Mm, pen * Mm, align, valign, text.Rotation, false, text.Italic, 1.0);
 
         for (int j = 0; j < text.Repeat; j++)
         {
@@ -225,14 +227,10 @@ public static partial class DrawingSheet
                 continue;
             }
 
-            if (text.Face is { } face
-                && OutlineText.Layout(face, text.Bold, text.Italic, label, start(j) * Mm, width * Mm, height * Mm, align, valign, text.Rotation) is { } shapes)
+            if (text.Face is { } face)
             {
-                foreach (var shape in shapes)
-                {
-                    sink.Fill(shape.Outline, shape.Holes, colour);
-                }
-
+                OutlineText.Layout(face, text.Bold, label, start(j) * Mm, style,
+                    shape => sink.Fill(shape.Outline, shape.Holes, colour), (p, q) => sink.Stroke(p, q, pen * Mm, colour));
                 continue;
             }
 

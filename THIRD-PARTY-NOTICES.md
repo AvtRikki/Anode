@@ -19,6 +19,11 @@ commit `a46f62841996fbc9edac9b9daef348651a1b1496`.
 The text layout rules in `Anode.Render` follow KiCad's stroke font behaviour (glyph scale, baseline offset,
 italic tilt, inter-line spacing) so boards render as they do in KiCad; the implementation is written from scratch.
 
+Outline (TrueType/OpenType) text follows KiCad's outline font placement (`OUTLINE_FONT`, `FONT::getLinePositions`):
+the 1.4 em compensation, line pitch, super- and subscript proportions and overbar height. Glyph outlines come from
+SkiaSharp (MIT) and shaping from HarfBuzzSharp (MIT; HarfBuzz itself under the Old MIT license), the same
+libraries Avalonia already ships with the application.
+
 ## KiCad file formats and test data
 
 KiCad demo and QA boards used by the tests are downloaded by `tools/fetch-fixtures.sh` and are not part of this

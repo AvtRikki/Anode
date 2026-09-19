@@ -111,7 +111,7 @@ public static class SchematicSceneBuilder
                     AddLabel(label, scene.AddOwner(label));
                     break;
                 case SchText text:
-                    Text(LayerStyle.Sch.Text, text.Text, text.Position.ToDouble(), text.TextHeight, text.Angle,
+                    Text(LayerStyle.Sch.Text, text.Text, text.Position.ToDouble(), text.TextHeight, text.Font, text.Angle,
                         text.Alignment, scene.AddOwner(text));
                     break;
                 case SchGraphic graphic:
@@ -146,7 +146,7 @@ public static class SchematicSceneBuilder
 
         private void AddLabel(SchLabel label, int owner)
         {
-            Text(LayerStyle.Sch.Label, label.Text, label.Position.ToDouble(), label.TextHeight, label.Angle, label.Alignment, owner);
+            Text(LayerStyle.Sch.Label, label.Text, label.Position.ToDouble(), label.TextHeight, label.Font, label.Angle, label.Alignment, owner);
         }
 
         private void AddSymbol(SymbolInstance symbol, int owner)
@@ -178,7 +178,7 @@ public static class SchematicSceneBuilder
 
                 if (!field.IsHidden && value.Length > 0)
                 {
-                    Text(LayerStyle.Sch.Field, value, field.Position.ToDouble(), field.TextHeight, field.Angle, field.Alignment, owner);
+                    Text(LayerStyle.Sch.Field, value, field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
                 }
             }
         }
@@ -202,7 +202,7 @@ public static class SchematicSceneBuilder
             {
                 var middle = new Vector2D((root.X + tip.X) / 2, (root.Y + tip.Y) / 2);
                 var offset = vertical ? new Vector2D(-pin.NumberHeight * 0.7, 0) : new Vector2D(0, -pin.NumberHeight * 0.7);
-                TextScene(LayerStyle.Sch.PinText, pin.Number, middle + offset, pin.NumberHeight, angle, ("center", "center"), owner);
+                TextScene(LayerStyle.Sch.PinText, pin.Number, middle + offset, pin.NumberHeight, pin.NumberFont, angle, ("center", "center"), owner);
             }
 
             if (definition.ShowPinNames && pin.Name is { Length: > 0 } name && name != "~")
@@ -213,7 +213,7 @@ public static class SchematicSceneBuilder
                 var alignment = vertical
                     ? (dy > 0 ? ("left", "center") : ("right", "center"))
                     : (dx > 0 ? ("left", "center") : ("right", "center"));
-                TextScene(LayerStyle.Sch.PinText, name, anchor, pin.NameHeight, angle, alignment, owner);
+                TextScene(LayerStyle.Sch.PinText, name, anchor, pin.NameHeight, pin.NameFont, angle, alignment, owner);
             }
         }
 
@@ -236,13 +236,13 @@ public static class SchematicSceneBuilder
             {
                 if (!field.IsHidden && field.Value.Length > 0)
                 {
-                    Text(LayerStyle.Sch.Field, field.Value, field.Position.ToDouble(), field.TextHeight, field.Angle, field.Alignment, owner);
+                    Text(LayerStyle.Sch.Field, field.Value, field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
                 }
             }
 
             foreach (var pin in sheet.Pins)
             {
-                Text(LayerStyle.Sch.Label, pin.Name, pin.Position.ToDouble(), pin.TextHeight, pin.Angle, ("left", "center"), owner);
+                Text(LayerStyle.Sch.Label, pin.Name, pin.Position.ToDouble(), pin.TextHeight, pin.Font, pin.Angle, ("left", "center"), owner);
             }
         }
 
@@ -362,11 +362,11 @@ public static class SchematicSceneBuilder
             }
         }
 
-        private void Text(string layer, string value, Vector2D anchorNm, long heightNm, double angle,
+        private void Text(string layer, string value, Vector2D anchorNm, long heightNm, TextFont font, double angle,
             (string Horizontal, string Vertical) alignment, int owner) =>
-            TextScene(layer, value, anchorNm, heightNm, angle, alignment, owner);
+            TextScene(layer, value, anchorNm, heightNm, font, angle, alignment, owner);
 
-        private void TextScene(string layer, string value, Vector2D anchorNm, long heightNm, double angle,
+        private void TextScene(string layer, string value, Vector2D anchorNm, long heightNm, TextFont font, double angle,
             (string Horizontal, string Vertical) alignment, int owner)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -374,29 +374,23 @@ public static class SchematicSceneBuilder
                 return;
             }
 
+            // KiCad's pen for schematic text: as written, or a fifth of the size when bold, an eighth otherwise, and
+            // never more than a quarter of it.
             double height = heightNm > 0 ? heightNm : 1_270_000;
-            var style = new StrokeTextStyle(
+            double pen = font.Thickness is > 1 ? font.Thickness.Value : height / (font.Bold ? 5 : 8);
+            var style = new TextStyle(
                 height,
                 height,
-                height / 8,
+                Math.Min(pen, height / 4),
                 alignment.Horizontal switch { "left" => TextHAlign.Left, "right" => TextHAlign.Right, _ => TextHAlign.Center },
                 alignment.Vertical switch { "top" => TextVAlign.Top, "bottom" => TextVAlign.Bottom, _ => TextVAlign.Center },
                 // Schematic text is never upside down: 180° reads as 0°, 270° as 90°.
                 angle % 180,
                 false,
-                false,
+                font.Italic,
                 1.0);
 
-            var geometry = scene.Layer(layer);
-            float width = (float)(style.PenWidth / Mm);
-            StrokeTextLayout.Layout(StrokeFont.Default, value, anchorNm, style, (a, b) =>
-            {
-                var p = scene.ToScene(a);
-                var q = scene.ToScene(b);
-                geometry.Lines.Add(new LinePrim(p, q, width, owner));
-                float h = width / 2;
-                scene.GrowOwner(owner, new RectD(Math.Min(p.X, q.X) - h, Math.Min(p.Y, q.Y) - h, Math.Max(p.X, q.X) + h, Math.Max(p.Y, q.Y) + h));
-            });
+            TextShapes.Emit(scene.Layer(layer), value, anchorNm, style, font, scene.ToScene, b => scene.GrowOwner(owner, b), owner);
         }
     }
 }

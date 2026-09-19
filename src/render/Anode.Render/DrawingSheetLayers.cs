@@ -14,19 +14,8 @@ internal sealed class DrawingSheetLayers(string frame, Func<string, LayerGeometr
     public void Stroke(Vector2D a, Vector2D b, double width, ColorRgba? colour) =>
         For(colour).Lines.Add(new LinePrim(toScene(a), toScene(b), (float)(width / Units.NmPerMm), OutlineLoops.NoOwner));
 
-    public void Fill(IReadOnlyList<Vector2D> outline, IReadOnlyList<IReadOnlyList<Vector2D>> holes, ColorRgba? colour)
-    {
-        var points = new List<Vector2>(outline.Count + holes.Sum(h => h.Count));
-        points.AddRange(outline.Select(toScene));
-        var starts = new List<int>(holes.Count);
-        foreach (var hole in holes)
-        {
-            starts.Add(points.Count);
-            points.AddRange(hole.Select(toScene));
-        }
-
-        For(colour).Polygons.Add(new PolygonPrim([.. points], OutlineLoops.NoOwner, starts.Count > 0 ? [.. starts] : null));
-    }
+    public void Fill(IReadOnlyList<Vector2D> outline, IReadOnlyList<IReadOnlyList<Vector2D>> holes, ColorRgba? colour) =>
+        For(colour).Polygons.Add(PolygonPrim.FromRings(outline, holes, toScene, OutlineLoops.NoOwner));
 
     public void Picture(Vector2D centre, Vector2D size, byte[] image)
     {

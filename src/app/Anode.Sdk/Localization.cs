@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using Avalonia.Threading;
 
 namespace Anode.Sdk;
 
@@ -61,7 +62,7 @@ public static class Tr
         }
 
         Cache.Clear();
-        Changed?.Invoke();
+        RaiseChanged();
         return new CatalogRegistration(catalog);
     }
 
@@ -76,7 +77,28 @@ public static class Tr
         _culture = culture;
         Cache.Clear();
         CultureInfo.DefaultThreadCurrentUICulture = culture;
-        Changed?.Invoke();
+        RaiseChanged();
+    }
+
+    /// <summary>
+    /// Tells the views on their own thread: a plugin registers its texts where it loads, which need not be the UI
+    /// thread, and the views may only be touched from there.
+    /// </summary>
+    private static void RaiseChanged()
+    {
+        if (Changed is not { } changed)
+        {
+            return;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            changed();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(changed);
+        }
     }
 
     /// <summary>Picks the best available language for <paramref name="preferred"/> (e.g. the system's).</summary>
@@ -165,7 +187,7 @@ public static class Tr
             }
 
             Cache.Clear();
-            Changed?.Invoke();
+            RaiseChanged();
         }
     }
 }

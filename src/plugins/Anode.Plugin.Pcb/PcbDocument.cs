@@ -3,8 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Anode.Editing;
 using Anode.Kicad;
+using Anode.Kicad.DrawingSheets;
 using Anode.Sdk;
 using Anode.Render;
+using Anode.Render.Fonts;
 
 namespace Anode.Plugin.Pcb;
 
@@ -25,7 +27,8 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
         {
             var board = Board.Load(path);
             // A board is one page, framed with the drawing sheet its project names for boards.
-            var scene = SceneBuilder.Build(board, SheetFrameText.ForProject(path, board: true, out string? missing));
+            var frame = SheetFrameText.ForProject(path, board: true, out string? missing);
+            var scene = SceneBuilder.Build(board, frame);
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 // GPU upload needs triangles; compute them here instead of stalling the first frame.
@@ -33,9 +36,28 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
             }
 
             log.Info(Tr.T("pcb.log.loaded", Path.GetFileName(path), board.Footprints.Count, scene.PrimitiveCount));
-            return (IDocument)new PcbDocument(board, scene, path) { DrawingSheetMissing = missing };
+            return (IDocument)new PcbDocument(board, scene, path)
+            {
+                DrawingSheetMissing = missing,
+                MissingFaces = MissingFaces(board, frame),
+            };
         },
         cancellationToken);
+
+    /// <summary>
+    /// Faces the board and its drawing sheet name that this machine lacks, with what stands in for each, and whether
+    /// every text in that face is drawn from the letters KiCad saved — in which case the board looks as authored.
+    /// </summary>
+    private static IReadOnlyList<(string Face, string StandIn, bool Saved)> MissingFaces(Board board, SheetFrameText frame)
+    {
+        var onBoard = TextFont.FacesIn(board.Document.Root);
+        var inFrame = frame.Template?.Items.OfType<WksText>().Select(t => t.Face).OfType<string>() ?? [];
+        return [.. OutlineText.StandIns(onBoard.Concat(inFrame)).Select(m =>
+        {
+            var texts = board.Texts.Where(t => string.Equals(t.FontFace, m.Face, StringComparison.OrdinalIgnoreCase)).ToList();
+            return (m.Face, m.StandIn, texts.Count > 0 && texts.All(SceneBuilder.DrawsFromCache) && !inFrame.Contains(m.Face, StringComparer.OrdinalIgnoreCase));
+        })];
+    }
 }
 
 /// <summary>One open board: the canvas, its editor, and what the workbench shows around them.</summary>
@@ -214,7 +236,16 @@ public sealed class PcbDocument : DocumentBase
         }
     }
 
-    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue()];
+    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue(), .. FaceIssues()];
+
+    /// <summary>Faces this machine lacks: what stands in, and whether KiCad's saved letters make that moot.</summary>
+    internal IReadOnlyList<(string Face, string StandIn, bool Saved)> MissingFaces { get; init; } = [];
+
+    private IEnumerable<Issue> FaceIssues() => MissingFaces.Select(m => new Issue(
+        IssueSeverity.Warning,
+        Tr.T("pcb.issue.face.title", m.Face),
+        Tr.T(m.Saved ? "pcb.issue.face.saved" : "pcb.issue.face.detail", m.Face, m.StandIn),
+        m.StandIn));
 
     /// <summary>The drawing sheet the project names, when it is missing or will not read; the default is drawn instead.</summary>
     internal string? DrawingSheetMissing { get; init; }

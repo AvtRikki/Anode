@@ -5,9 +5,11 @@ using Avalonia.Input;
 using Anode.Editing;
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.DrawingSheets;
 using Anode.Kicad.Editing;
 using Anode.Sdk;
 using Anode.Render;
+using Anode.Render.Fonts;
 
 namespace Anode.Plugin.Schematic;
 
@@ -74,6 +76,8 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design)
             {
                 DrawingSheetMissing = missing,
+                MissingFaces = OutlineText.StandIns(TextFont.FacesIn(schematic.Document.Root)
+                    .Concat(frame.Template?.Items.OfType<WksText>().Select(t => t.Face).OfType<string>() ?? [])),
             };
         },
         cancellationToken);
@@ -276,7 +280,16 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     public override IReadOnlyList<Issue> Issues =>
-        [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue(), .. Duplicates(), .. LoosePins()];
+        [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. LoosePins()];
+
+    /// <summary>Faces the sheet and its drawing sheet name that this machine lacks, each with what stands in.</summary>
+    internal IReadOnlyList<(string Face, string StandIn)> MissingFaces { get; init; } = [];
+
+    private IEnumerable<Issue> FaceIssues() => MissingFaces.Select(m => new Issue(
+        IssueSeverity.Warning,
+        Tr.T("sch.issue.face.title", m.Face),
+        Tr.T("sch.issue.face.detail", m.Face, m.StandIn),
+        m.StandIn));
 
     /// <summary>The drawing sheet the project names, when it is missing or will not read; the default is drawn instead.</summary>
     internal string? DrawingSheetMissing { get; init; }

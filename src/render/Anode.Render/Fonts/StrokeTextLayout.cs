@@ -1,22 +1,6 @@
-using System.Text;
 using Anode.Geometry;
 
 namespace Anode.Render.Fonts;
-
-/// <param name="Width">Glyph width in board units (KiCad text size X).</param>
-/// <param name="Height">Glyph height in board units (KiCad text size Y).</param>
-/// <param name="PenWidth">Stroke width in board units.</param>
-/// <param name="AngleDegrees">Counter-clockwise on screen, already adjusted for keep-upright.</param>
-public readonly record struct StrokeTextStyle(
-    double Width,
-    double Height,
-    double PenWidth,
-    TextHAlign HAlign = TextHAlign.Center,
-    TextVAlign VAlign = TextVAlign.Center,
-    double AngleDegrees = 0,
-    bool Mirrored = false,
-    bool Italic = false,
-    double LineSpacing = 1);
 
 /// <summary>
 /// Lays out text with a <see cref="StrokeFont"/> the way KiCad places stroke text: line boxes, alignment offsets,
@@ -35,19 +19,10 @@ public static class StrokeTextLayout
     private const double SubscriptDrop = 0.15;
     private const int TabWidth = 4;
 
-    [Flags]
-    private enum Markup
-    {
-        None = 0,
-        Overbar = 1,
-        Superscript = 2,
-        Subscript = 4,
-    }
-
     /// <summary>Emits every stroke segment of <paramref name="text"/> anchored at <paramref name="anchor"/>.</summary>
-    public static void Layout(StrokeFont font, string text, Vector2D anchor, in StrokeTextStyle style, Action<Vector2D, Vector2D> segment)
+    public static void Layout(StrokeFont font, string text, Vector2D anchor, in TextStyle style, Action<Vector2D, Vector2D> segment)
     {
-        string[] lines = text.Replace("\r\n", "\n").Split('\n');
+        string[] lines = TextMarkup.Lines(text);
         double interline = style.Height * InterlinePitch * LegacyInterlineFactor * style.LineSpacing;
 
         double height = 0;
@@ -85,10 +60,10 @@ public static class StrokeTextLayout
     }
 
     /// <summary>Advance width of a single line in board units.</summary>
-    public static double MeasureLine(StrokeFont font, string line, in StrokeTextStyle style)
+    public static double MeasureLine(StrokeFont font, string line, in TextStyle style)
     {
         double width = 0;
-        foreach (var (run, markup) in ParseMarkup(line))
+        foreach (var (run, markup) in TextMarkup.Parse(line))
         {
             width += Advance(font, run, GlyphScale(markup) * style.Width, width, style.Width);
         }
@@ -96,19 +71,19 @@ public static class StrokeTextLayout
         return width;
     }
 
-    private static void DrawLine(StrokeFont font, string line, Vector2D position, in StrokeTextStyle style, in Emitter emitter)
+    private static void DrawLine(StrokeFont font, string line, Vector2D position, in TextStyle style, in Emitter emitter)
     {
         double cursorX = position.X;
         double tilt = style.Italic ? ItalicTilt : 0;
 
-        foreach (var (run, markup) in ParseMarkup(line))
+        foreach (var (run, markup) in TextMarkup.Parse(line))
         {
             double scale = GlyphScale(markup);
             double glyphW = style.Width * scale;
             double glyphH = style.Height * scale;
             double baseline = position.Y
-                              + (markup.HasFlag(Markup.Subscript) ? glyphH * SubscriptDrop : 0)
-                              - (markup.HasFlag(Markup.Superscript) ? glyphH * SuperscriptRise : 0);
+                              + (markup.HasFlag(TextMarkup.Style.Subscript) ? glyphH * SubscriptDrop : 0)
+                              - (markup.HasFlag(TextMarkup.Style.Superscript) ? glyphH * SuperscriptRise : 0);
             double runStart = cursorX;
 
             foreach (var rune in run.EnumerateRunes())
@@ -146,7 +121,7 @@ public static class StrokeTextLayout
                 cursorX += glyph.Advance * glyphW;
             }
 
-            if (markup.HasFlag(Markup.Overbar) && cursorX > runStart)
+            if (markup.HasFlag(TextMarkup.Style.Overbar) && cursorX > runStart)
             {
                 double trim = style.Width * 0.1;
                 double barY = position.Y - style.Height * OverbarHeight;
@@ -185,51 +160,8 @@ public static class StrokeTextLayout
         return width;
     }
 
-    private static double GlyphScale(Markup markup) =>
-        markup.HasFlag(Markup.Superscript) || markup.HasFlag(Markup.Subscript) ? SuperSubScale : 1;
-
-    /// <summary>Splits KiCad markup into runs; unbalanced markup is kept literally.</summary>
-    private static List<(string Run, Markup Style)> ParseMarkup(string line)
-    {
-        var runs = new List<(string, Markup)>();
-        var plain = new StringBuilder();
-        int i = 0;
-        while (i < line.Length)
-        {
-            if (i + 1 < line.Length && line[i + 1] == '{' && line[i] is '~' or '^' or '_')
-            {
-                int close = line.IndexOf('}', i + 2);
-                if (close > 0)
-                {
-                    if (plain.Length > 0)
-                    {
-                        runs.Add((plain.ToString(), Markup.None));
-                        plain.Clear();
-                    }
-
-                    var style = line[i] switch
-                    {
-                        '~' => Markup.Overbar,
-                        '^' => Markup.Superscript,
-                        _ => Markup.Subscript,
-                    };
-                    runs.Add((line[(i + 2)..close], style));
-                    i = close + 1;
-                    continue;
-                }
-            }
-
-            plain.Append(line[i]);
-            i++;
-        }
-
-        if (plain.Length > 0 || runs.Count == 0)
-        {
-            runs.Add((plain.ToString(), Markup.None));
-        }
-
-        return runs;
-    }
+    private static double GlyphScale(TextMarkup.Style markup) =>
+        markup.HasFlag(TextMarkup.Style.Superscript) || markup.HasFlag(TextMarkup.Style.Subscript) ? SuperSubScale : 1;
 
     /// <summary>Mirrors about the anchor's X, then rotates counter-clockwise (on screen) about the anchor.</summary>
     private readonly struct Emitter(Vector2D anchor, bool mirrored, double sin, double cos, Action<Vector2D, Vector2D> segment)

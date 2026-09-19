@@ -90,6 +90,7 @@ public static class BoardEdits
                     }
                 }
 
+                CarryRenderCache(node, Map, degrees, rotates);
                 break;
 
             case Zone:
@@ -124,6 +125,12 @@ public static class BoardEdits
             }
         }
 
+        // What KiCad drew for its texts is saved in board frame, so it moves with the footprint.
+        foreach (var child in node.Lists().Where(c => c.Head is "property" or "fp_text"))
+        {
+            CarryRenderCache(child, map, degrees, rotates);
+        }
+
         // Pad and text angles are stored in board frame, so they turn with the footprint.
         if (rotates)
         {
@@ -151,5 +158,23 @@ public static class BoardEdits
         }
 
         footprint.Refresh();
+    }
+
+    /// <summary>
+    /// Moves the letters KiCad saved for a text with the text itself, and turns their angle with it — as KiCad moves
+    /// its own cache. A text that turns past upright is laid out afresh when drawn, the angle no longer matching.
+    /// </summary>
+    private static void CarryRenderCache(SList text, Func<Vector2L, Vector2L> map, double degrees, bool rotates)
+    {
+        if (text.Find("render_cache") is not { } cache)
+        {
+            return;
+        }
+
+        cache.MapAllPoints(map);
+        if (rotates && cache.AtomAt(2) is { } angle && angle.TryGetDouble(out double current))
+        {
+            cache.SetAngle(2, KiCadNumber.Normalize360(current + degrees), omitWhenZero: false);
+        }
     }
 }

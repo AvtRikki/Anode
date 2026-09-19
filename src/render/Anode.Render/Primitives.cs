@@ -59,6 +59,25 @@ public sealed class PolygonPrim(Vector2[] points, int owner, int[]? holeStarts =
 
     public int[] HoleStarts { get; } = holeStarts ?? [];
 
+    /// <summary>An outline and its holes, each point taken into the scene by <paramref name="toScene"/>.</summary>
+    public static PolygonPrim FromRings(
+        IReadOnlyList<Anode.Geometry.Vector2D> outline,
+        IReadOnlyList<IReadOnlyList<Anode.Geometry.Vector2D>> holes,
+        Func<Anode.Geometry.Vector2D, Vector2> toScene,
+        int owner)
+    {
+        var points = new List<Vector2>(outline.Count + holes.Sum(h => h.Count));
+        points.AddRange(outline.Select(toScene));
+        var starts = new List<int>(holes.Count);
+        foreach (var hole in holes)
+        {
+            starts.Add(points.Count);
+            points.AddRange(hole.Select(toScene));
+        }
+
+        return new PolygonPrim([.. points], owner, starts.Count > 0 ? [.. starts] : null);
+    }
+
     /// <summary>Each ring as a range of <see cref="Points"/>: the outline first, then the holes.</summary>
     public IEnumerable<Range> Rings
     {

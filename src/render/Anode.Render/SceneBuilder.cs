@@ -103,6 +103,14 @@ public static class SceneBuilder
         scene.Commit();
     }
 
+    /// <summary>
+    /// Whether <paramref name="text"/> is drawn from the letters KiCad saved for it: it names a face and the saved
+    /// letters still show its text at its angle — KiCad's own test before it sets a text afresh.
+    /// </summary>
+    public static bool DrawsFromCache(Text text) =>
+        text.FontFace is not null && text.RenderCache is { } cache && cache.Text == text.DisplayValue
+        && Math.Abs(Math.IEEERemainder(cache.Angle - text.DrawAngle, 360)) < 1e-6;
+
     private sealed class Builder(BoardScene scene)
     {
         private const double Mm = Units.NmPerMm;
@@ -337,9 +345,28 @@ public static class SceneBuilder
                 return;
             }
 
+            // KiCad draws a text in a face from the letters it saved, as long as they still show this text at this
+            // angle — so a board looks as its author saw it, whether or not this machine has the face.
+            if (DrawsFromCache(text) && text.RenderCache is { } cache)
+            {
+                var geometry = scene.Layer(layerName);
+                foreach (var glyph in cache.Polygons.Where(g => g.Outline.Length >= 3))
+                {
+                    var polygon = PolygonPrim.FromRings(
+                        [.. glyph.Outline.Select(p => p.ToDouble())],
+                        [.. glyph.Holes.Select(h => (IReadOnlyList<Vector2D>)[.. h.Select(p => p.ToDouble())])],
+                        scene.ToScene,
+                        owner);
+                    geometry.Polygons.Add(polygon);
+                    scene.GrowOwner(owner, polygon.Bounds);
+                }
+
+                return;
+            }
+
             var size = text.Size;
             double scale = text.ToBoard.ScaleFactor;
-            var style = new StrokeTextStyle(
+            var style = new TextStyle(
                 size.X * scale,
                 size.Y * scale,
                 text.PenWidth * scale,
@@ -350,11 +377,9 @@ public static class SceneBuilder
                 text.IsItalic,
                 text.LineSpacing);
 
-            // Text becomes ordinary stroked segments, so every backend, hit-testing and highlighting handle it.
-            var layer = scene.Layer(layerName);
-            float width = (float)(style.PenWidth / Mm);
-            StrokeTextLayout.Layout(StrokeFont.Default, value, text.BoardPosition.ToDouble(), style,
-                (a, b) => AddLine(layer, scene.ToScene(a), scene.ToScene(b), width, owner));
+            // Text becomes ordinary segments and polygons, so every backend, hit-testing and highlighting handle it.
+            TextShapes.Emit(scene.Layer(layerName), value, text.BoardPosition.ToDouble(), style,
+                new TextFont(text.FontFace, text.IsBold, text.IsItalic, text.Thickness), scene.ToScene, b => scene.GrowOwner(owner, b), owner);
         }
 
         private void Line(string layer, Vector2D a, Vector2D b, double widthNm, int owner) =>

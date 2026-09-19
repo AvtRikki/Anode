@@ -1,6 +1,6 @@
 # Schematic editing
 
-Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026-09-16.
+Status, 2026-09-19: **stages 0–3 done, parts of stages 4 and 5.** Written 2026-09-16.
 
 - **Stage 0** — done: one command stack over tree nodes, `SchEdits`, `SchematicEditor`, incremental scene, undo and
   redo in the header.
@@ -36,9 +36,16 @@ sheet prints always, the rest of KiCad's nine when a file uses them. A board's t
 overview the same way, and the board is drawn on its page with the same drawing sheet. A project's own drawing
 sheet (.kicad_wks, named per editor in the .kicad_pro) is drawn in place of the default, with the project's text
 variables; a missing one falls back to the default and says so in the checks. Pictures in a drawing sheet are drawn
-by both renderers, and a text keeps its own colour and, when this machine has it, its own face. Not yet: pictures
-other than PNG, a fallback face when the named one is missing (the stroke font stands in), and editing a drawing
-sheet.
+by both renderers, and a text keeps its own colour and its own face. Not yet: pictures other than PNG, and editing
+a drawing sheet.
+
+Texts on the sheet — free text, labels, fields, pin names and numbers, sheet pins — and on the board are drawn in
+the face their font names, laid out by KiCad's outline-font rules and shaped with HarfBuzz; bold and italic reach
+the stroke font too. Checked against the letters KiCad saved in the demo boards (147 texts): the anchored edge
+agrees within a few hundredths of a millimetre, top and bottom within about 0.1 mm even with a stand-in face. A face this machine lacks is
+stood in for as fontconfig would and reported in the checks; a board text is drawn from KiCad's saved letters
+(`render_cache`) while they still fit, so the board looks as authored regardless. Not yet: fonts embedded in the
+file (KiCad 9's `embedded_fonts`; no demo carries one), knockout text, and choosing a face in the inspector.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

@@ -154,6 +154,39 @@ public class EditingTests
     }
 
     [Fact]
+    public void The_letters_KiCad_saved_for_a_text_move_and_turn_with_it()
+    {
+        const string text = """
+            (kicad_pcb (version 20241229) (generator "pcbnew")
+            	(layers (0 "F.Cu" signal) (5 "F.SilkS" user))
+            	(gr_text "Hi" (at 10 10 0) (layer "F.SilkS")
+            		(effects (font (face "Lato") (size 1 1)))
+            		(render_cache "Hi" 0 (polygon (pts (xy 9 9) (xy 11 9) (xy 11 10)))))
+            	(footprint "Lib:Part" (layer "F.Cu") (at 20 20)
+            		(property "Reference" "U1" (at 0 -2 0) (layer "F.SilkS")
+            			(effects (font (face "Lato") (size 1 1)))
+            			(render_cache "U1" 0 (polygon (pts (xy 19 17) (xy 21 17) (xy 21 18)))))))
+
+            """;
+        var board = Board.Parse(text);
+        var history = new UndoStack();
+
+        history.Execute(Transform([board.Texts[0], board.Footprints[0]], Mm(10, 10), 90, Mm(1, 0)));
+
+        // Turned 90° counter-clockwise on screen about (10, 10), then moved 1 mm right: (9, 9) lands on (10, 11), and
+        // the footprint's (19, 17) on (18, 1).
+        var cache = board.Texts[0].RenderCache!;
+        Assert.Equal(90, cache.Angle);
+        Assert.Equal(Mm(10, 11), cache.Polygons[0].Outline[0]);
+        var field = board.Footprints[0].Texts.Single(t => t.FieldName == "Reference").RenderCache!;
+        Assert.Equal(90, field.Angle);
+        Assert.Equal(Mm(18, 1), field.Polygons[0].Outline[0]);
+
+        history.Undo();
+        Assert.Equal(text, board.Document.ToString());
+    }
+
+    [Fact]
     public void Rotating_a_footprint_turns_pad_and_text_angles_and_back_again()
     {
         var board = Board.Parse(Legacy);

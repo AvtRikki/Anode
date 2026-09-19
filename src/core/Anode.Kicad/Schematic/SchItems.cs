@@ -29,6 +29,9 @@ public abstract class SchItem(SList node) : INodeItem
         return size is { Count: > 2 } ? size.Nm(2) : fallback;
     }
 
+    /// <summary>The face, weight and slant of the item's own text; the stroke font when it names none.</summary>
+    public TextFont Font => TextFont.Read(Node.Find("effects"));
+
     protected (string Horizontal, string Vertical) Justify()
     {
         if (Node.Find("effects")?.Find("justify") is not { } justify)
@@ -127,6 +130,10 @@ public sealed class SchPin(SList node) : SchItem(node)
     public long NameHeight => Size(Node.Find("name"), 1_270_000);
 
     public long NumberHeight => Size(Node.Find("number"), 1_270_000);
+
+    public TextFont NameFont => TextFont.Read(Node.Find("name")?.Find("effects"));
+
+    public TextFont NumberFont => TextFont.Read(Node.Find("number")?.Find("effects"));
 
     /// <summary>
     /// The far end of the pin line, away from the point a wire meets — <see cref="SchItem.Position"/> is the
