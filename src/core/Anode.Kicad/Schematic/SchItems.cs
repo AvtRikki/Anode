@@ -351,6 +351,32 @@ public sealed class SymbolInstance : SchItem
 
     public string? Field(string name) =>
         _fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    /// <summary>
+    /// The designator and section this symbol carries in one appearance of its sheet. A sheet placed twice in a
+    /// hierarchy draws the same symbols twice under different names — RV201 in one, RV301 in the other — and the
+    /// Reference property can hold only one of them. Across the KiCad demos and QA designs it disagrees with the
+    /// true name for most symbols on a reused sheet, and even on a root sheet it is sometimes stale. Null when the
+    /// file says nothing for that path.
+    /// </summary>
+    public (string Reference, int Unit)? InstanceAt(string path)
+    {
+        foreach (var project in Node.Find("instances")?.Lists().Where(l => l.Head == "project") ?? [])
+        {
+            foreach (var entry in project.Lists().Where(l => l.Head == "path"))
+            {
+                if (string.Equals(entry.Str(1), path, StringComparison.Ordinal))
+                {
+                    return (entry.ChildString("reference") ?? Reference ?? string.Empty, (int)(entry.ChildDouble("unit") ?? Unit));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The designator in the given appearance of the sheet, or the property when there is no path or no entry.</summary>
+    public string? ReferenceAt(string? path) => path is not null && InstanceAt(path) is { } at ? at.Reference : Reference;
 }
 
 /// <summary>A wire or a bus segment.</summary>

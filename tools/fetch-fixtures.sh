@@ -40,6 +40,8 @@ FILES=(
   demos/cm5_minima/CM5.kicad_sch
   demos/cm5_minima/CM5IO.kicad_sym
   demos/complex_hierarchy/complex_hierarchy.kicad_sch
+  demos/complex_hierarchy/complex_hierarchy.kicad_pro
+  demos/complex_hierarchy/ampli_ht.kicad_sch
   demos/pic_programmer/pic_programmer.kicad_sch
   demos/video/video.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod

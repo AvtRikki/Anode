@@ -37,8 +37,13 @@ public static class SchWrites
     /// The designator of a placed symbol. KiCad keeps it twice — in the <c>Reference</c> property, which is what is
     /// drawn, and in the instance block, which is what the rest of the project reads — so both are written or the
     /// file contradicts itself.
+    ///
+    /// With a <paramref name="sheetPath"/>, only that appearance of the sheet is renamed. A sheet placed twice keeps a
+    /// designator per appearance, and writing one name into every path would give both copies of the part the same
+    /// designator — exactly the clash annotation exists to prevent. Without one, every path is written, which is
+    /// right for a sheet that appears once.
     /// </summary>
-    public static void SetReference(SymbolInstance symbol, string reference)
+    public static void SetReference(SymbolInstance symbol, string reference, string? sheetPath = null)
     {
         SetField(symbol, "Reference", reference);
 
@@ -46,6 +51,11 @@ public static class SchWrites
         {
             foreach (var entry in path.Lists().Where(l => l.Head == "path"))
             {
+                if (sheetPath is not null && !string.Equals(entry.Str(1), sheetPath, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (entry.Find("reference") is { } written)
                 {
                     (written.AtomAt(1) ?? throw new KiCadFormatException("An instance has no reference.")).SetString(reference);
