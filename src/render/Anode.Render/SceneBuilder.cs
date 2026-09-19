@@ -8,10 +8,11 @@ namespace Anode.Render;
 public static class SceneBuilder
 {
     /// <summary>Converts a board into per-layer primitives. Safe to run on a background thread.</summary>
-    public static BoardScene Build(Board board)
+    /// <param name="frame">What the page's title block prints besides its own fields.</param>
+    public static BoardScene Build(Board board, SheetFrameText? frame = null)
     {
         var bounds = board.ComputeBounds();
-        var scene = new BoardScene(board, bounds.IsEmpty ? Vector2L.Zero : bounds.Center);
+        var scene = new BoardScene(board, bounds.IsEmpty ? Vector2L.Zero : bounds.Center) { Frame = frame ?? new SheetFrameText() };
         var builder = new Builder(scene);
 
         // Board.Items yields graphics and zones first, so tracks, pads and vias draw on top of fills.
@@ -32,8 +33,46 @@ public static class SceneBuilder
             AddBoardBody(scene);
         }
 
+        AddPage(scene);
         scene.Commit();
         return scene;
+    }
+
+    /// <summary>
+    /// Draws the page again — after the title block was edited. Only the page's own layer is rebuilt.
+    /// </summary>
+    public static void RedrawFrame(BoardScene scene)
+    {
+        var layer = scene.Layer(LayerStyle.PageFrame);
+        layer.Lines.Clear();
+        layer.Polygons.Clear();
+        layer.Circles.Clear();
+        AddPage(scene);
+        scene.Commit();
+    }
+
+    /// <summary>
+    /// The page the board is drawn on, as KiCad shows it: board coordinates are page coordinates, so the page's
+    /// edge and its drawing sheet sit where the file says. Strokes only — no paper fill, which would swallow the
+    /// board body that already reads as paper against the desk.
+    /// </summary>
+    private static void AddPage(BoardScene scene)
+    {
+        var board = scene.Board;
+        var paper = DrawingSheet.PaperOf(board.Root);
+        var layer = scene.Layer(LayerStyle.PageFrame);
+
+        void Stroke(Vector2D a, Vector2D b, double width) =>
+            layer.Lines.Add(new LinePrim(scene.ToScene(a), scene.ToScene(b), (float)(width / Units.NmPerMm), OutlineLoops.NoOwner));
+
+        Vector2D[] corners = [new(0, 0), new(paper.X, 0), new(paper.X, paper.Y), new(0, paper.Y)];
+        for (int i = 0; i < corners.Length; i++)
+        {
+            Stroke(corners[i], corners[(i + 1) % corners.Length], DrawingSheet.LineWidth);
+        }
+
+        string paperName = board.Root.Find("paper")?.AtomAt(1)?.Value ?? "A4";
+        DrawingSheet.Draw(paper, board.TitleBlock, paperName, scene.Frame, Stroke);
     }
 
     /// <summary>

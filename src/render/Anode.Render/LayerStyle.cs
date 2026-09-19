@@ -22,6 +22,9 @@ public static class LayerStyle
     /// <summary>Pseudo-layer for the board body: the sheet inside the board outline, drawn under everything.</summary>
     public const string BoardBody = "#BoardBody";
 
+    /// <summary>The page a board is drawn on: its edge, and KiCad's drawing sheet with the title block.</summary>
+    public const string PageFrame = "#PageFrame";
+
     /// <summary>Schematic layers. A schematic is one drawing, but the parts of it are coloured and ordered apart.</summary>
     public static class Sch
     {
@@ -82,6 +85,7 @@ public static class LayerStyle
         // A schematic is an impression too: dark strokes on the sheet, cyan for what carries a name.
         [Sch.Sheet] = ColorRgba.Rgb(0xf8, 0xf4, 0xf4),
         [Sch.Frame] = new(0x20, 0x1e, 0x1d, 170),
+        [PageFrame] = new(0x20, 0x1e, 0x1d, 150),
         [Sch.Wire] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
         [Sch.Bus] = ColorRgba.Rgb(0x00, 0x88, 0xb0),
         [Sch.Symbol] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
@@ -133,6 +137,7 @@ public static class LayerStyle
 
         // KiCad's own drawing-sheet colour.
         [Sch.Frame] = ColorRgba.Rgb(132, 0, 0),
+        [PageFrame] = ColorRgba.Rgb(132, 0, 0),
     };
 
     private static readonly string[] BackOrder = ["B.Adhes", "B.Paste", "B.SilkS", "B.Mask", "B.Fab", "B.CrtYd"];
@@ -195,6 +200,7 @@ public static class LayerStyle
         return layerName switch
         {
             BoardBody or Sch.Sheet => -1_000,
+            PageFrame => -900,
             Sch.SymbolFill => -500,
             Sch.Frame => 5,
             Sch.Wire => 10,

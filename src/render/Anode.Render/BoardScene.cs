@@ -19,7 +19,8 @@ public sealed class LayerGeometry(string name)
     /// Drawn but never picked, selected or dimmed: the board body under the layers, and the paper a sheet is drawn
     /// on. Both are the ground the drawing sits on rather than part of it — dimming them makes the whole view blink.
     /// </summary>
-    public bool IsDecoration { get; } = name is LayerStyle.BoardBody or LayerStyle.Sch.Sheet;
+    /// <summary>Background: never dimmed and never picked. The page frame is paper, not part of the board.</summary>
+    public bool IsDecoration { get; } = name is LayerStyle.BoardBody or LayerStyle.Sch.Sheet or LayerStyle.PageFrame;
 
     public int DrawOrder { get; } = LayerStyle.DrawOrder(name);
 
@@ -63,6 +64,9 @@ public sealed class BoardScene : IRenderScene
     public Vector2L OriginNm { get; }
 
     public RectD BoardOutline { get; internal set; } = RectD.Empty;
+
+    /// <summary>What the page's title block prints besides its own fields; see <see cref="SheetFrameText"/>.</summary>
+    public SheetFrameText Frame { get; set; } = new();
 
     public RectD Bounds { get; private set; } = RectD.Empty;
 

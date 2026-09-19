@@ -24,7 +24,8 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
         () =>
         {
             var board = Board.Load(path);
-            var scene = SceneBuilder.Build(board);
+            // A board is one page: its file, no place in a hierarchy, page one of one.
+            var scene = SceneBuilder.Build(board, new SheetFrameText(Path.GetFileName(path), string.Empty));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 // GPU upload needs triangles; compute them here instead of stalling the first frame.
@@ -373,6 +374,10 @@ public sealed class PcbDocument : DocumentBase
     private void OnHistoryChanged()
     {
         _overview = null;
+
+        // The page prints the title block, which no item on the board owns; one layer, simply drawn again.
+        SceneBuilder.RedrawFrame(Scene);
+        _canvas?.Redraw();
         OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields));
     }
 }

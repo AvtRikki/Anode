@@ -1,3 +1,4 @@
+using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
 using Anode.Tests;
@@ -37,16 +38,46 @@ public class DrawingSheetRenderTests
         Render(scene, path!, "drawing-sheet-edited");
     }
 
-    private static void Render(SchematicScene scene, string path, string name)
+    [Fact]
+    public void A_board_is_drawn_on_its_page_and_the_page_follows_an_edit()
+    {
+        string? path = TestData.AnyBoard();
+        Assert.SkipWhen(path is null, TestData.SkipReason);
+
+        var board = Board.Load(path!);
+        var scene = SceneBuilder.Build(board, new SheetFrameText(Path.GetFileName(path!), string.Empty));
+        var page = Assert.Single(scene.Layers, l => l.Name == LayerStyle.PageFrame);
+
+        // Board coordinates are page coordinates: the page layer spans the paper the file names, board or not.
+        var paper = DrawingSheet.PaperOf(board.Root);
+        Assert.InRange(page.Bounds.Width, Units.NmToMm(paper.X) - 0.5, Units.NmToMm(paper.X) + 0.5);
+        Assert.InRange(page.Bounds.Height, Units.NmToMm(paper.Y) - 0.5, Units.NmToMm(paper.Y) + 0.5);
+
+        // Paper, not board: it neither dims nor picks.
+        Assert.True(page.IsDecoration);
+
+        Render(scene, page.Bounds, path!, "board-page", corner: false);
+        Render(scene, page.Bounds, path!, "board-page-corner", corner: true);
+
+        var before = page.Lines.ToList();
+        TitleBlockWrites.Set(board.Root, "rev", "B");
+        SceneBuilder.RedrawFrame(scene);
+        Assert.NotEqual(before, page.Lines);
+    }
+
+    private static void Render(SchematicScene scene, string path, string name) =>
+        Render(scene, scene.BoardOutline, path, name, corner: true);
+
+    private static void Render(IRenderScene scene, RectD paper, string path, string name, bool corner)
     {
         const int width = 1400, height = 560;
-        var paper = scene.BoardOutline;
-        var camera = new Camera2D { ViewportWidth = width, ViewportHeight = height };
-        camera.Fit(new RectD(paper.MaxX - 125, paper.MaxY - 50, paper.MaxX - 5, paper.MaxY - 5));
+        var camera = new Camera2D { ViewportWidth = width, ViewportHeight = corner ? height : 900 };
+        camera.Fit(corner ? new RectD(paper.MaxX - 125, paper.MaxY - 50, paper.MaxX - 5, paper.MaxY - 5) : paper);
+        int h = corner ? height : 900;
 
-        using var surface = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var surface = SKSurface.Create(new SKImageInfo(width, h, SKColorType.Rgba8888, SKAlphaType.Premul));
         using var renderer = new SkiaSceneRenderer(scene);
-        renderer.Render(surface.Canvas, new ViewState(camera.WorldToScreenTransform, camera.PixelsPerMm, width, height, false));
+        renderer.Render(surface.Canvas, new ViewState(camera.WorldToScreenTransform, camera.PixelsPerMm, width, h, false));
 
         string dir = Environment.GetEnvironmentVariable("ANODE_SNAPSHOT_DIR")
             ?? Path.Combine(Path.GetDirectoryName(TestData.KiCadDir)!, "..", "test-output", "renders");

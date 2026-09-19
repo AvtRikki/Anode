@@ -4,6 +4,10 @@
     "document": { "label": "KiCad board", "untitled": "board" },
     "panel": { "layers": "Layers", "layers.rail": "La" },
     "layers": {
+      "page": "Page",
+      "body": "Board body",
+      "platedHoles": "Plated holes",
+      "holes": "Holes",
       "empty": "Layers appear once a board is open",
       "all": "All layers",
       "fewer": "Main layers"

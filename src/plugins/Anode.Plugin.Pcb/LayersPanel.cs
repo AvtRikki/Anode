@@ -55,7 +55,7 @@ public sealed class LayersPanel : ContentControl
         {
             foreach (var layer in document.Scene.Layers.Where(l => !l.IsCopper).OrderByDescending(l => l.DrawOrder))
             {
-                rows.Children.Add(Row(document, [layer], layer.Name, null));
+                rows.Children.Add(Row(document, [layer], Title(layer.Name), null));
             }
         }
 
@@ -69,6 +69,16 @@ public sealed class LayersPanel : ContentControl
 
         Content = new ScrollViewer { Content = rows };
     }
+
+    /// <summary>KiCad layers by their own names; the layers the scene adds by what they are.</summary>
+    private static string Title(string name) => name switch
+    {
+        LayerStyle.PageFrame => Tr.T("pcb.layers.page"),
+        LayerStyle.BoardBody => Tr.T("pcb.layers.body"),
+        LayerStyle.PlatedHoles => Tr.T("pcb.layers.platedHoles"),
+        LayerStyle.NonPlatedHoles => Tr.T("pcb.layers.holes"),
+        _ => name,
+    };
 
     private static void AddGroup(StackPanel rows, PcbDocument document, string[] names, string title, ref int digit)
     {
