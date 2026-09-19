@@ -329,7 +329,12 @@ public sealed class BoardEditor
             .Then(Transform2D.Translation(anchor.X + dx, anchor.Y + dy));
     }
 
-    private void Run(IEditCommand command, bool removedFromScene = false)
+    /// <summary>
+    /// Runs a command as one undoable step, drawing its items again around it. Public for commands prepared outside
+    /// the editor — the title block, which no item on the board owns. Kept as the one method rather than given a
+    /// public twin: a second overload would quietly take over every call made here.
+    /// </summary>
+    public void Run(IEditCommand command, bool removedFromScene = false)
     {
         // The stack is shared with the schematic, so a command reports plain node items.
         var affected = command.Affected.OfType<BoardItem>().ToList();

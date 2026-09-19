@@ -9,6 +9,7 @@
       "fewer": "Main layers"
     },
     "command": {
+      "titleBlock": "Edit title block",
       "undo": "Undo",
       "redo": "Redo",
       "delete": "Delete selection",
@@ -50,6 +51,11 @@
       "noOutline": "no board edge",
       "thickness": "Thickness",
       "copper": "Copper layers",
+      "title": "Title",
+      "revision": "Revision",
+      "date": "Date",
+      "company": "Company",
+      "comment": "Comment {0}",
       "footprints": "Footprints",
       "pads": "Pads",
       "tracks": "Tracks",

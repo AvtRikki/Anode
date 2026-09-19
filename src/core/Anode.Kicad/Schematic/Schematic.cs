@@ -2,13 +2,29 @@ using Anode.Sexpr;
 
 namespace Anode.Kicad;
 
-/// <summary>Header fields of a sheet, shown in the frame around the drawing.</summary>
+/// <summary>
+/// The title block of a sheet or a board — both files keep it the same way, as <c>(title_block …)</c> under the root —
+/// shown in the frame around the drawing.
+/// </summary>
 public sealed record SchTitleBlock(string? Title, string? Date, string? Revision, string? Company)
 {
+    public static readonly SchTitleBlock Empty = new(null, null, null, null);
+
     /// <summary>The numbered comment lines, 1 to 9, by number; a missing one is empty.</summary>
     public IReadOnlyDictionary<int, string> Comments { get; init; } = new Dictionary<int, string>();
 
     public string Comment(int number) => Comments.TryGetValue(number, out var text) ? text : string.Empty;
+
+    /// <summary>Reads the title block under a file's root; <see cref="Empty"/> when there is none.</summary>
+    public static SchTitleBlock Read(SList root) => root.Find("title_block") is { } block
+        ? new SchTitleBlock(block.ChildString("title"), block.ChildString("date"), block.ChildString("rev"), block.ChildString("company"))
+        {
+            Comments = block.Lists()
+                .Where(l => l.Head == "comment" && l.AtomAt(1)?.TryGetDouble(out _) == true)
+                .GroupBy(l => (int)l.AtomAt(1)!.AsDouble())
+                .ToDictionary(g => g.Key, g => g.First().Str(2) ?? string.Empty),
+        }
+        : Empty;
 }
 
 /// <summary>
@@ -114,15 +130,7 @@ public sealed class Schematic : INodeHost
 
     public bool IsNewerThanKnown => Version > KiCadFormat.NewestKnown;
 
-    public SchTitleBlock TitleBlock => Root.Find("title_block") is { } block
-        ? new SchTitleBlock(block.ChildString("title"), block.ChildString("date"), block.ChildString("rev"), block.ChildString("company"))
-        {
-            Comments = block.Lists()
-                .Where(l => l.Head == "comment" && l.AtomAt(1)?.TryGetDouble(out _) == true)
-                .GroupBy(l => (int)l.AtomAt(1)!.AsDouble())
-                .ToDictionary(g => g.Key, g => g.First().Str(2) ?? string.Empty),
-        }
-        : new SchTitleBlock(null, null, null, null);
+    public SchTitleBlock TitleBlock => SchTitleBlock.Read(Root);
 
     /// <summary>Symbol definitions carried inside the file, keyed by their <c>lib_id</c>.</summary>
     public IReadOnlyDictionary<string, LibSymbol> LibrarySymbols => _librarySymbols;

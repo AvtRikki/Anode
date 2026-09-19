@@ -1,6 +1,7 @@
 using System.Globalization;
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
 using Anode.Render;
 using Anode.Sdk;
 
@@ -13,10 +14,16 @@ namespace Anode.Plugin.Pcb;
 internal static class BoardOverview
 {
     /// <param name="outline">The board edge on the canvas, in millimetres; empty when the board has none.</param>
-    public static SelectionInfo Build(Board board, string? filePath, RectD outline, IReadOnlyList<Issue> issues)
+    /// <param name="editTitleBlock">Writes a title block line: "title", "date", "rev", "company" or "comment3".</param>
+    public static SelectionInfo Build(
+        Board board,
+        string? filePath,
+        RectD outline,
+        IReadOnlyList<Issue> issues,
+        Action<string, string>? editTitleBlock = null)
     {
         string title = Path.GetFileNameWithoutExtension(filePath ?? Tr.T("pcb.document.untitled"));
-        List<InspectorBlock> blocks = [Physical(board, outline), Contents(board)];
+        List<InspectorBlock> blocks = [Physical(board, outline, editTitleBlock), Contents(board)];
         if (Checks(issues) is { } checks)
         {
             blocks.Add(checks);
@@ -25,15 +32,39 @@ internal static class BoardOverview
         return new SelectionInfo(title, Path.GetFileName(filePath), [], Tr.T("pcb.overview.tag")) { Blocks = blocks };
     }
 
-    private static InspectorBlock Physical(Board board, RectD outline)
+    private static InspectorBlock Physical(Board board, RectD outline, Action<string, string>? edit)
     {
         string mm = Tr.T("pcb.units.mm");
-        return new InspectorBlock(Tr.T("pcb.overview.block.board"),
+        List<InspectorRow> rows =
         [
             Row("size", outline.IsEmpty ? Tr.T("pcb.overview.noOutline") : $"{Mm(outline.Width)} × {Mm(outline.Height)} {mm}"),
             Row("thickness", $"{Mm(board.Thickness)} {mm}"),
             Row("copper", Count(board.Layers.Copper.Count)),
-        ]);
+        ];
+
+        // The title block, as a sheet offers it: every field, empty ones too, and the comment lines the default
+        // drawing sheet prints, plus any further ones the file already uses.
+        var block = board.TitleBlock;
+        if (edit is not null)
+        {
+            rows.Add(Row("title", block.Title ?? string.Empty) with { Commit = v => edit("title", v) });
+            rows.Add(Row("revision", block.Revision ?? string.Empty) with { Commit = v => edit("rev", v) });
+            rows.Add(Row("date", block.Date ?? string.Empty) with { Commit = v => edit("date", v) });
+            rows.Add(Row("company", block.Company ?? string.Empty) with { Commit = v => edit("company", v) });
+            for (int i = 1; i <= TitleBlockWrites.CommentCount; i++)
+            {
+                int number = i;
+                if (number <= 4 || block.Comment(number).Length > 0)
+                {
+                    rows.Add(new InspectorRow(Tr.T("pcb.overview.comment", number), block.Comment(number))
+                    {
+                        Commit = v => edit("comment" + number.ToString(CultureInfo.InvariantCulture), v),
+                    });
+                }
+            }
+        }
+
+        return new InspectorBlock(Tr.T("pcb.overview.block.board"), rows);
     }
 
     private static InspectorBlock Contents(Board board)

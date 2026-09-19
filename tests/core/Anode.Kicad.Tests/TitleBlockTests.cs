@@ -152,4 +152,29 @@ public class TitleBlockTests
         Assert.Throws<ArgumentOutOfRangeException>(() => TitleBlockWrites.SetComment(sheet.Root, 10, "x"));
         Assert.Throws<ArgumentOutOfRangeException>(() => TitleBlockWrites.SetComment(sheet.Root, 0, "x"));
     }
+
+    [Fact]
+    public void A_board_keeps_its_title_block_the_same_way()
+    {
+        string? path = TestData.AnyBoard();
+        Assert.SkipWhen(path is null, TestData.SkipReason);
+
+        var board = Board.Load(path!);
+        byte[] original = board.Document.ToBytes();
+        string? title = board.TitleBlock.Title;
+        var history = new UndoStack();
+
+        history.Execute(new RootChildCommand(board.Root, "title_block", "Title block",
+            () => TitleBlockWrites.Set(board.Root, "company", "Anode")));
+        history.Execute(new RootChildCommand(board.Root, "title_block", "Title block",
+            () => TitleBlockWrites.SetComment(board.Root, 1, "bench")));
+
+        Assert.Equal(title, board.TitleBlock.Title);
+        Assert.Equal("Anode", board.TitleBlock.Company);
+        Assert.Equal("bench", board.TitleBlock.Comment(1));
+
+        history.Undo();
+        history.Undo();
+        Assert.Equal(original, board.Document.ToBytes());
+    }
 }

@@ -49,6 +49,7 @@ public sealed class PcbDocument : DocumentBase
     private string _frame = string.Empty;
     private double _zoom;
     private SelectionInfo? _overview;
+    private IPluginContext? _context;
 
     internal PcbDocument(Board board, BoardScene scene, string path)
     {
@@ -115,7 +116,60 @@ public sealed class PcbDocument : DocumentBase
     }
 
     /// <summary>The board itself, for the inspector when nothing is selected; worked out once per state of the board.</summary>
-    public override SelectionInfo? Overview => _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues);
+    public override SelectionInfo? Overview =>
+        _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues, EditTitleBlock);
+
+    /// <summary>
+    /// Writes one line of the board's title block as one undoable step: "title", "date", "rev", "company", or
+    /// "comment3" for the third comment. The block is not an item on the board and may not exist yet, so the step
+    /// remembers the whole block rather than a node that was never there.
+    /// </summary>
+    internal void EditTitleBlock(string field, string value)
+    {
+        int comment = field.StartsWith("comment", StringComparison.Ordinal)
+            && int.TryParse(field.AsSpan("comment".Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+                ? n
+                : 0;
+
+        var block = _board.TitleBlock;
+        string current = (comment > 0 ? block.Comment(comment) : field switch
+        {
+            "title" => block.Title,
+            "date" => block.Date,
+            "rev" => block.Revision,
+            "company" => block.Company,
+            _ => null,
+        }) ?? string.Empty;
+
+        string written = value.Trim();
+        if (string.Equals(current, written, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            _editor.Run(new Anode.Kicad.Editing.RootChildCommand(
+                _board.Root,
+                "title_block",
+                Tr.T("pcb.command.titleBlock"),
+                () =>
+                {
+                    if (comment > 0)
+                    {
+                        Anode.Kicad.Editing.TitleBlockWrites.SetComment(_board.Root, comment, written);
+                    }
+                    else
+                    {
+                        Anode.Kicad.Editing.TitleBlockWrites.Set(_board.Root, field, written);
+                    }
+                }));
+        }
+        catch (Exception ex) when (ex is KiCadFormatException or ArgumentException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+        }
+    }
 
     public override SelectionInfo? Selection
     {
@@ -172,6 +226,7 @@ public sealed class PcbDocument : DocumentBase
 
     public override void Activate(IPluginContext context)
     {
+        _context = context;
         CommandDescriptor[] commands =
         [
             new("edit.undo", "pcb.command.undo")

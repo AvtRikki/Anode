@@ -76,6 +76,9 @@ public sealed class Board : INodeHost
 
     public SList Root { get; }
 
+    /// <summary>The title block, kept exactly as a sheet keeps it.</summary>
+    public SchTitleBlock TitleBlock => SchTitleBlock.Read(Root);
+
     public int Version { get; }
 
     public string? Generator => Root.ChildString("generator");
