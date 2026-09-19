@@ -105,4 +105,51 @@ public class TitleBlockTests
         history.Redo();
         Assert.Equal("3", sheet.TitleBlock.Revision);
     }
+    [Fact]
+    public void Comments_go_after_the_fields_in_number_order()
+    {
+        var sheet = Schematic.Parse(Bare);
+
+        TitleBlockWrites.SetComment(sheet.Root, 3, "third");
+        TitleBlockWrites.SetComment(sheet.Root, 1, "first");
+        TitleBlockWrites.Set(sheet.Root, "title", "Power");
+
+        string text = Text(sheet);
+        Assert.Contains("\t(title_block\n\t\t(title \"Power\")\n\t\t(comment 1 \"first\")\n\t\t(comment 3 \"third\")\n\t)", text, StringComparison.Ordinal);
+        Assert.Equal("third", sheet.TitleBlock.Comment(3));
+        Assert.Equal(string.Empty, sheet.TitleBlock.Comment(2));
+
+        TitleBlockWrites.SetComment(sheet.Root, 3, "changed");
+        Assert.Equal("changed", sheet.TitleBlock.Comment(3));
+
+        // And what was written reads back as the same tree.
+        Assert.Equal(Text(sheet), Text(Schematic.Parse(Text(sheet))));
+    }
+
+    [Fact]
+    public void An_emptied_comment_is_taken_out_and_the_block_with_it()
+    {
+        var sheet = Schematic.Parse(Bare);
+        byte[] original = sheet.Document.ToBytes();
+        var history = new UndoStack();
+
+        history.Execute(new RootChildCommand(sheet.Root, "title_block", "Comment",
+            () => TitleBlockWrites.SetComment(sheet.Root, 2, "note")));
+        TitleBlockWrites.SetComment(sheet.Root, 2, string.Empty);
+
+        Assert.DoesNotContain("title_block", Text(sheet), StringComparison.Ordinal);
+
+        // The command's own undo still lands on the file as it was.
+        history.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void A_comment_outside_KiCads_nine_is_refused()
+    {
+        var sheet = Schematic.Parse(Bare);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => TitleBlockWrites.SetComment(sheet.Root, 10, "x"));
+        Assert.Throws<ArgumentOutOfRangeException>(() => TitleBlockWrites.SetComment(sheet.Root, 0, "x"));
+    }
 }

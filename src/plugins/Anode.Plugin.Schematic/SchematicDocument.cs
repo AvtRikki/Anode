@@ -1153,14 +1153,20 @@ public sealed class SchematicDocument : DocumentBase
     /// </summary>
     internal void EditTitleBlock(string field, string value)
     {
-        string current = field switch
+        // "comment3" is the third comment line; everything else names a field.
+        int comment = field.StartsWith("comment", StringComparison.Ordinal)
+            && int.TryParse(field.AsSpan("comment".Length), NumberStyles.None, CultureInfo.InvariantCulture, out int n)
+                ? n
+                : 0;
+
+        string current = (comment > 0 ? Sheet.TitleBlock.Comment(comment) : field switch
         {
             "title" => Sheet.TitleBlock.Title,
             "date" => Sheet.TitleBlock.Date,
             "rev" => Sheet.TitleBlock.Revision,
             "company" => Sheet.TitleBlock.Company,
             _ => null,
-        } ?? string.Empty;
+        }) ?? string.Empty;
 
         string written = value.Trim();
         if (string.Equals(current, written, StringComparison.Ordinal))
@@ -1174,7 +1180,17 @@ public sealed class SchematicDocument : DocumentBase
                 Sheet.Root,
                 "title_block",
                 Tr.T("sch.command.titleBlock"),
-                () => TitleBlockWrites.Set(Sheet.Root, field, written)));
+                () =>
+                {
+                    if (comment > 0)
+                    {
+                        TitleBlockWrites.SetComment(Sheet.Root, comment, written);
+                    }
+                    else
+                    {
+                        TitleBlockWrites.Set(Sheet.Root, field, written);
+                    }
+                }));
         }
         catch (Exception ex) when (ex is KiCadFormatException or ArgumentException)
         {

@@ -10,17 +10,58 @@ namespace Anode.Kicad.Editing;
 /// </summary>
 public static class TitleBlockWrites
 {
-    /// <summary>The fields in the order KiCad writes them. Comments follow and are left as they are.</summary>
+    /// <summary>The fields in the order KiCad writes them. Numbered comments follow them.</summary>
     public static readonly IReadOnlyList<string> Fields = ["title", "date", "rev", "company"];
+
+    /// <summary>KiCad keeps nine comment lines; its default drawing sheet prints the first four.</summary>
+    public const int CommentCount = 9;
 
     public static void Set(SList root, string field, string value)
     {
         int order = IndexOf(field);
+        Write(
+            root,
+            value,
+            block => block.Find(field),
+            text => $"({field} {text})",
+            valueAt: 1,
+            before: l => l.Head is "comment" || (l.Head is { } head && Fields.Contains(head) && IndexOf(head) > order));
+    }
+
+    /// <summary>One numbered comment line, 1 to <see cref="CommentCount"/>, kept in number order after the fields.</summary>
+    public static void SetComment(SList root, int number, string value)
+    {
+        if (number is < 1 or > CommentCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(number), number, "KiCad numbers comments from 1 to 9.");
+        }
+
+        Write(
+            root,
+            value,
+            block => block.Lists().FirstOrDefault(l => NumberOf(l) == number),
+            text => $"(comment {number} {text})",
+            valueAt: 2,
+            before: l => NumberOf(l) > number);
+    }
+
+    /// <summary>
+    /// The one way a title block line is written: rewritten in place when it is there, added where KiCad would put
+    /// it when it is not, taken out when emptied — and the block with it once nothing is left in it.
+    /// </summary>
+    private static void Write(
+        SList root,
+        string value,
+        Func<SList, SList?> find,
+        Func<string, string> make,
+        int valueAt,
+        Func<SList, bool> before)
+    {
         var block = root.Find("title_block");
 
         if (value.Length == 0)
         {
-            if (block?.Find(field) is { } gone)
+            if (block is not null && find(block) is { } gone)
             {
                 block.Remove(gone);
                 if (!block.Lists().Any())
@@ -38,17 +79,20 @@ public static class TitleBlockWrites
             root.Insert(root.Find("paper") is { } paper ? root.IndexOf(paper) + 1 : root.Count, block);
         }
 
-        if (block.Find(field) is { } existing)
+        if (find(block) is { } existing)
         {
-            (existing.AtomAt(1) ?? throw new KiCadFormatException($"({field}) has no value.")).SetString(value);
+            (existing.AtomAt(valueAt) ?? throw new KiCadFormatException($"({existing.Head}) has no value.")).SetString(value);
             return;
         }
 
-        // Before the first field that KiCad writes later, and before any comment.
-        var fresh = SchNodes.Adopt(SDocument.Parse($"({field} {SEscape.Quote(value)})").Root);
-        var next = block.Lists().FirstOrDefault(l => l.Head is "comment" || (l.Head is { } head && Fields.Contains(head) && IndexOf(head) > order));
+        var fresh = SchNodes.Adopt(SDocument.Parse(make(SEscape.Quote(value))).Root);
+        var next = block.Lists().FirstOrDefault(before);
         block.Insert(next is null ? block.Count : block.IndexOf(next), fresh);
     }
+
+    /// <summary>The number of a comment line; zero for anything else.</summary>
+    private static int NumberOf(SList line) =>
+        line.Head == "comment" && line.AtomAt(1)?.TryGetDouble(out double number) == true ? (int)number : 0;
 
     private static int IndexOf(string field)
     {

@@ -122,6 +122,7 @@
       "revision": "Revision",
       "date": "Date",
       "company": "Company",
+      "comment": "Comment {0}",
       "place": "Place",
       "placeOf": "{0} of {1}",
       "format": "File",

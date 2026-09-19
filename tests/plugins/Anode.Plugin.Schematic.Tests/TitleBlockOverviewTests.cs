@@ -62,7 +62,39 @@ public class TitleBlockOverviewTests
         var writable = document.Overview!.Blocks[0].Rows.Where(r => r.Commit is not null).Select(r => r.Name).ToList();
 
         Assert.Equal(
-            [Tr.T("sch.overview.title"), Tr.T("sch.overview.revision"), Tr.T("sch.overview.date"), Tr.T("sch.overview.company")],
+            [
+                Tr.T("sch.overview.title"), Tr.T("sch.overview.revision"), Tr.T("sch.overview.date"), Tr.T("sch.overview.company"),
+                Tr.T("sch.overview.comment", 1), Tr.T("sch.overview.comment", 2), Tr.T("sch.overview.comment", 3), Tr.T("sch.overview.comment", 4),
+            ],
             writable);
+    }
+
+    [Fact]
+    public void A_comment_is_written_from_the_overview_and_a_fifth_shows_only_once_it_exists()
+    {
+        Assert.SkipWhen(TestData.AnySchematic() is null, TestData.SkipReason);
+        using var strings = Tr.Register(JsonTextCatalog.FromAssembly(typeof(SchematicDocument).Assembly));
+
+        var sheet = KicadSchematic.Load(TestData.AnySchematic()!);
+        string data = Directory.CreateTempSubdirectory("anode-title-").FullName;
+        using var document = new SchematicDocument(sheet, SchematicSceneBuilder.Build(sheet), TestData.AnySchematic()!, new SymbolLibraryList(data));
+        byte[] original = sheet.Document.ToBytes();
+
+        InspectorRow? Comment(int n) =>
+            document.Overview!.Blocks[0].Rows.SingleOrDefault(r => r.Name == Tr.T("sch.overview.comment", n));
+
+        Comment(2)!.Commit!("Checked by the bench");
+
+        Assert.Equal("Checked by the bench", sheet.TitleBlock.Comment(2));
+        Assert.Equal("Checked by the bench", Comment(2)!.Value);
+        Assert.Null(Comment(5));
+
+        // KiCad keeps nine; a fifth in the file is offered for editing like the rest.
+        document.EditTitleBlock("comment5", "Fifth");
+        Assert.Equal("Fifth", Comment(5)!.Value);
+
+        document.Editor.Undo();
+        document.Editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
     }
 }

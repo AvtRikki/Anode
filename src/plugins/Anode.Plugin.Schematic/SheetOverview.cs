@@ -70,6 +70,19 @@ internal static class SheetOverview
             rows.Add(Row("revision", block.Revision ?? string.Empty) with { Commit = v => edit("rev", v) });
             rows.Add(Row("date", block.Date ?? string.Empty) with { Commit = v => edit("date", v) });
             rows.Add(Row("company", block.Company ?? string.Empty) with { Commit = v => edit("company", v) });
+
+            // The four the default drawing sheet prints, always; KiCad keeps nine, so the rest when a file uses them.
+            for (int i = 1; i <= TitleBlockWrites.CommentCount; i++)
+            {
+                int number = i;
+                if (number <= 4 || block.Comment(number).Length > 0)
+                {
+                    rows.Add(new InspectorRow(Tr.T("sch.overview.comment", number), block.Comment(number))
+                    {
+                        Commit = v => edit("comment" + number.ToString(CultureInfo.InvariantCulture), v),
+                    });
+                }
+            }
         }
         else
         {
