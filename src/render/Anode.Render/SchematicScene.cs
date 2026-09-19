@@ -25,6 +25,12 @@ public sealed class SchematicScene : IRenderScene
 
     public Schematic Schematic { get; }
 
+    /// <summary>
+    /// Which appearance of the sheet is drawn: a sheet placed twice names its parts differently in each, so the
+    /// designators on the drawing depend on it. Null draws what the file's own fields say.
+    /// </summary>
+    public string? SheetPath { get; set; }
+
     /// <summary>Sheet point (nm) that maps to scene (0, 0).</summary>
     public Vector2L OriginNm { get; }
 

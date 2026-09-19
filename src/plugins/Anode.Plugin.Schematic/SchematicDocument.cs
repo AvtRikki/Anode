@@ -59,16 +59,38 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
         () =>
         {
             var schematic = Anode.Kicad.Schematic.Load(path);
-            var scene = SchematicSceneBuilder.Build(schematic);
+            var appearances = Appearances(path, schematic);
+            var scene = SchematicSceneBuilder.Build(schematic, appearances.FirstOrDefault()?.Path);
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
                 SceneTriangulator.Triangulate(scene);
             }
 
             log.Info(Tr.T("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
-            return (IDocument)new SchematicDocument(schematic, scene, path, remembered);
+            return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances);
         },
         cancellationToken);
+
+    /// <summary>
+    /// Every place this sheet appears in its project, found by walking down from the project's root sheet — the only
+    /// way to learn a sheet's paths, since a file does not know who places it. A sheet with no project around it is
+    /// its own root. One the root never reaches has no appearance at all, and its own fields are all there is to show.
+    /// </summary>
+    private static IReadOnlyList<SheetInstance> Appearances(string path, Anode.Kicad.Schematic schematic)
+    {
+        string full = Path.GetFullPath(path);
+        if (ProjectLibraries.ProjectFolder(full) is { } folder
+            && Directory.EnumerateFiles(folder, "*.kicad_pro").Order(StringComparer.Ordinal).FirstOrDefault() is { } project
+            && Path.ChangeExtension(project, ".kicad_sch") is var root
+            && File.Exists(root))
+        {
+            return [.. SchHierarchy.Walk(root).Where(i => string.Equals(i.File, full, StringComparison.Ordinal))];
+        }
+
+        return schematic.Uuid is { Length: > 0 } uuid
+            ? [new SheetInstance(full, "/" + uuid, Path.GetFileNameWithoutExtension(full), 0)]
+            : [];
+    }
 }
 
 /// <summary>One open sheet: the canvas and what the workbench shows around it.</summary>
@@ -78,6 +100,7 @@ public sealed class SchematicDocument : DocumentBase
     private readonly IReadOnlyList<SheetCheck> _checks;
     private readonly SchematicEditor _editor;
     private readonly SymbolLibraryList _remembered;
+    private readonly IReadOnlyList<SheetInstance> _appearances;
     private SymbolIndex? _libraries;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
@@ -94,12 +117,14 @@ public sealed class SchematicDocument : DocumentBase
         Anode.Kicad.Schematic schematic,
         SchematicScene scene,
         string path,
-        SymbolLibraryList remembered)
+        SymbolLibraryList remembered,
+        IReadOnlyList<SheetInstance>? appearances = null)
     {
         Sheet = schematic;
         Scene = scene;
         FilePath = path;
         _remembered = remembered;
+        _appearances = appearances ?? [];
         _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
@@ -125,7 +150,12 @@ public sealed class SchematicDocument : DocumentBase
         get
         {
             string zoom = _zoom > 0 ? _zoom.ToString("0", CultureInfo.InvariantCulture) + "%" : Count();
-            return Tr.T("sch.summary.sheet", zoom);
+            string summary = Tr.T("sch.summary.sheet", zoom);
+
+            // A sheet placed more than once says which of its places is on show.
+            return _appearances.Count > 1 && _appearances.FirstOrDefault(a => a.Path == Instance) is { } shown
+                ? shown.Name + " · " + summary
+                : summary;
         }
     }
 
@@ -142,7 +172,7 @@ public sealed class SchematicDocument : DocumentBase
             fields.Add(new StatusField(Count()));
             if (_editor.Selection is [var single])
             {
-                fields.Add(new StatusField(Tr.T("sch.status.selected", SchItemProperties.Header(single).Title)));
+                fields.Add(new StatusField(Tr.T("sch.status.selected", SchItemProperties.Header(single, Instance).Title)));
             }
             else if (_editor.Selection.Count > 1)
             {
@@ -169,13 +199,13 @@ public sealed class SchematicDocument : DocumentBase
                     : null;
             }
 
-            var (title, subtitle, tag) = SchItemProperties.Header(item);
+            var (title, subtitle, tag) = SchItemProperties.Header(item, Instance);
 
             // Where it lives is the document's to say, not the item's: the item has never heard of a file.
             subtitle ??= Path.GetFileName(FilePath);
             return new SelectionInfo(title, subtitle, [.. SchItemProperties.For(item)], tag)
             {
-                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf)],
+                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf, Instance)],
                 Actions = Actions(item),
             };
         }
@@ -258,7 +288,7 @@ public sealed class SchematicDocument : DocumentBase
     private IReadOnlyList<InspectorAction> Actions(SchItem item) => item switch
     {
         SchSheet sheet when sheet.SheetFile is { Length: > 0 } file =>
-            [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(file))],
+            [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(sheet, file))],
         SymbolInstance symbol when symbol.LibId is { Length: > 0 } libId =>
         [
             new InspectorAction(Tr.T("sch.action.updateFromLibrary"), () => UpdateFromLibrary(libId)),
@@ -333,15 +363,37 @@ public sealed class SchematicDocument : DocumentBase
     private SymbolIndex Libraries => _libraries ??= ProjectLibraries.For(FilePath, _remembered.Load());
 
     /// <summary>Opens a child sheet as its own tab, beside this one.</summary>
-    private void OpenSheet(string file)
+    private void OpenSheet(SchSheet sheet, string file)
     {
         if (_context is not { } context || FilePath is not { } path)
         {
             return;
         }
 
+        // At the appearance under this one, so the child shows the designators it has in this branch of the design.
         string target = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, file);
-        _ = context.Workbench.OpenAsync(target);
+        string? below = Instance is { } here && sheet.Uuid is { Length: > 0 } id ? here + "/" + id : null;
+        _ = context.Workbench.OpenAsync(target, below);
+    }
+
+    /// <summary>The path of the appearance on show; null for a sheet its project never reaches.</summary>
+    public override string? Instance => Scene.SheetPath;
+
+    /// <summary>
+    /// Shows another place this sheet appears. Nothing in the file changes — only which designators and sections are
+    /// read — so the parts are drawn again rather than edited, and the undo history is left alone.
+    /// </summary>
+    public override void ShowInstance(string instance)
+    {
+        if (string.Equals(instance, Scene.SheetPath, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Scene.SheetPath = instance;
+        _editor.Redraw([.. Sheet.Symbols]);
+        _canvas?.Redraw();
+        OnPropertiesChanged(nameof(Instance), nameof(Selection), nameof(StatusFields), nameof(Summary));
     }
 
     /// <summary>The shape button wears the kind it would draw.</summary>
@@ -408,7 +460,7 @@ public sealed class SchematicDocument : DocumentBase
     {
         try
         {
-            var symbol = SchSymbols.Place(Sheet, libId, definition, at, Designator(definition), ProjectName(), SchSymbols.PathOf(Sheet));
+            var symbol = SchSymbols.Place(Sheet, libId, definition, at, Designator(definition), ProjectName(), Instance ?? SchSymbols.PathOf(Sheet));
             _editor.Run(new CompositeCommand(
                 Tr.T("sch.command.symbol"),
                 [new AddLibrarySymbolCommand(Sheet, libId, definition), new AddNodesCommand(Sheet, [symbol])]));
@@ -428,7 +480,7 @@ public sealed class SchematicDocument : DocumentBase
     private string Designator(LibSymbol definition)
     {
         string prefix = SchAnnotation.PrefixOf(definition.Reference);
-        return prefix + SchAnnotation.NextNumber(Sheet, prefix).ToString(CultureInfo.InvariantCulture);
+        return prefix + SchAnnotation.NextNumber(Sheet, prefix, Instance).ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -437,7 +489,7 @@ public sealed class SchematicDocument : DocumentBase
     /// </summary>
     private void Annotate()
     {
-        var given = SchAnnotation.Annotate(Sheet, Sheet.Symbols);
+        var given = SchAnnotation.Annotate(Sheet, Sheet.Symbols, Instance);
         if (given.Count == 0)
         {
             return;
@@ -447,7 +499,7 @@ public sealed class SchematicDocument : DocumentBase
         {
             foreach (var (symbol, reference) in given)
             {
-                SchWrites.SetReference(symbol, reference);
+                SchWrites.SetReference(symbol, reference, Instance);
             }
         });
     }
@@ -680,7 +732,7 @@ public sealed class SchematicDocument : DocumentBase
             new("sch.annotate", "sch.command.annotate")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
-                CanExecute = () => SchAnnotation.Unannotated(Sheet).Count > 0,
+                CanExecute = () => SchAnnotation.Unannotated(Sheet, Instance).Count > 0,
                 Execute = () => Guard(Annotate, context),
             },
             new("sch.fit", "sch.command.fit")

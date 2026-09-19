@@ -36,12 +36,13 @@ public static class SchAnnotation
     /// <summary>
     /// The next free number for <paramref name="prefix"/> on this sheet, counting every designator already there.
     /// </summary>
-    public static int NextNumber(Schematic sheet, string prefix)
+    /// <param name="sheetPath">The appearance of the sheet being numbered; a reused sheet names its parts per appearance.</param>
+    public static int NextNumber(Schematic sheet, string prefix, string? sheetPath = null)
     {
         int highest = 0;
         foreach (var symbol in sheet.Symbols)
         {
-            if (symbol.Reference is not { Length: > 0 } reference
+            if (symbol.ReferenceAt(sheetPath) is not { Length: > 0 } reference
                 || !string.Equals(PrefixOf(reference), prefix, StringComparison.Ordinal))
             {
                 continue;
@@ -64,22 +65,23 @@ public static class SchAnnotation
     /// </summary>
     public static IReadOnlyList<(SymbolInstance Symbol, string Reference)> Annotate(
         Schematic sheet,
-        IEnumerable<SymbolInstance> symbols)
+        IEnumerable<SymbolInstance> symbols,
+        string? sheetPath = null)
     {
         var next = new Dictionary<string, int>(StringComparer.Ordinal);
         var given = new List<(SymbolInstance, string)>();
 
         foreach (var symbol in symbols)
         {
-            if (!IsUnannotated(symbol.Reference))
+            if (!IsUnannotated(symbol.ReferenceAt(sheetPath)))
             {
                 continue;
             }
 
-            string prefix = PrefixOf(symbol.Reference);
+            string prefix = PrefixOf(symbol.ReferenceAt(sheetPath));
             if (!next.TryGetValue(prefix, out int number))
             {
-                number = NextNumber(sheet, prefix);
+                number = NextNumber(sheet, prefix, sheetPath);
             }
 
             string reference = prefix + number.ToString(CultureInfo.InvariantCulture);
@@ -91,6 +93,6 @@ public static class SchAnnotation
     }
 
     /// <summary>Everything on the sheet that is still waiting for a number.</summary>
-    public static IReadOnlyList<SymbolInstance> Unannotated(Schematic sheet) =>
-        [.. sheet.Symbols.Where(s => IsUnannotated(s.Reference))];
+    public static IReadOnlyList<SymbolInstance> Unannotated(Schematic sheet, string? sheetPath = null) =>
+        [.. sheet.Symbols.Where(s => IsUnannotated(s.ReferenceAt(sheetPath)))];
 }

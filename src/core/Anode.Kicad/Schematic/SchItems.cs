@@ -377,6 +377,9 @@ public sealed class SymbolInstance : SchItem
 
     /// <summary>The designator in the given appearance of the sheet, or the property when there is no path or no entry.</summary>
     public string? ReferenceAt(string? path) => path is not null && InstanceAt(path) is { } at ? at.Reference : Reference;
+
+    /// <summary>The section in the given appearance of the sheet; the symbol's own when there is no entry.</summary>
+    public int UnitAt(string? path) => path is not null && InstanceAt(path) is { } at ? at.Unit : Unit;
 }
 
 /// <summary>A wire or a bus segment.</summary>

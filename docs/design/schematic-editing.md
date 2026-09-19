@@ -15,9 +15,12 @@ Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
   body style is left out on purpose: `body_style` is 1 in all 105 placements across the demo designs and no De
   Morgan variant appears anywhere, so there is nothing to check an implementation against. The two inspector
   actions are thin wrappers over tested core writes; the buttons themselves have no test of their own.
-- **Stage 4** — started: annotation, which leaves a part that already carries a number alone, and the
-  `(instances …)` block written on placement. Sheets and their pins, re-annotation that understands one file sitting
-  in the hierarchy twice, and field editing across the sheet are not done.
+- **Stage 4** — started: the hierarchy is walked from the project's root with KiCad's sheet paths, and a sheet
+  placed twice is one tab showing one place at a time, chosen in the project tree. Designators and sections are read
+  and written per place — the Reference property is only a cache, wrong for most parts on a reused sheet. Annotation
+  leaves a part that already carries a number alone. Not done: numbering unique across the whole design rather than
+  per sheet, a part placed on a reused sheet getting an entry for its other places, creating sheets and their pins,
+  and field editing across the sheet.
 - **Stage 5** — started: nets built from wires, junctions, labels of every kind, buses, power symbols and
   no-connects; the net a selection sits on, shown in the inspector; and one check — a pin left alone on its net. The
   pin-type matrix, duplicate references, missing power flags and sheet-pin checks are not done, nor the nets panel,

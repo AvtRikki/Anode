@@ -20,6 +20,20 @@ public interface IWorkbench
     /// <summary>Opens a file with the plugin registered for its extension, or activates its existing tab.</summary>
     Task<IDocument?> OpenAsync(string path);
 
+    /// <summary>
+    /// Opens a file at one of its appearances — a sheet placed twice is one tab showing one of its places at a time.
+    /// </summary>
+    async Task<IDocument?> OpenAsync(string path, string? instance)
+    {
+        var document = await OpenAsync(path);
+        if (document is not null && instance is not null)
+        {
+            document.ShowInstance(instance);
+        }
+
+        return document;
+    }
+
     void Activate(IDocument document);
 
     /// <summary>Shows the banner over the canvas; showing another one replaces it.</summary>

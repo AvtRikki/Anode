@@ -73,6 +73,14 @@ public interface IDocument : INotifyPropertyChanged, IDisposable
     /// <summary>Check results listed in the bottom dock.</summary>
     IReadOnlyList<Issue> Issues { get; }
 
+    /// <summary>The appearance of the file this tab shows; see <see cref="ProjectNode.Instance"/>. Null for most documents.</summary>
+    string? Instance => null;
+
+    /// <summary>Switches the tab to another appearance of its file, as a project tree node asks.</summary>
+    void ShowInstance(string instance)
+    {
+    }
+
     bool CanSave { get; }
 
     /// <summary>Saves to <paramref name="path"/> or the current file.</summary>
@@ -208,6 +216,12 @@ public abstract class DocumentBase : IDocument
     public virtual SelectionInfo? Selection => null;
 
     public virtual IReadOnlyList<Issue> Issues => [];
+
+    public virtual string? Instance => null;
+
+    public virtual void ShowInstance(string instance)
+    {
+    }
 
     public virtual bool CanSave => false;
 

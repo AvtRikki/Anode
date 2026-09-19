@@ -54,6 +54,9 @@ public sealed class ProjectTreePanel : ContentControl
 
         public string? Path { get; init; }
 
+        /// <summary>The appearance of <see cref="Path"/> this row stands for; see <see cref="ProjectNode.Instance"/>.</summary>
+        public string? Instance { get; init; }
+
         public bool IsSection { get; init; }
 
         public Func<IReadOnlyList<Node>>? Children { get; init; }
@@ -225,17 +228,22 @@ public sealed class ProjectTreePanel : ContentControl
     {
         Path = path,
         Detail = KindTag(path),
-        Children = () => Described(path),
+        Children = () => Described(path, null),
     };
 
-    private IReadOnlyList<Node> Described(string path) =>
+    /// <summary>
+    /// The level under one appearance of a file. The same sheet file can sit under two parents, so the key carries
+    /// the appearance as well — otherwise opening one would open both.
+    /// </summary>
+    private IReadOnlyList<Node> Described(string path, string? instance) =>
     [
-        .. _shell.ProjectStructure.Describe(path).Select((node, index) => new Node($"{path}|{index}:{node.Title}", node.Title, node.IconKey)
+        .. _shell.ProjectStructure.Describe(path, instance).Select((node, index) => new Node($"{path}|{instance}|{index}:{node.Title}", node.Title, node.IconKey)
         {
             Detail = node.Detail,
             Path = node.Path,
+            Instance = node.Instance,
             Children = node.Path is { } child && Is(child, SchematicExtensions)
-                ? () => Described(child)
+                ? () => Described(child, node.Instance)
                 : node.Children.Count > 0 ? () => Wrap(path, node.Children) : null,
         }),
     ];
@@ -378,7 +386,9 @@ public sealed class ProjectTreePanel : ContentControl
         line.Children.Add(title);
 
         var row = new Button { Classes = { "row" }, Padding = new Thickness(2, 3), Content = line };
-        if (node.Path is { } path && string.Equals(path, _shell.ActiveDocument?.FilePath, StringComparison.Ordinal))
+        // A reused sheet is one tab; only the row of the appearance it is showing reads as the open one.
+        if (node.Path is { } path && string.Equals(path, _shell.ActiveDocument?.FilePath, StringComparison.Ordinal)
+            && (node.Instance is null || string.Equals(node.Instance, _shell.ActiveDocument?.Instance, StringComparison.Ordinal)))
         {
             row.Classes.Add("selected");
         }
@@ -387,7 +397,7 @@ public sealed class ProjectTreePanel : ContentControl
         {
             if (Openable(node) && node.Path is { } file)
             {
-                _ = _shell.OpenAsync(file);
+                _ = Open(file, node.Instance);
             }
             else
             {
@@ -396,6 +406,16 @@ public sealed class ProjectTreePanel : ContentControl
         };
 
         return row;
+    }
+
+    /// <summary>
+    /// Opens a node and draws the tree again: switching a tab to another appearance of its sheet does not change the
+    /// active document, so nothing else would move the highlight to the row that was clicked.
+    /// </summary>
+    private async Task Open(string file, string? instance)
+    {
+        await _shell.OpenAsync(file, instance);
+        Render();
     }
 
     private void Toggle(Node node)

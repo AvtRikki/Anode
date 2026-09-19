@@ -14,9 +14,10 @@ internal static class SchItemProperties
     /// the document, which is the one that knows — where it lives. An object with no name of its own puts its kind on
     /// the first line and lets the chip carry a count or a sort.
     /// </summary>
-    public static (string Title, string? Subtitle, string? Tag) Header(SchItem item) => item switch
+    /// <param name="sheetPath">The appearance of the sheet on show: a reused sheet names its parts per appearance.</param>
+    public static (string Title, string? Subtitle, string? Tag) Header(SchItem item, string? sheetPath = null) => item switch
     {
-        SymbolInstance symbol => (symbol.Reference ?? symbol.LibId, null, Tr.T("sch.item.symbol")),
+        SymbolInstance symbol => (symbol.ReferenceAt(sheetPath) ?? symbol.LibId, null, Tr.T("sch.item.symbol")),
         SchWire wire => (Tr.T(wire.IsBus ? "sch.item.bus" : "sch.item.wire"), null, Length(wire)),
         SchBusEntry => (Tr.T("sch.item.busEntry"), null, null),
         SchJunction => (Tr.T("sch.item.junction"), null, null),
@@ -46,14 +47,15 @@ internal static class SchItemProperties
     public static IEnumerable<InspectorBlock> Blocks(
         SchItem item,
         Action<string, Action> edit,
-        Func<SchItem, string?>? netOf = null)
+        Func<SchItem, string?>? netOf = null,
+        string? sheetPath = null)
     {
         switch (item)
         {
             case SymbolInstance symbol:
                 yield return new InspectorBlock(Tr.T("sch.block.identity"),
                 [
-                    Writable("reference", symbol.Reference ?? None, v => edit(Name("reference"), () => SchWrites.SetField(symbol, "Reference", v))),
+                    Writable("reference", symbol.ReferenceAt(sheetPath) ?? None, v => edit(Name("reference"), () => SchWrites.SetReference(symbol, v, sheetPath))),
                     Writable("value", symbol.Value ?? None, v => edit(Name("value"), () => SchWrites.SetField(symbol, "Value", v))),
                     Computed("library", symbol.LibId),
 
@@ -61,12 +63,12 @@ internal static class SchItemProperties
                     .. symbol.Definition is { UnitCount: > 1 } sectioned
                         ? new[]
                         {
-                            Writable("unit", symbol.Unit.ToString(CultureInfo.InvariantCulture), v =>
+                            Writable("unit", symbol.UnitAt(sheetPath).ToString(CultureInfo.InvariantCulture), v =>
                             {
                                 if (int.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out int unit)
                                     && unit >= 1 && unit <= sectioned.UnitCount)
                                 {
-                                    edit(Name("unit"), () => SchWrites.SetUnit(symbol, unit));
+                                    edit(Name("unit"), () => SchWrites.SetUnit(symbol, unit, sheetPath));
                                 }
                             }),
                         }
@@ -78,7 +80,7 @@ internal static class SchItemProperties
 
                 yield return Geometry(item, edit);
 
-                if (symbol.Definition?.PinsOf(symbol.Unit, symbol.BodyStyle).ToList() is { Count: > 0 } pins)
+                if (symbol.Definition?.PinsOf(symbol.UnitAt(sheetPath), symbol.BodyStyle).ToList() is { Count: > 0 } pins)
                 {
                     yield return new InspectorBlock(
                         Tr.T("sch.block.connectionsOf", $"{pins.Count} {Tr.Plural("sch.pin", pins.Count)}"),

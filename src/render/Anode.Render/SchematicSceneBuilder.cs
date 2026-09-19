@@ -14,10 +14,11 @@ public static class SchematicSceneBuilder
     private const long SymbolWidth = 152_400;
     private const long NoConnectArm = 635_000;
 
-    public static SchematicScene Build(Schematic schematic)
+    /// <param name="sheetPath">The appearance of the sheet to draw; see <see cref="SchematicScene.SheetPath"/>.</param>
+    public static SchematicScene Build(Schematic schematic, string? sheetPath = null)
     {
         var paper = PaperSize(schematic.Paper, schematic.IsPortrait);
-        var scene = new SchematicScene(schematic, new Vector2L(paper.X / 2, paper.Y / 2));
+        var scene = new SchematicScene(schematic, new Vector2L(paper.X / 2, paper.Y / 2)) { SheetPath = sheetPath };
         var builder = new Builder(scene);
 
         builder.AddSheetFrame(paper);
@@ -158,15 +159,19 @@ public static class SchematicSceneBuilder
 
         private void AddSymbol(SymbolInstance symbol, int owner)
         {
+            // A reused sheet names its parts, and may pick their sections, per appearance.
+            string? path = scene.SheetPath;
+            int unit = symbol.UnitAt(path);
+
             if (symbol.Definition is { } definition)
             {
                 var t = symbol.ToSheet;
-                foreach (var graphic in definition.GraphicsOf(symbol.Unit, symbol.BodyStyle))
+                foreach (var graphic in definition.GraphicsOf(unit, symbol.BodyStyle))
                 {
                     AddGraphic(graphic, t, LayerStyle.Sch.Symbol, owner);
                 }
 
-                foreach (var pin in definition.PinsOf(symbol.Unit, symbol.BodyStyle))
+                foreach (var pin in definition.PinsOf(unit, symbol.BodyStyle))
                 {
                     AddPin(pin, definition, t, owner);
                 }
@@ -175,9 +180,13 @@ public static class SchematicSceneBuilder
             // Fields carry their own place and angle on the sheet, so they stay upright whatever the symbol does.
             foreach (var field in symbol.Fields)
             {
-                if (!field.IsHidden && field.Value.Length > 0)
+                string value = string.Equals(field.Name, "Reference", StringComparison.OrdinalIgnoreCase)
+                    ? symbol.ReferenceAt(path) ?? field.Value
+                    : field.Value;
+
+                if (!field.IsHidden && value.Length > 0)
                 {
-                    Text(LayerStyle.Sch.Field, field.Value, field.Position.ToDouble(), field.TextHeight, field.Angle, field.Alignment, owner);
+                    Text(LayerStyle.Sch.Field, value, field.Position.ToDouble(), field.TextHeight, field.Angle, field.Alignment, owner);
                 }
             }
         }

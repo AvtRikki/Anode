@@ -381,6 +381,18 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         ProjectChanged?.Invoke();
     }
 
+    /// <summary>Opens a file at one of its appearances; see <see cref="IWorkbench.OpenAsync(string, string?)"/>.</summary>
+    public async Task<IDocument?> OpenAsync(string path, string? instance)
+    {
+        var document = await OpenAsync(path);
+        if (document is not null && instance is not null)
+        {
+            document.ShowInstance(instance);
+        }
+
+        return document;
+    }
+
     public async Task<IDocument?> OpenAsync(string path)
     {
         string full = Path.GetFullPath(path);

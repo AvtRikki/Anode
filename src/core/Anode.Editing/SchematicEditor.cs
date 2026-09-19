@@ -574,6 +574,9 @@ public sealed class SchematicEditor
         }
     }
 
+    /// <summary>Draws items again without changing them — when what they show depends on something outside the file.</summary>
+    public void Redraw(IReadOnlyList<SchItem> items) => Refresh(items);
+
     private void Refresh(IReadOnlyList<SchItem> items)
     {
         Scene.Remove(items);

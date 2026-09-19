@@ -71,7 +71,8 @@ public static class SchWrites
     /// The symbol's pin list is deliberately left alone. KiCad writes every pin of the whole part on each placed
     /// section, which the four sections of the 74LS125 in the demo designs confirm: all fourteen pins on each.
     /// </summary>
-    public static void SetUnit(SymbolInstance symbol, int unit)
+    /// <param name="sheetPath">Only that appearance of the sheet, as for <see cref="SetReference"/>; null writes every path.</param>
+    public static void SetUnit(SymbolInstance symbol, int unit, string? sheetPath = null)
     {
         if (unit < 1)
         {
@@ -87,6 +88,11 @@ public static class SchWrites
         {
             foreach (var entry in path.Lists().Where(l => l.Head == "path"))
             {
+                if (sheetPath is not null && !string.Equals(entry.Str(1), sheetPath, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 if (entry.Find("unit") is { } written)
                 {
                     (written.AtomAt(1) ?? throw new KiCadFormatException("An instance has no unit number.")).SetNumber(unit);

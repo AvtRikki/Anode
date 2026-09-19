@@ -121,14 +121,16 @@ public sealed class ProjectStructureRegistry : IProjectStructureRegistry
         });
     }
 
-    public IReadOnlyList<ProjectNode> Describe(string path)
+    public IReadOnlyList<ProjectNode> Describe(string path) => Describe(path, null);
+
+    public IReadOnlyList<ProjectNode> Describe(string path, string? instance)
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
         foreach (var contributor in _contributors.Where(c => c.Extensions.Contains(extension, StringComparer.Ordinal)))
         {
             try
             {
-                return contributor.Describe(path);
+                return contributor.Describe(path, instance);
             }
             catch (Exception)
             {
