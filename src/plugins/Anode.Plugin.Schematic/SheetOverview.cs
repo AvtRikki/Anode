@@ -1,0 +1,159 @@
+using System.Globalization;
+using Anode.Geometry;
+using Anode.Kicad;
+using Anode.Kicad.Editing;
+using Anode.Render;
+using Anode.Sdk;
+
+namespace Anode.Plugin.Schematic;
+
+/// <summary>
+/// What the inspector says when nothing is selected: the sheet itself. Its paper and title block, what is drawn on
+/// it, how its nets and numbering stand, and what the checks found — the questions one asks of a sheet before
+/// clicking anything on it.
+/// </summary>
+internal static class SheetOverview
+{
+    /// <param name="paper">The paper on the canvas, in millimetres; empty when unknown.</param>
+    /// <param name="instance">The place on show, when the sheet appears in a hierarchy.</param>
+    /// <param name="actions">What the footer offers; the document decides, it knows its commands.</param>
+    public static SelectionInfo Build(
+        Anode.Kicad.Schematic sheet,
+        string? filePath,
+        RectD paper,
+        string? instance,
+        IReadOnlyList<SheetInstance> appearances,
+        IReadOnlyList<SchNet> nets,
+        IReadOnlyList<Issue> issues,
+        IReadOnlyList<InspectorAction> actions)
+    {
+        string file = Path.GetFileName(filePath ?? string.Empty);
+        var shown = appearances.FirstOrDefault(a => a.Path == instance);
+        string title = appearances.Count > 1 && shown is not null
+            ? shown.Name
+            : Path.GetFileNameWithoutExtension(filePath ?? Tr.T("sch.document.untitled"));
+
+        List<InspectorBlock> blocks = [SheetBlock(sheet, paper, appearances, shown), Contents(sheet), Electrics(sheet, nets, instance)];
+        if (Checks(issues) is { } checks)
+        {
+            blocks.Add(checks);
+        }
+
+        return new SelectionInfo(title, file.Length > 0 ? file : null, [], Tr.T("sch.item.sheet"))
+        {
+            Blocks = blocks,
+            Actions = actions,
+        };
+    }
+
+    private static InspectorBlock SheetBlock(Anode.Kicad.Schematic sheet, RectD paper, IReadOnlyList<SheetInstance> appearances, SheetInstance? shown)
+    {
+        List<InspectorRow> rows = [];
+
+        string size = paper.IsEmpty
+            ? sheet.Paper
+            : $"{sheet.Paper} · {Mm(paper.Width)} × {Mm(paper.Height)} {Tr.T("sch.units.mm")}";
+        rows.Add(Row("paper", sheet.IsPortrait ? size + " · " + Tr.T("sch.overview.portrait") : size));
+
+        // Only what the title block actually says; four empty rows would read as four things missing.
+        var block = sheet.TitleBlock;
+        AddIf(rows, "title", block.Title);
+        AddIf(rows, "revision", block.Revision);
+        AddIf(rows, "date", block.Date);
+        AddIf(rows, "company", block.Company);
+
+        if (appearances.Count > 1 && shown is not null)
+        {
+            int index = appearances.ToList().IndexOf(shown) + 1;
+            rows.Add(Row("place", Tr.T("sch.overview.placeOf", index, appearances.Count)));
+        }
+
+        // KiCad's own editor saved it: say which KiCad, not the editor's internal name and the format's date code.
+        string format = sheet.Generator is "eeschema" && sheet.GeneratorVersion is { Length: > 0 } release
+            ? $"KiCad {release}"
+            : $"{sheet.Generator ?? "?"} · {sheet.Version.ToString(CultureInfo.InvariantCulture)}";
+        rows.Add(Row("format", format));
+
+        return new InspectorBlock(Tr.T("sch.overview.block.sheet"), rows);
+    }
+
+    private static InspectorBlock Contents(Anode.Kicad.Schematic sheet)
+    {
+        int power = sheet.Symbols.Count(s => s.Definition?.IsPower == true);
+        var wires = sheet.Wires.Where(w => !w.IsBus).ToList();
+        int buses = sheet.Wires.Count - wires.Count;
+        long length = wires.Sum(w => w.Points.Zip(w.Points.Skip(1)).Sum(s => (long)Math.Round(Distance(s.First, s.Second))));
+
+        List<InspectorRow> rows =
+        [
+            Row("parts", Count(sheet.Symbols.Count - power)),
+            Row("wires", wires.Count == 0 ? "0" : $"{wires.Count} · {Mm(Units.NmToMm(length))} {Tr.T("sch.units.mm")}"),
+        ];
+
+        // The rest only when there is some: a sheet with no buses has nothing to say about buses.
+        AddIf(rows, "power", power);
+        AddIf(rows, "buses", buses);
+        AddIf(rows, "labels", sheet.Labels.Count);
+        AddIf(rows, "junctions", sheet.Junctions.Count);
+        AddIf(rows, "noConnects", sheet.NoConnects.Count);
+        AddIf(rows, "sheets", sheet.Sheets.Count);
+        AddIf(rows, "notes", sheet.Texts.Count + sheet.Graphics.Count);
+
+        return new InspectorBlock(Tr.T("sch.overview.block.contents"), rows);
+    }
+
+    private static InspectorBlock Electrics(Anode.Kicad.Schematic sheet, IReadOnlyList<SchNet> nets, string? instance)
+    {
+        int named = nets.Count(n => n.IsNamed);
+        int waiting = SchAnnotation.Unannotated(sheet, instance).Count(s => s.Definition?.IsPower != true);
+
+        return new InspectorBlock(Tr.T("sch.block.electrics"),
+        [
+            Row("nets", Tr.T("sch.overview.netsNamed", nets.Count, named)),
+            Row("unannotated", Count(waiting)) with { IsUnresolved = waiting > 0 },
+        ]);
+    }
+
+    private static InspectorBlock? Checks(IReadOnlyList<Issue> issues)
+    {
+        int errors = issues.Count(i => i.Severity == IssueSeverity.Error);
+        int warnings = issues.Count - errors;
+        if (issues.Count == 0)
+        {
+            return null;
+        }
+
+        return new InspectorBlock(Tr.T("sch.block.checks"),
+        [
+            Row("errors", Count(errors)) with { IsUnresolved = errors > 0 },
+            Row("warnings", Count(warnings)),
+        ])
+        {
+            IsAlert = errors > 0,
+        };
+    }
+
+    private static InspectorRow Row(string key, string value) => new(Tr.T($"sch.overview.{key}"), value);
+
+    private static void AddIf(List<InspectorRow> rows, string key, string? value)
+    {
+        if (value is { Length: > 0 })
+        {
+            rows.Add(Row(key, value));
+        }
+    }
+
+    private static void AddIf(List<InspectorRow> rows, string key, int count)
+    {
+        if (count > 0)
+        {
+            rows.Add(Row(key, Count(count)));
+        }
+    }
+
+    private static string Count(int count) => count.ToString(CultureInfo.InvariantCulture);
+
+    private static string Mm(double mm) => mm.ToString("0.#", CultureInfo.InvariantCulture);
+
+    private static double Distance(Vector2L a, Vector2L b) => Math.Sqrt(Math.Pow(b.X - a.X, 2) + Math.Pow(b.Y - a.Y, 2));
+}

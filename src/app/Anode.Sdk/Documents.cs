@@ -70,6 +70,12 @@ public interface IDocument : INotifyPropertyChanged, IDisposable
     /// <summary>What the inspector shows; null when nothing is selected.</summary>
     SelectionInfo? Selection { get; }
 
+    /// <summary>
+    /// What the inspector shows when nothing is selected: the document itself — its size, what it holds, what is wrong
+    /// with it — in the same blocks a selection uses. Null leaves the panel's own hint.
+    /// </summary>
+    SelectionInfo? Overview => null;
+
     /// <summary>Check results listed in the bottom dock.</summary>
     IReadOnlyList<Issue> Issues { get; }
 
@@ -214,6 +220,8 @@ public abstract class DocumentBase : IDocument
     public virtual string? ActiveToolId => null;
 
     public virtual SelectionInfo? Selection => null;
+
+    public virtual SelectionInfo? Overview => null;
 
     public virtual IReadOnlyList<Issue> Issues => [];
 

@@ -110,6 +110,35 @@
       "selected": "selected: {0}",
       "net": "net {0}"
     },
+    "overview": {
+      "block": {
+        "sheet": "Sheet",
+        "contents": "Contents"
+      },
+      "paper": "Paper",
+      "portrait": "portrait",
+      "title": "Title",
+      "revision": "Revision",
+      "date": "Date",
+      "company": "Company",
+      "place": "Place",
+      "placeOf": "{0} of {1}",
+      "format": "File",
+      "parts": "Parts",
+      "power": "Power symbols",
+      "wires": "Wires",
+      "buses": "Buses",
+      "labels": "Labels",
+      "junctions": "Junctions",
+      "noConnects": "No-connects",
+      "sheets": "Child sheets",
+      "notes": "Text and graphics",
+      "nets": "Nets",
+      "netsNamed": "{0}, {1} named",
+      "unannotated": "Unnumbered",
+      "errors": "Errors",
+      "warnings": "Warnings"
+    },
     "issue": {
       "duplicate": {
         "title": "Designator used twice",

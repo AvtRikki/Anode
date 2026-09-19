@@ -4,6 +4,6 @@
   "version": "0.1.0",
   "assembly": "Anode.Plugin.Pcb.dll",
   "entryType": "Anode.Plugin.Pcb.PcbPlugin",
-  "contractVersion": 11,
+  "contractVersion": 12,
   "description": "Просмотр и правка плат .kicad_pcb: слои, выделение, перемещение, поворот, отмена, сохранение без потерь."
 }

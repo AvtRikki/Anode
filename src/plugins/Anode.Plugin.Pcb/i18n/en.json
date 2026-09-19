@@ -39,6 +39,26 @@
       "net": "net: {0}",
       "checks": "checks: {0}"
     },
+    "overview": {
+      "tag": "Board",
+      "block": {
+        "board": "Board",
+        "contents": "Contents",
+        "checks": "Checks"
+      },
+      "size": "Size",
+      "noOutline": "no board edge",
+      "thickness": "Thickness",
+      "copper": "Copper layers",
+      "footprints": "Footprints",
+      "pads": "Pads",
+      "tracks": "Tracks",
+      "vias": "Vias",
+      "zones": "Zones",
+      "nets": "Nets",
+      "errors": "Errors",
+      "warnings": "Warnings"
+    },
     "issue": {
       "oldFormat": { "title": "Old format", "detail": "The file is older than KiCad 8; saving may change its structure." },
       "newFormat": { "title": "Newer format", "detail": "The board comes from a newer KiCad; unknown fields are preserved as they are." },

@@ -60,7 +60,8 @@ public sealed class InspectorPanel : ContentControl
         // The document tells the frame it has changed for all sorts of reasons — a redrawn frame, a moved cursor —
         // and almost none of them change what the inspector says. Rebuilding anyway destroyed whatever box the
         // caret was in, which made a field impossible to type in while the canvas was drawing.
-        var current = _workbench.ActiveDocument?.Selection;
+        // Nothing selected is not nothing to say: the document describes itself instead.
+        var current = _workbench.ActiveDocument is { } document ? document.Selection ?? document.Overview : null;
         string signature = Signature(current);
         if (signature == _shown)
         {
@@ -223,8 +224,13 @@ public sealed class InspectorPanel : ContentControl
         {
             grid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
 
+            // Names and read-only values wrap rather than trail off: a paper size or a board title cut short at the
+            // panel's edge is a value the reader cannot see, and neither language has names short enough to promise.
             var label = Ui.Text(rows[i].Name, "dim");
             label.FontSize = 12.5;
+            label.TextWrapping = TextWrapping.Wrap;
+            label.TextTrimming = TextTrimming.None;
+            label.VerticalAlignment = VerticalAlignment.Top;
             Grid.SetRow(label, i);
             grid.Children.Add(label);
 
@@ -237,7 +243,10 @@ public sealed class InspectorPanel : ContentControl
             }
             else
             {
-                value = Ui.Mono(rows[i].Value, rows[i].IsUnresolved ? "accentText" : "value");
+                var text = Ui.Mono(rows[i].Value, rows[i].IsUnresolved ? "accentText" : "value");
+                text.TextWrapping = TextWrapping.Wrap;
+                text.TextTrimming = TextTrimming.None;
+                value = text;
             }
 
             Grid.SetRow(value, i);

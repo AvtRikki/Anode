@@ -114,6 +114,7 @@ public sealed class SchematicDocument : DocumentBase
 
     /// <summary>An item on the lit net. The net is found again from it after every edit, since edits reshape nets.</summary>
     private SchItem? _netAnchor;
+    private SelectionInfo? _overview;
 
     /// <summary>The scene owners of the lit net, as handed to the canvas; null when no net is lit.</summary>
     internal IReadOnlySet<int>? LitNet { get; private set; }
@@ -570,6 +571,7 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         Scene.SheetPath = instance;
+        _overview = null;
         _editor.Redraw([.. Sheet.Symbols]);
         _canvas?.Redraw();
         OnPropertiesChanged(nameof(Instance), nameof(Selection), nameof(StatusFields), nameof(Summary));
@@ -1080,14 +1082,34 @@ public sealed class SchematicDocument : DocumentBase
     {
         _nets = null;
         _duplicates = null;
+        _overview = null;
     }
+
+    /// <summary>The sheet itself, for the inspector when nothing is selected; worked out once per state of the sheet.</summary>
+    public override SelectionInfo? Overview => _overview ??= SheetOverview.Build(
+        Sheet,
+        FilePath,
+        Scene.BoardOutline,
+        Instance,
+        _appearances,
+        Nets,
+        Issues,
+        [
+            .. SchAnnotation.Unannotated(Sheet, Instance).Count > 0
+                ? new[] { new InspectorAction(Tr.T("sch.command.annotate"), Annotate) { IsPrimary = true } }
+                : [],
+            new InspectorAction(Tr.T("sch.command.fit"), () => _canvas?.ZoomToFit()),
+        ]);
 
     private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields), nameof(Summary));
 
     private string Count() => Tr.T("sch.status.symbols", Sheet.Symbols.Count, Tr.Plural("sch.symbol", Sheet.Symbols.Count));
 
-    private void OnLanguageChanged() =>
-        OnPropertiesChanged(nameof(Title), nameof(Summary), nameof(StatusFields), nameof(Selection), nameof(Issues));
+    private void OnLanguageChanged()
+    {
+        _overview = null;
+        OnPropertiesChanged(nameof(Title), nameof(Summary), nameof(StatusFields), nameof(Selection), nameof(Overview), nameof(Issues));
+    }
 }
 
 /// <summary>A check result kept in translation-independent form, so it survives a language switch.</summary>

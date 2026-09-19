@@ -48,6 +48,7 @@ public sealed class PcbDocument : DocumentBase
     private string _cursor = string.Empty;
     private string _frame = string.Empty;
     private double _zoom;
+    private SelectionInfo? _overview;
 
     internal PcbDocument(Board board, BoardScene scene, string path)
     {
@@ -112,6 +113,9 @@ public sealed class PcbDocument : DocumentBase
             return fields;
         }
     }
+
+    /// <summary>The board itself, for the inspector when nothing is selected; worked out once per state of the board.</summary>
+    public override SelectionInfo? Overview => _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues);
 
     public override SelectionInfo? Selection
     {
@@ -303,11 +307,19 @@ public sealed class PcbDocument : DocumentBase
         }
     }
 
-    private void OnLanguageChanged() => OnPropertiesChanged(nameof(Title), nameof(Summary), nameof(StatusFields), nameof(Selection), nameof(Issues));
+    private void OnLanguageChanged()
+    {
+        _overview = null;
+        OnPropertiesChanged(nameof(Title), nameof(Summary), nameof(StatusFields), nameof(Selection), nameof(Overview), nameof(Issues));
+    }
 
     private void OnSelectionChanged() => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
 
-    private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields));
+    private void OnHistoryChanged()
+    {
+        _overview = null;
+        OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields));
+    }
 }
 
 /// <summary>A check result kept in translation-independent form, so it survives a language switch.</summary>

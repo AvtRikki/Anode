@@ -28,6 +28,9 @@ Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
   (backquote, or the inspector's footer): its wires, labels and dots stand out and the rest of the sheet dims.
 - **Stage 6** — not started.
 
+With nothing selected the inspector describes the document itself: a sheet its paper, title block, contents, nets
+and checks; a board its size, layers, placement and routing.
+
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.
 
