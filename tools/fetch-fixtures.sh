@@ -42,6 +42,8 @@ FILES=(
   demos/complex_hierarchy/complex_hierarchy.kicad_sch
   demos/complex_hierarchy/complex_hierarchy.kicad_pro
   demos/complex_hierarchy/ampli_ht.kicad_sch
+  qa/data/eeschema/netlists/test_multiunit_reannotate_5/test_multiunit_reannotate_5.kicad_sch
+  qa/data/eeschema/netlists/test_multiunit_reannotate_5/test_multiunit_reannotate_5.kicad_pro
   demos/pic_programmer/pic_programmer.kicad_sch
   demos/video/video.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod

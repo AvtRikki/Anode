@@ -20,7 +20,11 @@ public static class SchHierarchy
     /// is read once however often it appears. A sheet whose file is missing or unreadable is left out rather than
     /// stopping the walk, as the project tree shows it separately.
     /// </summary>
-    public static IReadOnlyList<SheetInstance> Walk(string rootFile)
+    /// <param name="open">
+    /// Where a sheet comes from, when not straight from disk: an open tab has edits the file does not have yet. Null
+    /// from it falls back to reading the file.
+    /// </param>
+    public static IReadOnlyList<SheetInstance> Walk(string rootFile, Func<string, Schematic?>? open = null)
     {
         var loaded = new Dictionary<string, Schematic?>(StringComparer.Ordinal);
         var found = new List<SheetInstance>();
@@ -62,7 +66,7 @@ public static class SchHierarchy
             {
                 try
                 {
-                    sheet = File.Exists(file) ? Schematic.Load(file) : null;
+                    sheet = open?.Invoke(file) ?? (File.Exists(file) ? Schematic.Load(file) : null);
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
                 {

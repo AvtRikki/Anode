@@ -107,6 +107,11 @@
       "selected": "selected: {0}"
     },
     "issue": {
+      "duplicate": {
+        "title": "Designator used twice",
+        "detail": "{0} names {1} parts: {2}",
+        "location": "X {0} Y {1} {2}"
+      },
       "loosePin": {
         "title": "Pin leads nowhere",
         "detail": "{0} is connected to nothing",

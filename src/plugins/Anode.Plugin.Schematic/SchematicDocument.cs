@@ -79,10 +79,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
     private static IReadOnlyList<SheetInstance> Appearances(string path, Anode.Kicad.Schematic schematic)
     {
         string full = Path.GetFullPath(path);
-        if (ProjectLibraries.ProjectFolder(full) is { } folder
-            && Directory.EnumerateFiles(folder, "*.kicad_pro").Order(StringComparer.Ordinal).FirstOrDefault() is { } project
-            && Path.ChangeExtension(project, ".kicad_sch") is var root
-            && File.Exists(root))
+        if (ProjectRoot(full) is { } root)
         {
             return [.. SchHierarchy.Walk(root).Where(i => string.Equals(i.File, full, StringComparison.Ordinal))];
         }
@@ -91,6 +88,15 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             ? [new SheetInstance(full, "/" + uuid, Path.GetFileNameWithoutExtension(full), 0)]
             : [];
     }
+
+    /// <summary>The root sheet of the project around <paramref name="path"/>: named after its .kicad_pro, as KiCad names it.</summary>
+    internal static string? ProjectRoot(string path) =>
+        ProjectLibraries.ProjectFolder(path) is { } folder
+        && Directory.EnumerateFiles(folder, "*.kicad_pro").Order(StringComparer.Ordinal).FirstOrDefault() is { } project
+        && Path.ChangeExtension(project, ".kicad_sch") is var root
+        && File.Exists(root)
+            ? root
+            : null;
 }
 
 /// <summary>One open sheet: the canvas and what the workbench shows around it.</summary>
@@ -101,6 +107,10 @@ public sealed class SchematicDocument : DocumentBase
     private readonly SchematicEditor _editor;
     private readonly SymbolLibraryList _remembered;
     private readonly IReadOnlyList<SheetInstance> _appearances;
+
+    /// <summary>The project's other sheets, read for the design-wide checks and kept while their files are unchanged.</summary>
+    private readonly Dictionary<string, (DateTime Written, Anode.Kicad.Schematic? Sheet)> _neighbours = new(StringComparer.Ordinal);
+    private IReadOnlyList<(string Reference, IReadOnlyList<DesignatorUse> Uses)>? _duplicates;
     private SymbolIndex? _libraries;
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
@@ -128,7 +138,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor = new SchematicEditor(scene) { TriangulateChanges = GraphicsOptions.Renderer == RendererKind.OpenGl };
         _editor.SelectionChanged += OnSelectionChanged;
         _editor.History.Changed += OnHistoryChanged;
-        _editor.History.Changed += ForgetNets;
+        _editor.History.Changed += ForgetDerived;
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -211,7 +221,82 @@ public sealed class SchematicDocument : DocumentBase
         }
     }
 
-    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. LoosePins()];
+    public override IReadOnlyList<Issue> Issues => [.. _checks.Select(c => c.ToIssue()), .. Duplicates(), .. LoosePins()];
+
+    /// <summary>
+    /// Designators used twice anywhere in the design, reported on the sheets that carry one of them. The whole
+    /// hierarchy is read because a designator belongs to a place, and a clash can span two sheets; this sheet is
+    /// read as it stands in the editor, the others as they are on disk.
+    /// </summary>
+    private IEnumerable<Issue> Duplicates()
+    {
+        if (FilePath is not { } path)
+        {
+            yield break;
+        }
+
+        string own = Path.GetFullPath(path);
+        _duplicates ??= FindDuplicates(own);
+
+        foreach (var (reference, uses) in _duplicates)
+        {
+            if (uses.FirstOrDefault(u => string.Equals(u.Place.File, own, StringComparison.Ordinal)) is not { } here)
+            {
+                continue;
+            }
+
+            string places = string.Join(", ", uses.Select(u => u.Place.Name).Distinct(StringComparer.Ordinal));
+            yield return new Issue(
+                IssueSeverity.Error,
+                Tr.T("sch.issue.duplicate.title"),
+                Tr.T("sch.issue.duplicate.detail", reference, uses.Count, places),
+                Tr.T("sch.issue.duplicate.location",
+                    Units.NmToMm(here.Symbol.Position.X).ToString("0.##", CultureInfo.InvariantCulture),
+                    Units.NmToMm(here.Symbol.Position.Y).ToString("0.##", CultureInfo.InvariantCulture),
+                    Tr.T("sch.units.mm")),
+                Action: () => Reveal(here));
+        }
+    }
+
+    private IReadOnlyList<(string Reference, IReadOnlyList<DesignatorUse> Uses)> FindDuplicates(string own)
+    {
+        var places = SchematicDocumentType.ProjectRoot(own) is { } root ? SchHierarchy.Walk(root, Open) : _appearances;
+        return SchDuplicates.Find(places, Open);
+
+        Anode.Kicad.Schematic? Open(string file)
+        {
+            if (string.Equals(file, own, StringComparison.Ordinal))
+            {
+                return Sheet;
+            }
+
+            DateTime written = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : default;
+            if (!_neighbours.TryGetValue(file, out var known) || known.Written != written)
+            {
+                Anode.Kicad.Schematic? sheet;
+                try
+                {
+                    sheet = written == default ? null : Anode.Kicad.Schematic.Load(file);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+                {
+                    sheet = null;
+                }
+
+                known = (written, sheet);
+                _neighbours[file] = known;
+            }
+
+            return known.Sheet;
+        }
+    }
+
+    /// <summary>Turns the tab to the place a part stands in and selects it there.</summary>
+    private void Reveal(DesignatorUse use)
+    {
+        ShowInstance(use.Place.Path);
+        _editor.SetSelection([use.Symbol]);
+    }
 
     /// <summary>
     /// Pins that lead nowhere. Deliberately quiet: a pin is only reported when its net has just the one pin, nobody
@@ -779,7 +864,7 @@ public sealed class SchematicDocument : DocumentBase
         Deactivate();
         _editor.SelectionChanged -= OnSelectionChanged;
         _editor.History.Changed -= OnHistoryChanged;
-        _editor.History.Changed -= ForgetNets;
+        _editor.History.Changed -= ForgetDerived;
         Tr.Changed -= OnLanguageChanged;
         base.Dispose();
     }
@@ -887,7 +972,12 @@ public sealed class SchematicDocument : DocumentBase
 
     private void OnSelectionChanged() => OnPropertiesChanged(nameof(Selection), nameof(StatusFields));
 
-    private void ForgetNets() => _nets = null;
+    /// <summary>What was worked out from the sheet as it was: its nets, and the design-wide designator check.</summary>
+    private void ForgetDerived()
+    {
+        _nets = null;
+        _duplicates = null;
+    }
 
     private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields), nameof(Summary));
 
