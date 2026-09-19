@@ -3,6 +3,7 @@ using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
 using Anode.Render;
+using Anode.Render.Fonts;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Schematic;
@@ -26,7 +27,9 @@ internal static class SheetOverview
         IReadOnlyList<SchNet> nets,
         IReadOnlyList<Issue> issues,
         IReadOnlyList<InspectorAction> actions,
-        Action<string, string>? editTitleBlock = null)
+        Action<string, string>? editTitleBlock = null,
+        IReadOnlyList<DocumentFonts.Use>? fonts = null,
+        Action<bool>? embedFonts = null)
     {
         string file = Path.GetFileName(filePath ?? string.Empty);
         var shown = appearances.FirstOrDefault(a => a.Path == instance);
@@ -36,6 +39,11 @@ internal static class SheetOverview
 
         List<InspectorBlock> blocks =
             [SheetBlock(sheet, paper, appearances, shown, editTitleBlock), Contents(sheet), Electrics(sheet, nets, instance)];
+        if (Fonts(sheet.Document.Root, fonts ?? [], embedFonts) is { } faces)
+        {
+            blocks.Add(faces);
+        }
+
         if (Checks(issues) is { } checks)
         {
             blocks.Add(checks);
@@ -162,6 +170,45 @@ internal static class SheetOverview
         {
             IsAlert = errors > 0,
         };
+    }
+
+    /// <summary>
+    /// The faces the design's texts are set in and where each comes from — carried in the file, installed here,
+    /// held back by its licence, or stood in for — and, on the sheet that keeps KiCad's setting, whether they are
+    /// carried on saving. Absent when no text uses a face and the sheet carries none.
+    /// </summary>
+    private static InspectorBlock? Fonts(Anode.Sexpr.SList root, IReadOnlyList<DocumentFonts.Use> fonts, Action<bool>? embed)
+    {
+        bool? wanted = EmbeddedFonts.Wanted(root);
+        var carried = EmbeddedFonts.Names(root);
+        if (fonts.Count == 0 && carried.Count == 0 && wanted is not true)
+        {
+            return null;
+        }
+
+        List<InspectorRow> rows = [.. fonts.Select(u => new InspectorRow(
+            string.Join(" ", new[] { u.Face, u.Bold ? Tr.T("sch.overview.fonts.bold") : null, u.Italic ? Tr.T("sch.overview.fonts.italic") : null }.OfType<string>()),
+            u.File switch
+            {
+                null => Tr.T("sch.overview.fonts.standIn", OutlineText.Substitute(u.Face) ?? string.Empty),
+                { } file when carried.Contains(file.Name) => Tr.T("sch.overview.fonts.carried"),
+                { MayTravel: false } => Tr.T("sch.overview.fonts.restricted"),
+                _ => Tr.T("sch.overview.fonts.installed"),
+            })
+        {
+            IsUnresolved = u.File is null,
+        })];
+
+        if (wanted is { } on && embed is not null)
+        {
+            rows.Add(new InspectorRow(Tr.T("sch.overview.fonts.embed"), Tr.T("sch.overview.fonts.onSave"))
+            {
+                Switch = on,
+                Commit = v => embed(v == "yes"),
+            });
+        }
+
+        return new InspectorBlock(Tr.T("sch.overview.fonts.title"), rows);
     }
 
     private static InspectorRow Row(string key, string value) => new(Tr.T($"sch.overview.{key}"), value);

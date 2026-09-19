@@ -47,8 +47,14 @@ stood in for as fontconfig would and reported in the checks; a board text is dra
 (`render_cache`) while they still fit, so the board looks as authored regardless. A font the file itself carries
 (KiCad 9's `embedded_files`, anywhere in the board or sheet) comes first, as fontconfig takes it for KiCad; the
 decoding is checked against every file KiCad embedded in the demos, each matching the checksum KiCad wrote. No
-demo embeds a font, so that path is tested with Noto Sans from KiCad's QA resources. Not yet: embedding fonts on
-save, a drawing sheet embedded in the board, knockout text, and choosing a face in the inspector.
+demo embeds a font, so that path is tested with Noto Sans from KiCad's QA resources. Saving embeds as KiCad does:
+with `(embedded_fonts yes)` — a switch in the overview's Fonts block, which also says where each face comes from —
+the file of every face the document's own texts use is added when its licence (OS/2 `fsType`) allows, one already
+carried under that name is kept, and with `no` carried fonts are dropped. A board looks at its own texts, not its
+footprints'; a schematic keeps the setting and the files in its root sheet and looks at every sheet's texts and
+labels, and a sheet below the root draws with the root's fonts. A face only stood in for is not carried, where
+KiCad would carry the stand-in. Not yet: a drawing sheet embedded in the board, knockout text, and choosing a
+face in the inspector.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

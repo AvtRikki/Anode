@@ -49,6 +49,7 @@
       "annotate": "Number the parts",
       "highlightNet": "Highlight net",
       "titleBlock": "Edit title block",
+      "embedFonts": "Embed fonts on save",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
     },
@@ -112,6 +113,7 @@
       "net": "net {0}"
     },
     "overview": {
+      "fonts": { "title": "Fonts", "carried": "carried in the file", "installed": "installed", "restricted": "installed · its licence forbids embedding", "standIn": "not here · {0} stands in", "bold": "bold", "italic": "italic", "embed": "Embed", "onSave": "on save" },
       "block": {
         "sheet": "Sheet",
         "contents": "Contents"

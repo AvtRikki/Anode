@@ -48,10 +48,19 @@ public static class OutlineText
 
     private static readonly ConcurrentDictionary<(Face Face, ushort Glyph), Vector2D[][]> Glyphs = new();
 
-    /// <summary>Faces read from files' embedded fonts, for the life of the process, as fontconfig keeps them.</summary>
-    private static readonly List<SKTypeface> Embedded = [];
+    private static readonly ConcurrentDictionary<Face, FontFile?> Files = new();
 
-    private static readonly HashSet<string> EmbeddedKeys = new(StringComparer.Ordinal);
+    /// <summary>Faces read from files' embedded fonts, for the life of the process, as fontconfig keeps them.</summary>
+    private static readonly List<(SKTypeface Typeface, string Name, byte[] Data)> Embedded = [];
+
+    /// <summary>
+    /// Each embedded font's reading, once: a second document carrying the same font waits for the first to finish
+    /// rather than drawing with a stand-in meanwhile.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Lazy<int>> EmbeddedLoads = new(StringComparer.Ordinal);
+
+    /// <summary>Counts the embedded faces; a stand-in chosen before the latest arrived is chosen again.</summary>
+    private static int _embeddedGeneration;
 
     /// <summary>Whether this machine has <paramref name="face"/> itself, not a stand-in.</summary>
     public static bool IsInstalled(string face) => !Resolve(face, false, false).Substituted;
@@ -220,24 +229,47 @@ public static class OutlineText
         int added = 0;
         foreach (var file in files.Where(f => f.IsFont && f.HasData))
         {
-            string key = file.Checksum ?? file.Name;
-            lock (Embedded)
+            bool first = false;
+            var load = EmbeddedLoads.GetOrAdd(file.Checksum ?? file.Name, _ =>
             {
-                if (!EmbeddedKeys.Add(key))
-                {
-                    continue;
-                }
+                first = true;
+                return new Lazy<int>(() => Load(file), LazyThreadSafetyMode.ExecutionAndPublication);
+            });
+
+            int faces = load.Value;
+            added += first ? faces : 0;
+        }
+
+        return added;
+    }
+
+    /// <summary>Reads one embedded font — every face of a collection — and makes it available; answers how many faces.</summary>
+    private static int Load(EmbeddedFile file)
+    {
+        if (file.Data is not { } data)
+        {
+            return 0;
+        }
+
+        int added = 0;
+        using var shared = SKData.CreateCopy(data);
+        int count = data.Length >= 4 && data[0] == 't' && data[1] == 't' && data[2] == 'c' && data[3] == 'f' ? int.MaxValue : 1;
+        for (int index = 0; index < count; index++)
+        {
+            if (SKTypeface.FromData(shared, index) is not { } typeface)
+            {
+                break;
             }
 
-            if (file.Data is not { } data || SKTypeface.FromData(SKData.CreateCopy(data)) is not { } typeface
-                || string.IsNullOrEmpty(typeface.FamilyName))
+            if (string.IsNullOrEmpty(typeface.FamilyName))
             {
                 continue;
             }
 
             lock (Embedded)
             {
-                Embedded.Add(typeface);
+                Embedded.Add((typeface, file.Name, data));
+                _embeddedGeneration++;
             }
 
             // What was resolved for this family before — most likely a stand-in — gives way.
@@ -253,10 +285,81 @@ public static class OutlineText
     }
 
     /// <summary>Whether <paramref name="face"/> is drawn from a font a file carried rather than one installed.</summary>
-    public static bool IsEmbedded(string face) => Resolve(face, false, false).Embedded;
+    public static bool IsEmbedded(string face) => Resolve(face, false, false).Carried is not null;
 
-    private static Face Resolve(string face, bool bold, bool italic) => Faces.GetOrAdd((face, bold, italic), key =>
+    /// <summary>
+    /// The font file a text in <paramref name="face"/> is drawn from, to be carried in a file as KiCad carries it:
+    /// named as its file was, or by its PostScript name, and whether its licence lets it travel. Null when the face is
+    /// only stood in for — KiCad would carry the stand-in, which helps no one who opens the file.
+    /// </summary>
+    public static FontFile? FileOf(string face, bool bold, bool italic) =>
+        Files.GetOrAdd(Resolve(face, bold, italic), ReadFile);
+
+    private static FontFile? ReadFile(Face font)
     {
+        if (font.Substituted)
+        {
+            return null;
+        }
+
+        if (font.Carried is { } carried)
+        {
+            return new FontFile(carried.Name, carried.Data, EmbeddingOf(font.Typeface));
+        }
+
+        using var stream = font.Typeface.OpenStream(out _);
+        using var data = SKData.Create(stream);
+        byte[] bytes = data.ToArray();
+        string extension = bytes.Length >= 4 && bytes[0] == 't' && bytes[1] == 't' && bytes[2] == 'c' && bytes[3] == 'f' ? ".ttc"
+            : bytes.Length >= 4 && bytes[0] == 'O' && bytes[1] == 'T' && bytes[2] == 'T' && bytes[3] == 'O' ? ".otf"
+            : ".ttf";
+        string name = (string.IsNullOrEmpty(font.Typeface.PostScriptName) ? font.Family : font.Typeface.PostScriptName) + extension;
+        return new FontFile(name, bytes, EmbeddingOf(font.Typeface));
+    }
+
+    /// <summary>
+    /// What a font's licence allows, read from its OS/2 table as KiCad reads it: bits 0–3 of <c>fsType</c>, a font
+    /// with no such table or allowing bitmaps only being restricted.
+    /// </summary>
+    private static FontEmbedding EmbeddingOf(SKTypeface typeface)
+    {
+        const uint os2 = ('O' << 24) | ('S' << 16) | ('/' << 8) | '2';
+        if (typeface.GetTableData(os2) is not { Length: >= 10 } table)
+        {
+            return FontEmbedding.Restricted;
+        }
+
+        int fsType = (table[8] << 8) | table[9];
+        if ((fsType & 0x0200) != 0)
+        {
+            return FontEmbedding.Restricted;
+        }
+
+        int bits = fsType & 0x000F;
+        return bits == 0 ? FontEmbedding.Installable
+            : (bits & 0x0008) != 0 ? FontEmbedding.Editable
+            : (bits & 0x0004) != 0 ? FontEmbedding.PreviewAndPrint
+            : FontEmbedding.Restricted;
+    }
+
+    private static Face Resolve(string face, bool bold, bool italic)
+    {
+        var resolved = Faces.GetOrAdd((face, bold, italic), Find);
+
+        // A stand-in settled on while an embedded font was still arriving is looked for again.
+        if (resolved.Substituted && resolved.Generation != Volatile.Read(ref _embeddedGeneration))
+        {
+            var again = Find((face, bold, italic));
+            Faces[(face, bold, italic)] = again;
+            return again;
+        }
+
+        return resolved;
+    }
+
+    private static Face Find((string Face, bool Bold, bool Italic) key)
+    {
+        int generation = Volatile.Read(ref _embeddedGeneration);
         // fontconfig in KiCad: a name that says it is heavy is looked up bold, whatever the text asks.
         bool heavy = key.Bold || new[] { "bold", "heavy", "black", "thick", "dark" }
             .Any(w => key.Face.Contains(w, StringComparison.OrdinalIgnoreCase));
@@ -269,25 +372,26 @@ public static class OutlineText
         // lacks, where the typeface factory would quietly hand back its default; so the lack is noticed here, and
         // the stand-in chosen deliberately.
         var embedded = FromFile(key.Face, style);
-        var typeface = embedded ?? Match(key.Face, style);
+        var typeface = embedded?.Typeface ?? Match(key.Face, style);
         bool substituted = typeface is null;
         typeface ??= StandIn(key.Face, style);
 
         // A bold the family lacks is made up by KiCad with a one-pixel embolden at 1152 dpi — too slight to see, so
         // it is left out. A missing italic is slanted by 12°, which shows.
         bool fakeItalic = key.Italic && typeface.FontSlant == SKFontStyleSlant.Upright;
-        return new Face(typeface, substituted, fakeItalic) { Embedded = embedded is not null };
-    });
+        return new Face(typeface, substituted, fakeItalic) { Carried = embedded is { } e ? (e.Name, e.Data) : null, Generation = generation };
+    }
 
     /// <summary>The embedded face of <paramref name="family"/> closest to <paramref name="style"/>, if any.</summary>
-    private static SKTypeface? FromFile(string family, SKFontStyle style)
+    private static (SKTypeface Typeface, string Name, byte[] Data)? FromFile(string family, SKFontStyle style)
     {
         lock (Embedded)
         {
             return Embedded
-                .Where(t => string.Equals(t.FamilyName, family, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(t => (t.FontSlant == SKFontStyleSlant.Upright) == (style.Slant == SKFontStyleSlant.Upright) ? 0 : 1)
-                .ThenBy(t => Math.Abs(t.FontWeight - style.Weight))
+                .Where(e => string.Equals(e.Typeface.FamilyName, family, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => (e.Typeface.FontSlant == SKFontStyleSlant.Upright) == (style.Slant == SKFontStyleSlant.Upright) ? 0 : 1)
+                .ThenBy(e => Math.Abs(e.Typeface.FontWeight - style.Weight))
+                .Select(e => ((SKTypeface, string, byte[])?)e)
                 .FirstOrDefault();
         }
     }
@@ -478,8 +582,11 @@ public static class OutlineText
 
         public bool FakeItalic { get; }
 
-        /// <summary>Read from a font a file carried.</summary>
-        public bool Embedded { get; init; }
+        /// <summary>How many embedded faces there were when it was chosen.</summary>
+        public int Generation { get; init; }
+
+        /// <summary>The file it was read from when a document carried it: its name there, and its bytes.</summary>
+        public (string Name, byte[] Data)? Carried { get; init; }
 
         public int UnitsPerEm { get; }
 
@@ -497,4 +604,20 @@ public static class OutlineText
         public int GetHashCode((string Face, bool Bold, bool Italic) obj) =>
             HashCode.Combine(StringComparer.OrdinalIgnoreCase.GetHashCode(obj.Face), obj.Bold, obj.Italic);
     }
+}
+
+/// <summary>What a font's licence says about carrying it in a document; KiCad carries installable and editable ones.</summary>
+public enum FontEmbedding
+{
+    Installable,
+    Editable,
+    PreviewAndPrint,
+    Restricted,
+}
+
+/// <summary>A font file as a document would carry it.</summary>
+public sealed record FontFile(string Name, byte[] Data, FontEmbedding Embedding)
+{
+    /// <summary>Whether KiCad would carry it: installable or editable, never preview-and-print or restricted.</summary>
+    public bool MayTravel => Embedding is FontEmbedding.Installable or FontEmbedding.Editable;
 }

@@ -66,6 +66,27 @@ public static class Ui
     /// all; a computed value is left bare. Enter commits, Esc puts back what was there, and leaving does the same as
     /// Enter — a field that silently dropped an edit on focus loss would be worse than one that refuses it.
     /// </summary>
+    /// <summary>A yes-or-no setting: a box to tick, and what ticking it means beside it.</summary>
+    public static CheckBox Switch(bool on, string meaning, Action<bool> changed)
+    {
+        var box = new CheckBox
+        {
+            IsChecked = on,
+            Content = Text(meaning, "value"),
+            VerticalAlignment = VerticalAlignment.Top,
+            MinHeight = 0,
+            Padding = new Thickness(6, 0, 0, 0),
+        };
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if (box.IsChecked is { } now && now != on)
+            {
+                changed(now);
+            }
+        };
+        return box;
+    }
+
     public static TextBox EditableField(string value, Action<string> commit)
     {
         // A long value — a sheet's title, say — wraps inside its field rather than hiding past the edge. Enter still

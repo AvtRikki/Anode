@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Anode.Sdk;
 using Anode.Workbench.Services;
 using Anode.Workbench.Views;
@@ -62,6 +64,59 @@ public class FontIssueTests
             var sch = Pump(shell.OpenAsync(sheet))!;
             var face = Assert.Single(sch.Issues, i => i.Title == Tr.T("sch.issue.face.title", "Sheet Face Anode"));
             Assert.Equal(Tr.T("sch.issue.face.detail", "Sheet Face Anode", face.Location), face.Detail);
+
+            Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+            window.Close();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    });
+
+    [Fact]
+    public Task Ticking_embed_in_the_inspector_carries_the_face_on_save() => ShellWindowTests.Dispatch(directory =>
+    {
+        Assert.SkipWhen(SkiaSharp.SKFontManager.Default.MatchFamily("Helvetica") is not { FamilyName.Length: > 0 }, "Helvetica is not installed");
+        GraphicsOptions.Renderer = RendererKind.Skia;
+        Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+
+        string folder = Directory.CreateTempSubdirectory("anode-embed-ui-").FullName;
+        string board = Path.Combine(folder, "embed.kicad_pcb");
+        File.WriteAllText(board, """
+            (kicad_pcb (version 20241229) (generator "pcbnew")
+            	(layers (0 "F.Cu" signal) (5 "F.SilkS" user))
+            	(gr_text "Anode" (at 10 10 0) (layer "F.SilkS")
+            		(effects (font (face "Helvetica") (size 2 2))))
+            	(embedded_fonts no))
+
+            """);
+
+        try
+        {
+            var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+            var window = new MainWindow { DataContext = shell, Width = 1240, Height = 1000 };
+            window.Show();
+
+            var document = Pump(shell.OpenAsync(board))!;
+            shell.Commands.TryExecute("shell.inspector.focus");
+            Dispatcher.UIThread.RunJobs();
+
+            var box = Assert.Single(window.GetVisualDescendants().OfType<CheckBox>(), c => c.IsVisible);
+            Assert.False(box.IsChecked);
+            box.IsChecked = true;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(document.IsDirty);
+
+            Assert.True(Pump(document.SaveAsync()));
+            Dispatcher.UIThread.RunJobs();
+            ShellWindowTests.Snapshot(window, directory, "overview-fonts-embedded");
+
+            string saved = File.ReadAllText(board);
+            Assert.Contains("(embedded_fonts yes)", saved, StringComparison.Ordinal);
+            Assert.Contains("(type font)", saved, StringComparison.Ordinal);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == Tr.T("pcb.overview.fonts.carried"));
 
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
             window.Close();

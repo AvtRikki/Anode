@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Anode.Editing;
 using Anode.Kicad;
 using Anode.Kicad.DrawingSheets;
+using Anode.Kicad.Editing;
 using Anode.Sdk;
 using Anode.Render;
 using Anode.Render.Fonts;
@@ -140,7 +141,19 @@ public sealed class PcbDocument : DocumentBase
 
     /// <summary>The board itself, for the inspector when nothing is selected; worked out once per state of the board.</summary>
     public override SelectionInfo? Overview =>
-        _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues, EditTitleBlock);
+        _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues, EditTitleBlock, DocumentFonts.Of(_board), EmbedFonts);
+
+    /// <summary>KiCad's setting that the board carries its fonts, written as one undoable step.</summary>
+    internal void EmbedFonts(bool on)
+    {
+        if (EmbeddedFonts.Wanted(_board.Root) == on)
+        {
+            return;
+        }
+
+        _editor.Run(new Anode.Kicad.Editing.RootChildCommand(
+            _board.Root, "embedded_fonts", Tr.T("pcb.command.embedFonts"), () => EmbeddedFonts.SetWanted(_board.Root, on)));
+    }
 
     /// <summary>
     /// Writes one line of the board's title block as one undoable step: "title", "date", "rev", "company", or
@@ -265,9 +278,15 @@ public sealed class PcbDocument : DocumentBase
     public override Task<bool> SaveAsync(string? path = null)
     {
         string target = path ?? FilePath ?? throw new InvalidOperationException("The document has no path to save to.");
+
+        // As KiCad does before it writes: the fonts the board's texts use are carried when it asks for that, and
+        // dropped when it does not.
+        EmbeddedFonts.Sync(_board.Root, DocumentFonts.Carried(DocumentFonts.Of(_board)));
+
         _editor.Save(target);
         FilePath = target;
-        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty));
+        _overview = null;
+        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty), nameof(Overview));
         return Task.FromResult(true);
     }
 

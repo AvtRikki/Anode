@@ -66,6 +66,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             var appearances = design.Where(i => string.Equals(i.File, full, StringComparison.Ordinal)).ToList();
             string? shown = appearances.FirstOrDefault()?.Path;
             var frame = SheetFrameText.ForProject(path, board: false, out string? missing);
+            EmbedRootFonts(full);
             var scene = SchematicSceneBuilder.Build(schematic, shown, FrameFor(frame, design, shown));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {
@@ -87,6 +88,31 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
     /// since a file does not know who places it. A sheet with no project around it is its own root. One the root
     /// never reaches has no place at all, and its own fields are all there is to show.
     /// </summary>
+    /// <summary>
+    /// A sheet below the root draws with the fonts the root carries — KiCad keeps a design's embedded fonts in its
+    /// root file and has them loaded whichever sheet is shown. The root is read only when it carries a font.
+    /// </summary>
+    private static void EmbedRootFonts(string sheet)
+    {
+        if (ProjectRoot(sheet) is not { } root || string.Equals(root, sheet, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            string text = File.ReadAllText(root);
+            if (text.Contains("(type font)", StringComparison.Ordinal))
+            {
+                OutlineText.Embed(EmbeddedFile.In(Anode.Kicad.Schematic.Parse(text).Document.Root));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+        {
+            // The root's fonts are a nicety for this sheet; a root that will not read is reported where it is opened.
+        }
+    }
+
     private static IReadOnlyList<SheetInstance> Design(string path, Anode.Kicad.Schematic schematic)
     {
         string full = Path.GetFullPath(path);
@@ -343,35 +369,39 @@ public sealed class SchematicDocument : DocumentBase
 
     private IReadOnlyList<(string Reference, IReadOnlyList<DesignatorUse> Uses)> FindDuplicates(string own)
     {
-        var places = SchematicDocumentType.ProjectRoot(own) is { } root ? SchHierarchy.Walk(root, Open) : _appearances;
-        return SchDuplicates.Find(places, Open);
+        var places = SchematicDocumentType.ProjectRoot(own) is { } root ? SchHierarchy.Walk(root, OpenSheet) : _appearances;
+        return SchDuplicates.Find(places, OpenSheet);
+    }
 
-        Anode.Kicad.Schematic? Open(string file)
+    /// <summary>
+    /// A sheet of the design: this one as it stands in the editor, any other as it is on disk, read once and again
+    /// only when its file changes; null when it cannot be read.
+    /// </summary>
+    private Anode.Kicad.Schematic? OpenSheet(string file)
+    {
+        if (FilePath is { } own && string.Equals(file, Path.GetFullPath(own), StringComparison.Ordinal))
         {
-            if (string.Equals(file, own, StringComparison.Ordinal))
-            {
-                return Sheet;
-            }
-
-            DateTime written = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : default;
-            if (!_neighbours.TryGetValue(file, out var known) || known.Written != written)
-            {
-                Anode.Kicad.Schematic? sheet;
-                try
-                {
-                    sheet = written == default ? null : Anode.Kicad.Schematic.Load(file);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
-                {
-                    sheet = null;
-                }
-
-                known = (written, sheet);
-                _neighbours[file] = known;
-            }
-
-            return known.Sheet;
+            return Sheet;
         }
+
+        DateTime written = File.Exists(file) ? File.GetLastWriteTimeUtc(file) : default;
+        if (!_neighbours.TryGetValue(file, out var known) || known.Written != written)
+        {
+            Anode.Kicad.Schematic? sheet;
+            try
+            {
+                sheet = written == default ? null : Anode.Kicad.Schematic.Load(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+            {
+                sheet = null;
+            }
+
+            known = (written, sheet);
+            _neighbours[file] = known;
+        }
+
+        return known.Sheet;
     }
 
     /// <summary>Turns the tab to the place a part stands in and selects it there.</summary>
@@ -808,9 +838,16 @@ public sealed class SchematicDocument : DocumentBase
 
     public override Task<bool> SaveAsync(string? path = null)
     {
-        _editor.Save(path ?? FilePath ?? throw new InvalidOperationException("The sheet has no path to save to."));
-        FilePath = path ?? FilePath;
-        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty));
+        string target = path ?? FilePath ?? throw new InvalidOperationException("The sheet has no path to save to.");
+
+        // As KiCad does before it writes: the fonts the design's texts use are carried when it asks for that, and
+        // dropped when it does not.
+        EmbeddedFonts.Sync(Sheet.Root, DocumentFonts.Carried(DocumentFonts.Of(FontSheets())));
+
+        _editor.Save(target);
+        FilePath = target;
+        _overview = null;
+        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty), nameof(Overview));
         return Task.FromResult(true);
     }
 
@@ -1180,7 +1217,37 @@ public sealed class SchematicDocument : DocumentBase
                 : [],
             new InspectorAction(Tr.T("sch.command.fit"), () => _canvas?.ZoomToFit()),
         ],
-        EditTitleBlock);
+        EditTitleBlock,
+        DocumentFonts.Of(FontSheets()),
+        EmbedFonts);
+
+    /// <summary>
+    /// The sheets whose texts decide what this file carries: the whole design when this is the sheet that keeps
+    /// KiCad's setting — the design's root, as KiCad keeps it there — otherwise this sheet alone.
+    /// </summary>
+    private IReadOnlyList<Anode.Kicad.Schematic> FontSheets()
+    {
+        if (FilePath is not { } path || SchematicDocumentType.ProjectRoot(Path.GetFullPath(path)) is not { } root
+            || !string.Equals(root, Path.GetFullPath(path), StringComparison.Ordinal))
+        {
+            return [Sheet];
+        }
+
+        return [.. SchHierarchy.Walk(root, OpenSheet).Select(p => p.File).Distinct(StringComparer.Ordinal)
+            .Select(OpenSheet).OfType<Anode.Kicad.Schematic>()];
+    }
+
+    /// <summary>KiCad's setting that the design carries its fonts, written as one undoable step.</summary>
+    internal void EmbedFonts(bool on)
+    {
+        if (EmbeddedFonts.Wanted(Sheet.Root) == on)
+        {
+            return;
+        }
+
+        _editor.Run(new RootChildCommand(
+            Sheet.Root, "embedded_fonts", Tr.T("sch.command.embedFonts"), () => EmbeddedFonts.SetWanted(Sheet.Root, on)));
+    }
 
     /// <summary>
     /// Writes one field of the title block as one undoable step. The block is not an item on the sheet and may not

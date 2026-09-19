@@ -14,6 +14,7 @@
     },
     "command": {
       "titleBlock": "Edit title block",
+      "embedFonts": "Embed fonts on save",
       "undo": "Undo",
       "redo": "Redo",
       "delete": "Delete selection",
@@ -45,6 +46,7 @@
       "checks": "checks: {0}"
     },
     "overview": {
+      "fonts": { "title": "Fonts", "carried": "carried in the file", "installed": "installed", "restricted": "installed · its licence forbids embedding", "standIn": "not here · {0} stands in", "bold": "bold", "italic": "italic", "embed": "Embed", "onSave": "on save" },
       "tag": "Board",
       "block": {
         "board": "Board",

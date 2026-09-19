@@ -123,7 +123,7 @@ public sealed class InspectorPanel : ContentControl
             {
                 text.Append('\u001f').Append(row.Name).Append('=').Append(row.Value)
                     .Append('|').Append(row.Trailing).Append(row.IsUnresolved)
-                    .Append(row.Commit is null ? '-' : '+');
+                    .Append(row.Commit is null ? '-' : '+').Append(row.Switch);
             }
         }
 
@@ -235,7 +235,11 @@ public sealed class InspectorPanel : ContentControl
             grid.Children.Add(label);
 
             Control value;
-            if (rows[i].Commit is { } commit)
+            if (rows[i] is { Switch: { } on, Commit: { } flip })
+            {
+                value = Ui.Switch(on, rows[i].Value, v => flip(v ? "yes" : "no"));
+            }
+            else if (rows[i].Commit is { } commit)
             {
                 var box = Ui.EditableField(rows[i].Value, commit);
                 _editable.Add(box);

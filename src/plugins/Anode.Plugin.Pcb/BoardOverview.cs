@@ -3,6 +3,7 @@ using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
 using Anode.Render;
+using Anode.Render.Fonts;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Pcb;
@@ -20,10 +21,17 @@ internal static class BoardOverview
         string? filePath,
         RectD outline,
         IReadOnlyList<Issue> issues,
-        Action<string, string>? editTitleBlock = null)
+        Action<string, string>? editTitleBlock = null,
+        IReadOnlyList<DocumentFonts.Use>? fonts = null,
+        Action<bool>? embedFonts = null)
     {
         string title = Path.GetFileNameWithoutExtension(filePath ?? Tr.T("pcb.document.untitled"));
         List<InspectorBlock> blocks = [Physical(board, outline, editTitleBlock), Contents(board)];
+        if (Fonts(board.Document.Root, fonts ?? [], embedFonts) is { } faces)
+        {
+            blocks.Add(faces);
+        }
+
         if (Checks(issues) is { } checks)
         {
             blocks.Add(checks);
@@ -88,6 +96,45 @@ internal static class BoardOverview
 
         rows.Add(Row("nets", Count(board.Nets.All.Count(n => !n.IsUnconnected))));
         return new InspectorBlock(Tr.T("pcb.overview.block.contents"), rows);
+    }
+
+    /// <summary>
+    /// The faces the board's own texts are set in and where each comes from — carried in the file, installed here,
+    /// held back by its licence, or stood in for — and, when the file has KiCad's setting, whether they are carried
+    /// on saving. Absent when the board uses no face and carries none.
+    /// </summary>
+    private static InspectorBlock? Fonts(Anode.Sexpr.SList root, IReadOnlyList<DocumentFonts.Use> fonts, Action<bool>? embed)
+    {
+        bool? wanted = EmbeddedFonts.Wanted(root);
+        var carried = EmbeddedFonts.Names(root);
+        if (fonts.Count == 0 && carried.Count == 0 && wanted is not true)
+        {
+            return null;
+        }
+
+        List<InspectorRow> rows = [.. fonts.Select(u => new InspectorRow(
+            string.Join(" ", new[] { u.Face, u.Bold ? Tr.T("pcb.overview.fonts.bold") : null, u.Italic ? Tr.T("pcb.overview.fonts.italic") : null }.OfType<string>()),
+            u.File switch
+            {
+                null => Tr.T("pcb.overview.fonts.standIn", OutlineText.Substitute(u.Face) ?? string.Empty),
+                { } file when carried.Contains(file.Name) => Tr.T("pcb.overview.fonts.carried"),
+                { MayTravel: false } => Tr.T("pcb.overview.fonts.restricted"),
+                _ => Tr.T("pcb.overview.fonts.installed"),
+            })
+        {
+            IsUnresolved = u.File is null,
+        })];
+
+        if (wanted is { } on && embed is not null)
+        {
+            rows.Add(new InspectorRow(Tr.T("pcb.overview.fonts.embed"), Tr.T("pcb.overview.fonts.onSave"))
+            {
+                Switch = on,
+                Commit = v => embed(v == "yes"),
+            });
+        }
+
+        return new InspectorBlock(Tr.T("pcb.overview.fonts.title"), rows);
     }
 
     private static InspectorBlock? Checks(IReadOnlyList<Issue> issues)

@@ -171,6 +171,12 @@ public sealed record InspectorRow(string Name, string Value)
 
     /// <summary>The row says something is unresolved — an unnamed net, a missing library — and reads in the accent.</summary>
     public bool IsUnresolved { get; init; }
+
+    /// <summary>
+    /// A yes-or-no setting, shown as a switch beside <see cref="InspectorRow.Value"/>, which says what it means; flipping
+    /// it calls <see cref="Commit"/> with "yes" or "no". Null for any other row.
+    /// </summary>
+    public bool? Switch { get; init; }
 }
 
 /// <param name="IsPrimary">The one action that answers the block above it; the rest are outlined.</param>

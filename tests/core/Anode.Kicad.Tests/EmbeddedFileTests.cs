@@ -1,4 +1,5 @@
 using System.Text;
+using Anode.Kicad.Editing;
 using Anode.Tests;
 
 namespace Anode.Kicad.Tests;
@@ -75,5 +76,63 @@ public class EmbeddedFileTests
         bool padded = length % 16 % 4 != 0;
         Assert.Equal(!padded, EmbeddedFile.ChecksumOf(data) == EmbeddedFile.ChecksumOf(data, legacyTail: true));
         Assert.Equal(32, EmbeddedFile.ChecksumOf(data).Length);
+    }
+
+    [Fact]
+    public void A_file_added_back_lands_exactly_where_and_as_KiCad_wrote_it()
+    {
+        string path = TestData.FullPath("qa/data/pcbnew/api_kitchen_sink.kicad_pcb");
+        Assert.SkipUnless(File.Exists(path), TestData.SkipReason);
+        string original = File.ReadAllText(path);
+
+        var board = Board.Parse(original);
+        var root = board.Document.Root;
+        var block = root.Find("embedded_files")!;
+        var file = Assert.Single(block.Lists());
+        string name = file.Find("name")!.AtomAt(1)!.Value, checksum = file.Find("checksum")!.AtomAt(1)!.Value;
+        string encoded = string.Concat(Enumerable.Range(1, file.Find("data")!.Count - 1).Select(i => file.Find("data")!.AtomAt(i)!.Value.Trim('|')));
+
+        // Gone entirely, block and all, then written again from nothing but its name, type, data and checksum.
+        root.Remove(block);
+        EmbeddedFonts.Add(root, name, "other", encoded, checksum);
+
+        Assert.Equal(original, board.Document.ToString());
+    }
+
+    [Fact]
+    public void Fonts_are_added_when_asked_for_kept_by_name_and_dropped_when_not()
+    {
+        const string text = """
+            (kicad_pcb
+            	(version 20241229)
+            	(generator "pcbnew")
+            	(embedded_fonts no)
+            )
+
+            """;
+        var board = Board.Parse(text);
+        var root = board.Document.Root;
+        byte[] b = [1, 2, 3, 4, 5], a = [9, 8, 7];
+
+        Assert.False(EmbeddedFonts.Sync(root, [("B.ttf", b)]));
+        Assert.Equal(text, board.Document.ToString());
+
+        EmbeddedFonts.SetWanted(root, true);
+        Assert.True(EmbeddedFonts.Sync(root, [("B.ttf", b), ("A.ttf", a)]));
+        Assert.Equal(["A.ttf", "B.ttf"], EmbeddedFonts.Names(root));
+        Assert.Equal(b, EmbeddedFile.In(root).Single(f => f.Name == "B.ttf").Data);
+
+        // A font already carried under that name is not replaced, even by other bytes.
+        Assert.False(EmbeddedFonts.Sync(root, [("A.ttf", b)]));
+        Assert.Equal(a, EmbeddedFile.In(root).Single(f => f.Name == "A.ttf").Data);
+
+        // Written as KiCad writes it, and read back the same.
+        string saved = board.Document.ToString();
+        Assert.Contains("\t(embedded_fonts yes)\n\t(embedded_files\n\t\t(file\n\t\t\t(name \"A.ttf\")\n\t\t\t(type font)\n\t\t\t(data |", saved, StringComparison.Ordinal);
+        Assert.Equal(["A.ttf", "B.ttf"], EmbeddedFonts.Names(Board.Parse(saved).Document.Root));
+
+        EmbeddedFonts.SetWanted(root, false);
+        Assert.True(EmbeddedFonts.Sync(root, []));
+        Assert.Equal(text, board.Document.ToString());
     }
 }
