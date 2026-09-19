@@ -18,6 +18,8 @@ public static class SchematicSceneBuilder
     /// <param name="frame">What the frame prints besides the title block.</param>
     public static SchematicScene Build(Schematic schematic, string? sheetPath = null, SheetFrameText? frame = null)
     {
+        // Fonts the sheet carries, its symbols' included, before any text is set.
+        OutlineText.Embed(EmbeddedFile.In(schematic.Document.Root));
         var paper = DrawingSheet.PaperOf(schematic.Root);
         var scene = new SchematicScene(schematic, new Vector2L(paper.X / 2, paper.Y / 2))
         {

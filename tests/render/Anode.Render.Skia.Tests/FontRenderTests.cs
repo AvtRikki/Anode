@@ -46,6 +46,26 @@ public class FontRenderTests
     }
 
     [Fact]
+    public void An_embedded_face_beside_a_stand_in()
+    {
+        string font = TestData.FullPath("qa/resources/fonts/NotoSans-Regular.ttf");
+        Assert.SkipUnless(File.Exists(font), TestData.SkipReason);
+
+        var sheet = Schematic.Parse($$"""
+            (kicad_sch (version 20250114) (generator "eeschema") (uuid "6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10") (paper "A4")
+              (text "Noto Sans, carried in the file: Qgy 0123" (exclude_from_sim no) (at 20 20 0)
+                (effects (font (face "Noto Sans") (size 2.54 2.54)) (justify left)) (uuid "{{Guid.NewGuid()}}"))
+              (text "Not carried, stood in for: Qgy 0123" (exclude_from_sim no) (at 20 30 0)
+                (effects (font (face "Missing Face Anode") (size 2.54 2.54)) (justify left)) (uuid "{{Guid.NewGuid()}}"))
+              (embedded_fonts yes)
+              {{EmbeddedFile.Block("NotoSans-Regular.ttf", "font", File.ReadAllBytes(font))}})
+            """);
+        var scene = SchematicSceneBuilder.Build(sheet);
+
+        Assert.True(Render(scene, scene.Layers.Single(l => l.Name == LayerStyle.Sch.Text).Bounds.Inflate(4), "fonts-embedded") > 0);
+    }
+
+    [Fact]
     public void The_demo_sheet_title_in_its_face()
     {
         string path = TestData.FullPath("demos/cm5_minima/CM5.kicad_sch");

@@ -44,8 +44,11 @@ the face their font names, laid out by KiCad's outline-font rules and shaped wit
 the stroke font too. Checked against the letters KiCad saved in the demo boards (147 texts): the anchored edge
 agrees within a few hundredths of a millimetre, top and bottom within about 0.1 mm even with a stand-in face. A face this machine lacks is
 stood in for as fontconfig would and reported in the checks; a board text is drawn from KiCad's saved letters
-(`render_cache`) while they still fit, so the board looks as authored regardless. Not yet: fonts embedded in the
-file (KiCad 9's `embedded_fonts`; no demo carries one), knockout text, and choosing a face in the inspector.
+(`render_cache`) while they still fit, so the board looks as authored regardless. A font the file itself carries
+(KiCad 9's `embedded_files`, anywhere in the board or sheet) comes first, as fontconfig takes it for KiCad; the
+decoding is checked against every file KiCad embedded in the demos, each matching the checksum KiCad wrote. No
+demo embeds a font, so that path is tested with Noto Sans from KiCad's QA resources. Not yet: embedding fonts on
+save, a drawing sheet embedded in the board, knockout text, and choosing a face in the inspector.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

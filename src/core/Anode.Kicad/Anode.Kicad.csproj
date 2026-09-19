@@ -3,6 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Anode.Sexpr\Anode.Sexpr.csproj" />
     <ProjectReference Include="..\Anode.Geometry\Anode.Geometry.csproj" />
+    <!-- Files KiCad embeds are zstd-compressed; a managed port of zstd (MIT), no native library. -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
   </ItemGroup>
 
   <PropertyGroup>

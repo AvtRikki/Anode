@@ -88,7 +88,8 @@ Text whose font names a face (KiCad 7+) is emitted as filled polygons with holes
 is drawn from the `render_cache` KiCad saved beside it while that still shows the same text at the same angle,
 exactly as KiCad does, so a board looks as authored even without its faces; the editor moves that cache with the
 text. A face this machine lacks is stood in for (monospaced for monospaced, serif for serif, else the system sans)
-and reported in the checks.
+and reported in the checks — unless the file embeds it: fonts under `embedded_files` are decoded (zstd, base64,
+KiCad's MurmurHash3 checksum) and used ahead of installed faces, process-wide, as KiCad adds them to fontconfig.
 
 ## Follow-ups
 

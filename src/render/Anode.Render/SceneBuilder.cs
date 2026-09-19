@@ -11,6 +11,8 @@ public static class SceneBuilder
     /// <param name="frame">What the page's title block prints besides its own fields.</param>
     public static BoardScene Build(Board board, SheetFrameText? frame = null)
     {
+        // Fonts the board carries, for its own texts and footprints' alike, before any text is set.
+        OutlineText.Embed(EmbeddedFile.In(board.Document.Root));
         var bounds = board.ComputeBounds();
         var scene = new BoardScene(board, bounds.IsEmpty ? Vector2L.Zero : bounds.Center) { Frame = frame ?? new SheetFrameText() };
         var builder = new Builder(scene);

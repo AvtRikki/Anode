@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Anode.Geometry;
+using Anode.Kicad;
 using SkiaSharp;
 using HbBuffer = HarfBuzzSharp.Buffer;
 using HbFace = HarfBuzzSharp.Face;
@@ -12,8 +13,8 @@ namespace Anode.Render.Fonts;
 /// (<c>FONT::getLinePositions</c>, <c>OUTLINE_FONT::getTextAsGlyphs</c>): the em is 1.4 times the text height, the
 /// first baseline sits one text height below the top, lines are 1.68 heights apart, glyphs are shaped by HarfBuzz so
 /// kerning and ligatures come out the same, and superscripts, subscripts and overbars follow KiCad's proportions.
-/// A face this machine lacks is stood in for by one it has, as fontconfig does for KiCad; <see cref="Substitute"/>
-/// says which.
+/// A font the file itself carries is used first (<see cref="Embed"/>); a face neither the file nor this machine has
+/// is stood in for by one it has, as fontconfig does for KiCad; <see cref="Substitute"/> says which.
 /// </summary>
 public static class OutlineText
 {
@@ -46,6 +47,11 @@ public static class OutlineText
     private static readonly ConcurrentDictionary<(string Face, bool Bold, bool Italic), Face> Faces = new(FaceKeyComparer.Instance);
 
     private static readonly ConcurrentDictionary<(Face Face, ushort Glyph), Vector2D[][]> Glyphs = new();
+
+    /// <summary>Faces read from files' embedded fonts, for the life of the process, as fontconfig keeps them.</summary>
+    private static readonly List<SKTypeface> Embedded = [];
+
+    private static readonly HashSet<string> EmbeddedKeys = new(StringComparer.Ordinal);
 
     /// <summary>Whether this machine has <paramref name="face"/> itself, not a stand-in.</summary>
     public static bool IsInstalled(string face) => !Resolve(face, false, false).Substituted;
@@ -204,24 +210,87 @@ public static class OutlineText
             : new Vector2D(p.X, p.Y)).ToArray())];
     });
 
+    /// <summary>
+    /// Makes the fonts among <paramref name="files"/> available by their family, ahead of the faces this machine has
+    /// — as KiCad adds a file's embedded fonts to fontconfig, for every text from then on. Each font is read once;
+    /// answers how many were new.
+    /// </summary>
+    public static int Embed(IEnumerable<EmbeddedFile> files)
+    {
+        int added = 0;
+        foreach (var file in files.Where(f => f.IsFont && f.HasData))
+        {
+            string key = file.Checksum ?? file.Name;
+            lock (Embedded)
+            {
+                if (!EmbeddedKeys.Add(key))
+                {
+                    continue;
+                }
+            }
+
+            if (file.Data is not { } data || SKTypeface.FromData(SKData.CreateCopy(data)) is not { } typeface
+                || string.IsNullOrEmpty(typeface.FamilyName))
+            {
+                continue;
+            }
+
+            lock (Embedded)
+            {
+                Embedded.Add(typeface);
+            }
+
+            // What was resolved for this family before — most likely a stand-in — gives way.
+            foreach (var resolved in Faces.Keys.Where(k => string.Equals(k.Face, typeface.FamilyName, StringComparison.OrdinalIgnoreCase)))
+            {
+                Faces.TryRemove(resolved, out _);
+            }
+
+            added++;
+        }
+
+        return added;
+    }
+
+    /// <summary>Whether <paramref name="face"/> is drawn from a font a file carried rather than one installed.</summary>
+    public static bool IsEmbedded(string face) => Resolve(face, false, false).Embedded;
+
     private static Face Resolve(string face, bool bold, bool italic) => Faces.GetOrAdd((face, bold, italic), key =>
     {
+        // fontconfig in KiCad: a name that says it is heavy is looked up bold, whatever the text asks.
+        bool heavy = key.Bold || new[] { "bold", "heavy", "black", "thick", "dark" }
+            .Any(w => key.Face.Contains(w, StringComparison.OrdinalIgnoreCase));
         var style = new SKFontStyle(
-            key.Bold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
+            heavy ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal,
             SKFontStyleWidth.Normal,
             key.Italic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright);
 
-        // The font manager answers nothing for a family it lacks, where the typeface factory would quietly hand back
-        // its default; so the lack is noticed here, and the stand-in chosen deliberately.
-        var typeface = Match(key.Face, style);
+        // A font the file carries comes first; then the machine's. The font manager answers nothing for a family it
+        // lacks, where the typeface factory would quietly hand back its default; so the lack is noticed here, and
+        // the stand-in chosen deliberately.
+        var embedded = FromFile(key.Face, style);
+        var typeface = embedded ?? Match(key.Face, style);
         bool substituted = typeface is null;
         typeface ??= StandIn(key.Face, style);
 
         // A bold the family lacks is made up by KiCad with a one-pixel embolden at 1152 dpi — too slight to see, so
         // it is left out. A missing italic is slanted by 12°, which shows.
         bool fakeItalic = key.Italic && typeface.FontSlant == SKFontStyleSlant.Upright;
-        return new Face(typeface, substituted, fakeItalic);
+        return new Face(typeface, substituted, fakeItalic) { Embedded = embedded is not null };
     });
+
+    /// <summary>The embedded face of <paramref name="family"/> closest to <paramref name="style"/>, if any.</summary>
+    private static SKTypeface? FromFile(string family, SKFontStyle style)
+    {
+        lock (Embedded)
+        {
+            return Embedded
+                .Where(t => string.Equals(t.FamilyName, family, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(t => (t.FontSlant == SKFontStyleSlant.Upright) == (style.Slant == SKFontStyleSlant.Upright) ? 0 : 1)
+                .ThenBy(t => Math.Abs(t.FontWeight - style.Weight))
+                .FirstOrDefault();
+        }
+    }
 
     private static SKTypeface? Match(string family, SKFontStyle style) =>
         SKFontManager.Default.MatchFamily(family, style) is { } found && !string.IsNullOrEmpty(found.FamilyName) ? found : null;
@@ -408,6 +477,9 @@ public static class OutlineText
         public bool Substituted { get; }
 
         public bool FakeItalic { get; }
+
+        /// <summary>Read from a font a file carried.</summary>
+        public bool Embedded { get; init; }
 
         public int UnitsPerEm { get; }
 

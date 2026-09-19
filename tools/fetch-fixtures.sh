@@ -76,5 +76,29 @@ for f in "${FILES[@]}"; do
   fi
 done
 
+# Files that entered KiCad after the pinned commit, each fetched from the commit that added it.
+LATER=(
+  # An OFL font to embed in test files: no KiCad demo carries an embedded font.
+  "753afc7f379a99305fdeb509ada6cf9f47182143 qa/resources/fonts/NotoSans-Regular.ttf"
+)
+
+for entry in "${LATER[@]}"; do
+  commit="${entry%% *}"
+  f="${entry#* }"
+  out="${DEST}/${f}"
+  if [[ -s "$out" ]]; then
+    ok=$((ok + 1))
+    continue
+  fi
+  mkdir -p "$(dirname "$out")"
+  if curl -fsSL -o "$out" "https://gitlab.com/kicad/code/kicad/-/raw/${commit}/${f// /%20}"; then
+    ok=$((ok + 1))
+  else
+    rm -f "$out"
+    echo "warning: failed to fetch $f" >&2
+    failed=$((failed + 1))
+  fi
+done
+
 echo "$KICAD_COMMIT" > "${DEST}/COMMIT"
 echo "fixtures: ${ok} ok, ${failed} failed -> ${DEST}"
