@@ -48,6 +48,7 @@
       "properties": "Properties",
       "annotate": "Number the parts",
       "highlightNet": "Highlight net",
+      "titleBlock": "Edit title block",
       "fit": "Fit sheet to window",
       "openSheet": "Open child sheet"
     },

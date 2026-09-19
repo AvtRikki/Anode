@@ -29,7 +29,9 @@ Status, 2026-09-18: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
 - **Stage 6** — not started.
 
 With nothing selected the inspector describes the document itself: a sheet its paper, title block, contents, nets
-and checks; a board its size, layers, placement and routing.
+and checks; a board its size, layers, placement and routing. The sheet's title, revision, date and company can be
+written there. Not yet: the title block's comments, the board's title block, and drawing the title block in the
+sheet's frame.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

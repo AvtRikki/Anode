@@ -1099,7 +1099,43 @@ public sealed class SchematicDocument : DocumentBase
                 ? new[] { new InspectorAction(Tr.T("sch.command.annotate"), Annotate) { IsPrimary = true } }
                 : [],
             new InspectorAction(Tr.T("sch.command.fit"), () => _canvas?.ZoomToFit()),
-        ]);
+        ],
+        EditTitleBlock);
+
+    /// <summary>
+    /// Writes one field of the title block as one undoable step. The block is not an item on the sheet and may not
+    /// exist yet, so the step remembers the whole block rather than a node that was never there.
+    /// </summary>
+    internal void EditTitleBlock(string field, string value)
+    {
+        string current = field switch
+        {
+            "title" => Sheet.TitleBlock.Title,
+            "date" => Sheet.TitleBlock.Date,
+            "rev" => Sheet.TitleBlock.Revision,
+            "company" => Sheet.TitleBlock.Company,
+            _ => null,
+        } ?? string.Empty;
+
+        string written = value.Trim();
+        if (string.Equals(current, written, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            _editor.Run(new RootChildCommand(
+                Sheet.Root,
+                "title_block",
+                Tr.T("sch.command.titleBlock"),
+                () => TitleBlockWrites.Set(Sheet.Root, field, written)));
+        }
+        catch (Exception ex) when (ex is KiCadFormatException or ArgumentException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+        }
+    }
 
     private void OnHistoryChanged() => OnPropertiesChanged(nameof(IsDirty), nameof(StatusFields), nameof(Summary));
 

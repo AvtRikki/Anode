@@ -25,7 +25,8 @@ internal static class SheetOverview
         IReadOnlyList<SheetInstance> appearances,
         IReadOnlyList<SchNet> nets,
         IReadOnlyList<Issue> issues,
-        IReadOnlyList<InspectorAction> actions)
+        IReadOnlyList<InspectorAction> actions,
+        Action<string, string>? editTitleBlock = null)
     {
         string file = Path.GetFileName(filePath ?? string.Empty);
         var shown = appearances.FirstOrDefault(a => a.Path == instance);
@@ -33,7 +34,8 @@ internal static class SheetOverview
             ? shown.Name
             : Path.GetFileNameWithoutExtension(filePath ?? Tr.T("sch.document.untitled"));
 
-        List<InspectorBlock> blocks = [SheetBlock(sheet, paper, appearances, shown), Contents(sheet), Electrics(sheet, nets, instance)];
+        List<InspectorBlock> blocks =
+            [SheetBlock(sheet, paper, appearances, shown, editTitleBlock), Contents(sheet), Electrics(sheet, nets, instance)];
         if (Checks(issues) is { } checks)
         {
             blocks.Add(checks);
@@ -46,7 +48,12 @@ internal static class SheetOverview
         };
     }
 
-    private static InspectorBlock SheetBlock(Anode.Kicad.Schematic sheet, RectD paper, IReadOnlyList<SheetInstance> appearances, SheetInstance? shown)
+    private static InspectorBlock SheetBlock(
+        Anode.Kicad.Schematic sheet,
+        RectD paper,
+        IReadOnlyList<SheetInstance> appearances,
+        SheetInstance? shown,
+        Action<string, string>? editTitleBlock)
     {
         List<InspectorRow> rows = [];
 
@@ -55,12 +62,23 @@ internal static class SheetOverview
             : $"{sheet.Paper} · {Mm(paper.Width)} × {Mm(paper.Height)} {Tr.T("sch.units.mm")}";
         rows.Add(Row("paper", sheet.IsPortrait ? size + " · " + Tr.T("sch.overview.portrait") : size));
 
-        // Only what the title block actually says; four empty rows would read as four things missing.
         var block = sheet.TitleBlock;
-        AddIf(rows, "title", block.Title);
-        AddIf(rows, "revision", block.Revision);
-        AddIf(rows, "date", block.Date);
-        AddIf(rows, "company", block.Company);
+        if (editTitleBlock is { } edit)
+        {
+            // All four, empty ones too: an empty field that can be written is an invitation, not a missing value.
+            rows.Add(Row("title", block.Title ?? string.Empty) with { Commit = v => edit("title", v) });
+            rows.Add(Row("revision", block.Revision ?? string.Empty) with { Commit = v => edit("rev", v) });
+            rows.Add(Row("date", block.Date ?? string.Empty) with { Commit = v => edit("date", v) });
+            rows.Add(Row("company", block.Company ?? string.Empty) with { Commit = v => edit("company", v) });
+        }
+        else
+        {
+            // Read only, then only what the title block says; four empty rows would read as four things missing.
+            AddIf(rows, "title", block.Title);
+            AddIf(rows, "revision", block.Revision);
+            AddIf(rows, "date", block.Date);
+            AddIf(rows, "company", block.Company);
+        }
 
         if (appearances.Count > 1 && shown is not null)
         {

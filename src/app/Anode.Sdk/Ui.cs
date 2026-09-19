@@ -68,7 +68,16 @@ public static class Ui
     /// </summary>
     public static TextBox EditableField(string value, Action<string> commit)
     {
-        var box = new TextBox { Text = value, Classes = { "fieldInput" }, Tag = value };
+        // A long value — a sheet's title, say — wraps inside its field rather than hiding past the edge. Enter still
+        // commits: the box never takes a line break, it only lays one out.
+        var box = new TextBox
+        {
+            Text = value,
+            Classes = { "fieldInput" },
+            Tag = value,
+            TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+            AcceptsReturn = false,
+        };
 
         box.KeyDown += (_, e) =>
         {
