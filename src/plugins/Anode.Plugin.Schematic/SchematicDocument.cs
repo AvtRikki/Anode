@@ -579,6 +579,8 @@ public sealed class SchematicDocument : DocumentBase
         new("sch.tool.junction", "sch.tool.junction", Icons.Junction) { ShortcutText = "J", Activate = () => UseTool("sch.tool.junction") },
         new("sch.tool.busEntry", "sch.tool.busEntry", Icons.BusEntry) { Activate = () => UseTool("sch.tool.busEntry") },
         new("sch.tool.text", "sch.tool.text", Icons.Text) { ShortcutText = "T", Activate = () => UseTool("sch.tool.text") },
+        new("sch.tool.sheet", "sch.tool.sheet", Icons.Sheet) { ShortcutText = "S", Activate = () => UseTool("sch.tool.sheet") },
+        new("sch.tool.sheetPin", "sch.tool.sheetPin", Icons.SheetPin) { Activate = () => UseTool("sch.tool.sheetPin") },
         new(_shapeTool, _shapeTool, ShapeIcon(_shapeTool))
         {
             Activate = () => UseTool(_shapeTool),
@@ -815,6 +817,9 @@ public sealed class SchematicDocument : DocumentBase
     /// <summary>KiCad's bus entry steps one grid square down and to the right.</summary>
     private static readonly Vector2L BusStep = new(2_540_000, 2_540_000);
 
+    /// <summary>How far outside a sheet's border a click still means that sheet: one grid step, as KiCad allows.</summary>
+    private const long PinReach = 2_540_000;
+
     /// <summary>The name is asked for on the canvas, where the label is being dropped.</summary>
     private PromptTool Label(SchematicCanvas canvas, SchLabelKind kind) =>
         Prompt(canvas, LabelToolId(kind), (name, at) => SchNodes.Label(kind, name, at));
@@ -922,6 +927,127 @@ public sealed class SchematicDocument : DocumentBase
         return Path.GetFileNameWithoutExtension(FilePath ?? string.Empty);
     }
 
+    /// <summary>
+    /// Puts a child sheet down: the rectangle that stands for it here, and the schematic it reads, written beside
+    /// this one and named after it. A sheet whose file is already there reads that file rather than overwriting it,
+    /// which is how an existing sheet is brought into a second design — KiCad does the same.
+    ///
+    /// The sheet is placed where it stands in the hierarchy, with the next free page number, because a sheet that
+    /// names no path has no page and is not annotated with the rest of the design.
+    /// </summary>
+    private async Task PlaceSheetAsync(Vector2L at, Vector2L size)
+    {
+        if (_canvas is not { } canvas || FilePath is not { } path)
+        {
+            Warn(Tr.T("sch.sheet.needsFile"));
+            return;
+        }
+
+        if (await canvas.AskForNameAsync(at, string.Empty) is not { Length: > 0 } name)
+        {
+            return;
+        }
+
+        string file = name + ".kicad_sch";
+        if (name.AsSpan().IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            Warn(Tr.T("sch.sheet.badName", name));
+            return;
+        }
+
+        try
+        {
+            string target = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path)) ?? string.Empty, file);
+            if (!File.Exists(target))
+            {
+                SchSheets.NewSheet(Sheet).Save(target);
+            }
+
+            var sheet = SchNodes.Sheet(name, file, at, size, [(ProjectName(), Instance ?? SchSymbols.PathOf(Sheet), NextPage())]);
+            _editor.Apply(Tr.T("sch.tool.sheet"), [sheet], []);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException
+            or NotSupportedException or KiCadFormatException or InvalidOperationException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+            Warn(ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Puts a pin on a child sheet's edge. Its shape is the one the hierarchical label of that name carries inside
+    /// the sheet, so a pin made for a label that is already there matches it and the two answer each other.
+    /// </summary>
+    private async Task PlaceSheetPinAsync(SchSheet sheet, Vector2L at, SheetSide side)
+    {
+        if (_canvas is not { } canvas || await canvas.AskForNameAsync(at, string.Empty) is not { Length: > 0 } name)
+        {
+            return;
+        }
+
+        if (sheet.Pins.Any(p => string.Equals(KicadText.Unescape(p.Name), name, StringComparison.Ordinal)))
+        {
+            Warn(Tr.T("sch.sheet.pinTaken", name));
+            return;
+        }
+
+        _editor.Modify(Tr.T("sch.tool.sheetPin"), [sheet], () => SchSheets.AddPin(sheet, name, ShapeInside(sheet, name), at, side));
+    }
+
+    /// <summary>What the label of that name inside the sheet is, so the pin arrives already agreeing with it.</summary>
+    private string ShapeInside(SchSheet sheet, string name)
+    {
+        if (ChildFile(sheet) is { } file && OpenSheet(file) is { } child)
+        {
+            foreach (var label in child.Labels)
+            {
+                if (label.Kind == SchLabelKind.Hierarchical && string.Equals(label.Shown, name, StringComparison.Ordinal))
+                {
+                    return label.Shape;
+                }
+            }
+        }
+
+        return "input";
+    }
+
+    /// <summary>The file a child sheet reads, beside this one; null when the sheet names none or this one has no path.</summary>
+    private string? ChildFile(SchSheet sheet)
+    {
+        if (FilePath is not { } path || sheet.SheetFile is not { Length: > 0 } relative)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Path.GetFullPath(Path.Combine(Path.GetDirectoryName(Path.GetFullPath(path)) ?? string.Empty, relative));
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The page a new sheet takes: one past the design as it stands. KiCad numbers the pages of a hierarchy in the
+    /// order they are walked, and a sheet appended at the end takes the next number.
+    /// </summary>
+    private string NextPage()
+    {
+        try
+        {
+            return (SchHierarchy.Walk(RootFile(), OpenSheet).Count + 1).ToString(CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException
+            or Anode.Sexpr.SexprParseException or InvalidOperationException)
+        {
+            return "2";
+        }
+    }
+
+    private void Warn(string message) => _context?.Workbench.ShowBanner(new Banner(message, IsAlert: true));
+
     /// <summary>Puts a tool on the pointer, or takes it off; the buttons and the canvas follow.</summary>
     public void UseTool(string? id)
     {
@@ -953,6 +1079,12 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
                 "sch.tool.junction" => new PlaceTool(_editor, "sch.tool.junction", SchNodes.Junction, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
+                "sch.tool.sheet" => new SheetTool(_editor, PlaceSheetAsync, ex => _context?.Log.Error(ex.Message, ex)),
+                "sch.tool.sheetPin" => new SheetPinTool(
+                    _editor,
+                    point => SchSheets.At(Sheet.Sheets, point, PinReach),
+                    PlaceSheetPinAsync,
+                    ex => _context?.Log.Error(ex.Message, ex)),
                 _ => null,
             };
         }
@@ -1076,22 +1208,22 @@ public sealed class SchematicDocument : DocumentBase
             },
             new("sch.tool.wire", "sch.command.wire")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "W", MenuKey = "menu.place", MenuOrder = 0,
+                ScopeKey = "scope.schematic", ShortcutText = "W", Gesture = new KeyGesture(Key.W), MenuKey = "menu.place", MenuOrder = 0,
                 Execute = () => UseTool("sch.tool.wire"),
             },
             new("sch.tool.bus", "sch.command.bus")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "B", MenuKey = "menu.place", MenuOrder = 10,
+                ScopeKey = "scope.schematic", ShortcutText = "B", Gesture = new KeyGesture(Key.B), MenuKey = "menu.place", MenuOrder = 10,
                 Execute = () => UseTool("sch.tool.bus"),
             },
             new("sch.tool.label", "sch.command.label")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "L", MenuKey = "menu.place", MenuOrder = 20,
+                ScopeKey = "scope.schematic", ShortcutText = "L", Gesture = new KeyGesture(Key.L), MenuKey = "menu.place", MenuOrder = 20,
                 Execute = () => UseTool("sch.tool.label"),
             },
             new("sch.tool.globalLabel", "sch.command.globalLabel")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "⇧L", MenuKey = "menu.place", MenuOrder = 30,
+                ScopeKey = "scope.schematic", ShortcutText = "⇧L", Gesture = new KeyGesture(Key.L, KeyModifiers.Shift), MenuKey = "menu.place", MenuOrder = 30,
                 Execute = () => UseTool("sch.tool.globalLabel"),
             },
             new("sch.tool.hierarchicalLabel", "sch.command.hierarchicalLabel")
@@ -1101,12 +1233,12 @@ public sealed class SchematicDocument : DocumentBase
             },
             new("sch.tool.noConnect", "sch.command.noConnect")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "Q", MenuKey = "menu.place", MenuOrder = 50,
+                ScopeKey = "scope.schematic", ShortcutText = "Q", Gesture = new KeyGesture(Key.Q), MenuKey = "menu.place", MenuOrder = 50,
                 Execute = () => UseTool("sch.tool.noConnect"),
             },
             new("sch.tool.junction", "sch.command.junction")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "J", MenuKey = "menu.place", MenuOrder = 55,
+                ScopeKey = "scope.schematic", ShortcutText = "J", Gesture = new KeyGesture(Key.J), MenuKey = "menu.place", MenuOrder = 55,
                 Execute = () => UseTool("sch.tool.junction"),
             },
             new("sch.tool.busEntry", "sch.command.busEntry")
@@ -1116,8 +1248,19 @@ public sealed class SchematicDocument : DocumentBase
             },
             new("sch.tool.text", "sch.command.text")
             {
-                ScopeKey = "scope.schematic", ShortcutText = "T", MenuKey = "menu.place", MenuOrder = 70,
+                ScopeKey = "scope.schematic", ShortcutText = "T", Gesture = new KeyGesture(Key.T), MenuKey = "menu.place", MenuOrder = 70,
                 Execute = () => UseTool("sch.tool.text"),
+            },
+            new("sch.tool.sheet", "sch.command.sheet")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "S", Gesture = new KeyGesture(Key.S),
+                MenuKey = "menu.place", MenuOrder = 75,
+                Execute = () => UseTool("sch.tool.sheet"),
+            },
+            new("sch.tool.sheetPin", "sch.command.sheetPin")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 76,
+                Execute = () => UseTool("sch.tool.sheetPin"),
             },
             new("sch.tool.line", "sch.command.line")
             {

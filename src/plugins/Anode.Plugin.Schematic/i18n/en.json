@@ -4,6 +4,7 @@
     "hierarchy": {"Unreadable": "Could not read a sheet in the design", "Cycle": "Cyclic sheet reference", "DepthLimit": "Sheet hierarchy depth limit reached", "InstanceLimit": "Sheet instance limit reached"},
     "document": { "label": "KiCad schematic", "untitled": "schematic" },
     "sheets": { "missing": "file not found" },
+    "sheet": { "needsFile": "Save this schematic before adding a sheet to it.", "badName": "“{0}” cannot be a file name.", "pinTaken": "This sheet already has a pin called “{0}”." },
     "tool": {
       "select": "Select",
       "wire": "Wire",
@@ -18,6 +19,8 @@
       "symbol": "Symbol",
       "line": "Line",
       "rectangle": "Rectangle",
+      "sheet": "Sheet",
+      "sheetPin": "Sheet pin",
       "circle": "Circle"
     },
     "command": {
@@ -33,6 +36,8 @@
       "text": "Place text",
       "line": "Draw a line",
       "rectangle": "Draw a rectangle",
+      "sheet": "Place a child sheet",
+      "sheetPin": "Place a sheet pin",
       "circle": "Draw a circle",
       "undo": "Undo",
       "redo": "Redo",

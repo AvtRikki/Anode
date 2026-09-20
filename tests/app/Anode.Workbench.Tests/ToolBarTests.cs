@@ -58,7 +58,7 @@ public class ToolBarTests
                 [
                     "sch.tool.select", "sch.tool.wire", "sch.tool.bus", "sch.tool.label",
                     "sch.tool.noConnect", "sch.tool.junction", "sch.tool.busEntry", "sch.tool.text",
-                    "sch.tool.line",
+                    "sch.tool.sheet", "sch.tool.sheetPin", "sch.tool.line",
                 ],
                 document!.Tools.Select(t => t.Id));
 

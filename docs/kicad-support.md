@@ -41,7 +41,12 @@ another part, and a sheet's fields and title block are written from the inspecto
 unnumbered, per place.
 
 **Hierarchy.** A design is walked from the project's root; a sheet placed twice is one tab showing one place at a
-time, chosen in the project tree, and designators and units are read and written per place.
+time, chosen in the project tree, and designators and units are read and written per place. A sheet can be made:
+the rectangle that stands for it is written with the fields KiCad autoplaces and the path and page it holds in the
+design, and the schematic it reads is written beside its parent in the parent's own format version and paper — or
+an existing file is read, if one of that name is already there. Its pins are kept on its edge, wherever they are
+put, and carry the edge as the angle KiCad writes for it; a pin made for a hierarchical label that is already
+inside the sheet takes that label's shape, so the two agree.
 
 **Nets.** Built from wires, junctions, labels of every kind, buses (vector and group, with `bus_alias`), power
 symbols, no-connects and the pins of child sheets. A label or a pin landing part way along a wire is on that wire;
@@ -74,9 +79,9 @@ KiCad's natural order. A part on a sheet placed twice is two parts, under the de
 power symbol is not a part, nor is one the file marks `(exclude_from_bom yes)`; a part marked do-not-place is on a
 line of its own, as that column keeps it apart.
 
-Not done: creating sheets and their pins, numbering unique across a whole design, and the alternate
-(De Morgan) body style. The rules are KiCad's defaults and cannot yet be turned off or changed,
-and a conflict is reported for each pair of pins rather than condensed as KiCad condenses it.
+Not done: numbering unique across a whole design, and the alternate (De Morgan) body style. The rules are KiCad's
+defaults and cannot yet be turned off or changed, and a conflict is reported for each pair of pins rather than
+condensed as KiCad condenses it.
 
 ## Drawing sheets (`.kicad_wks`)
 

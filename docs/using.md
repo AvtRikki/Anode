@@ -51,8 +51,11 @@ the command palette, which lists every command with its shortcut.
 ## Schematics
 
 - The same selection, move, rotate and delete; M, R, Shift+R, and Y and X mirror.
-- Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, line, rectangle,
-  circle. Esc returns to selecting.
+- Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, sheet, sheet pin,
+  line, rectangle, circle. Esc returns to selecting.
+- A sheet is drawn as a rectangle in two clicks and then named; the schematic it reads is written beside this one
+  under that name, unless a file of that name is already there, which it then reads instead. The sheet pin tool
+  puts a pin on the edge of a sheet nearest where it is clicked — the preview shows where it would land.
 - The components panel searches the symbol libraries and places a part; the pointer stays armed, so a row of them
   can be laid down. A part drawn in sections asks which one to place.
 - The nets panel lists the nets of the sheet with what each reaches; a switch turns it to the whole design's nets.

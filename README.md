@@ -12,7 +12,8 @@ What it does today, in short:
 - **Boards:** open, look at and edit — select, move, rotate, delete, undo/redo, save. Layers panel, net highlighting,
   an inspector that describes the board or the selected item.
 - **Schematics:** open and edit — drawing tools (wires, buses, labels, graphics, text), placing parts from symbol
-  libraries, per-place designators on a reused sheet, annotation, nets of a sheet and of a whole design, checks.
+  libraries, making child sheets and their pins, per-place designators on a reused sheet, annotation, nets of a
+  sheet and of a whole design, checks, netlist and bill-of-materials export.
 - **Both:** KiCad's drawing sheets (frame and title block, a project's own `.kicad_wks` included), text in the stroke
   font or in any typeface the machine or the file itself carries, the title block written from the inspector.
 

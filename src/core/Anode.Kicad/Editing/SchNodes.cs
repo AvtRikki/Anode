@@ -110,6 +110,96 @@ public static class SchNodes
         new(Fresh($"(no_connect (at {KiCadNumber.FormatMm(at.X)} {KiCadNumber.FormatMm(at.Y)}) (uuid \"{Guid.NewGuid()}\"))"));
 
     /// <summary>
+    /// A child sheet: the rectangle that stands for it here, with the name it is called by and the file it reads.
+    /// Its fields are placed as KiCad autoplaces them — the name above the top-left corner, the file below the
+    /// bottom-left one — and it says so, which is what lets KiCad place them again when the sheet is resized.
+    ///
+    /// <paramref name="places"/> is where the sheet stands in the design and which page it is there: it appears once
+    /// per path of the parent, and the page numbers are read from this. A sheet written without any is still read,
+    /// but has no page of its own until the design is numbered.
+    /// </summary>
+    public static SchSheet Sheet(
+        string name,
+        string file,
+        Vector2L at,
+        Vector2L size,
+        IReadOnlyList<(string Project, string Path, string Page)>? places = null)
+    {
+        if (name.Length == 0 || file.Length == 0)
+        {
+            throw new ArgumentException("A sheet needs a name and a file.");
+        }
+
+        if (size.X <= 0 || size.Y <= 0)
+        {
+            throw new ArgumentException("A sheet needs a size.", nameof(size));
+        }
+
+        const long height = SchSheets.TextHeightNm;
+        var text = new StringBuilder("(sheet");
+        text.Append($" (at {Mm(at.X)} {Mm(at.Y)}) (size {Mm(size.X)} {Mm(size.Y)})")
+            .Append(" (exclude_from_sim no) (in_bom yes) (on_board yes) (dnp no) (fields_autoplaced yes)")
+            .Append(" (stroke (width 0) (type solid)) (fill (color 0 0 0 0.0000))")
+            .Append($" (uuid \"{Guid.NewGuid()}\")")
+            .Append(Field("Sheetname", name, SchSheets.NamePosition(at, height), "bottom", height))
+            .Append(Field("Sheetfile", file, SchSheets.FilePosition(at, size, height), "top", height));
+
+        if (places is { Count: > 0 })
+        {
+            text.Append(" (instances");
+            foreach (var project in places.GroupBy(p => p.Project, StringComparer.Ordinal))
+            {
+                text.Append($" (project {Quote(project.Key)}");
+                foreach (var (_, path, page) in project)
+                {
+                    text.Append($" (path {Quote(path)} (page {Quote(page)}))");
+                }
+
+                text.Append(')');
+            }
+
+            text.Append(')');
+        }
+
+        return new SchSheet(Fresh(text.Append(')').ToString()));
+    }
+
+    /// <summary>
+    /// A pin of a sheet symbol: the name it answers inside, the direction of the signal, and the point on the edge
+    /// where a wire meets it. The edge has no word of its own in the file — it is the angle, and the name reads away
+    /// from the sheet, which is what the justification says.
+    /// </summary>
+    public static SchSheetPin SheetPin(string name, string shape, Vector2L at, SheetSide side)
+    {
+        if (name.Length == 0)
+        {
+            throw new ArgumentException("A sheet pin needs a name.", nameof(name));
+        }
+
+        // Left 180, right 0, top 90, bottom 270, as KiCad's getSheetPinAngle writes them.
+        (int angle, string justify) = side switch
+        {
+            SheetSide.Right => (0, "right"),
+            SheetSide.Top => (90, "right"),
+            SheetSide.Bottom => (270, "left"),
+            _ => (180, "left"),
+        };
+
+        const long height = SchSheets.TextHeightNm;
+        return new SchSheetPin(Fresh(
+            $"(pin {Quote(name)} {shape} (at {Mm(at.X)} {Mm(at.Y)} {KiCadNumber.FormatAngle(angle)})"
+            + $" (uuid \"{Guid.NewGuid()}\")"
+            + $" (effects (font (size {Mm(height)} {Mm(height)})) (justify {justify})))"));
+    }
+
+    /// <summary>A sheet's own field: a property like any other, placed and justified by which one it is.</summary>
+    private static string Field(string name, string value, Vector2L at, string vertical, long height) =>
+        $" (property {Quote(name)} {Quote(value)} (at {Mm(at.X)} {Mm(at.Y)} 0)"
+        + $" (effects (font (size {Mm(height)} {Mm(height)})) (justify left {vertical})))";
+
+    private static string Mm(long nm) => KiCadNumber.FormatMm(nm);
+
+    /// <summary>
     /// A subtree from somewhere else — a definition copied out of a library — made ready to live in this file: its
     /// own copy, with the whitespace of its old home dropped so the writer lays it out where it now sits.
     /// </summary>

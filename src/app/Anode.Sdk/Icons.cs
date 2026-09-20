@@ -69,6 +69,8 @@ public static class Icons
     public const string Rectangle = "rectangle";
     public const string Circle = "circle";
     public const string Bus = "bus";
+    public const string Sheet = "sheet";
+    public const string SheetPin = "sheet-pin";
 
     // ——— Workbench ———
     public const string Search = "search";
@@ -213,6 +215,13 @@ public static class Icons
         [Junction] = new(
             "M8 6.2 A1.8 1.8 0 1 1 8 9.8 A1.8 1.8 0 1 1 8 6.2 Z",
             "M2.2 8 H13.8 M8 2.2 V8 M8 6.2 A1.8 1.8 0 1 1 8 9.8 A1.8 1.8 0 1 1 8 6.2 Z"),
+        [Sheet] = new(
+            "M2.6 3.4 H13.4 V12.6 H2.6 Z",
+            "M2.6 3.4 H13.4 V12.6 H2.6 Z M2.6 6.2 H13.4"),
+        [SheetPin] = new(
+            "M1.8 5.8 H7.6 L9.4 7.6 L7.6 9.4 H1.8 Z",
+            "M9.4 2.6 V13.4 M1.8 5.8 H7.6 L9.4 7.6 L7.6 9.4 H1.8 Z"),
+
         [BusEntry] = new(
             null,
             "M1.8 3.4 H14.2 M10.6 5.2 L6.2 9.6 M6.2 9.6 H1.8"),
