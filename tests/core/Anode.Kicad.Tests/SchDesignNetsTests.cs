@@ -187,4 +187,32 @@ public class SchDesignNetsTests
         // Every net of the design is reachable by name, and no two carry the same one.
         Assert.Equal(nets.Count, nets.Select(n => n.Name).Distinct(StringComparer.Ordinal).Count());
     }
+
+    /// <summary>
+    /// A child sheet that will not parse leaves the rest of the design readable: the nets of the sheets that do read
+    /// are still worked out, and the netlist is still written. The design is partial, and its diagnostics say so.
+    /// </summary>
+    [Fact]
+    public void A_child_that_will_not_parse_does_not_stop_the_design()
+    {
+        string folder = Directory.CreateTempSubdirectory("anode-design-nets-").FullName;
+        try
+        {
+            string root = Design(folder);
+            File.WriteAllText(Path.Combine(folder, "block.kicad_sch"), "(kicad_sch (version 20250114) (generator \"eeschema\"");
+
+            var nets = SchDesignNets.Build(root);
+            Assert.NotEmpty(nets);
+            Assert.Contains(nets, n => n.Name == "/TOP");
+            Assert.All(nets, n => Assert.All(n.Parts, p => Assert.Equal("/", p.Place.Trail)));
+
+            string netlist = SchNetlist.Write(root);
+            Assert.StartsWith("(export (version \"E\")", netlist, StringComparison.Ordinal);
+            Assert.Contains("R1", netlist, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
 }

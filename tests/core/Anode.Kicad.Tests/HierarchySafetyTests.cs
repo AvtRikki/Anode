@@ -91,5 +91,21 @@ public sealed class HierarchySafetyTests : IDisposable
         Assert.Throws<OperationCanceledException>(() => SchHierarchy.Walk(root, cancellationToken: cancelled.Token));
     }
 
+    [Fact]
+    public void A_sheet_placing_itself_under_another_spelling_is_still_a_cycle()
+    {
+        // On a filesystem that ignores case — macOS, Windows — "BLOCK.kicad_sch" is the file the sheet is already
+        // inside, so the branch is a cycle rather than a new place.
+        Assert.SkipUnless(OperatingSystem.IsWindows() || OperatingSystem.IsMacOS(), "the filesystem here tells the two names apart");
+
+        string root = Write("loop.kicad_sch", "./LOOP.kicad_sch");
+
+        var problems = new List<HierarchyDiagnostic>();
+        var places = SchHierarchy.Walk(root, report: problems.Add, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Single(places);
+        Assert.Equal(HierarchyProblem.Cycle, Assert.Single(problems).Problem);
+    }
+
     public void Dispose() => Directory.Delete(_directory, recursive: true);
 }

@@ -35,6 +35,13 @@ public static class SchHierarchy
     private const int MaxInstances = 10_000;
 
     /// <summary>
+    /// Paths are compared the way the filesystem compares them, so a sheet placing itself under another spelling of
+    /// its own name is still the same file and still a cycle.
+    /// </summary>
+    private static readonly StringComparer FilePaths =
+        OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
+    /// <summary>
     /// Every sheet instance under <paramref name="rootFile"/>, root first, each parent before its children. Each file
     /// is read once however often it appears. A sheet whose file is missing or unreadable is left out rather than
     /// stopping the walk, as the project tree shows it separately.
@@ -46,9 +53,9 @@ public static class SchHierarchy
     public static IReadOnlyList<SheetInstance> Walk(string rootFile, Func<string, Schematic?>? open = null,
         Action<HierarchyDiagnostic>? report = null, CancellationToken cancellationToken = default)
     {
-        var loaded = new Dictionary<string, Schematic?>(StringComparer.Ordinal);
+        var loaded = new Dictionary<string, Schematic?>(FilePaths);
         var found = new List<SheetInstance>();
-        var ancestors = new HashSet<string>(StringComparer.Ordinal);
+        var ancestors = new HashSet<string>(FilePaths);
         bool exhausted = false;
 
         string root = Path.GetFullPath(rootFile);

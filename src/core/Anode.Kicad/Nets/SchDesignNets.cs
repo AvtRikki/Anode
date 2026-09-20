@@ -53,7 +53,8 @@ public static class SchDesignNets
                 {
                     loaded = open?.Invoke(file) ?? (File.Exists(file) ? Schematic.Load(file) : null);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException
+                    or Sexpr.SexprParseException or System.Text.DecoderFallbackException)
                 {
                     loaded = null;
                 }
