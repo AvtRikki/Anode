@@ -340,7 +340,7 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     public override IReadOnlyList<Issue> Issues =>
-        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. Electrical(), .. LoosePins()];
+        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. Electrical(), .. SheetPins(), .. LoosePins()];
 
     /// <summary>
     /// The electrical rules, over the whole design: pins that may not be wired together, and nets nothing drives.
@@ -370,6 +370,44 @@ public sealed class SchematicDocument : DocumentBase
                 Tr.T("sch.issue.erc.detail", finding.Net.Name, pins),
                 Tr.T("sch.issue.erc.location", here.Place.Trail),
                 Action: () => Reveal(here));
+        }
+    }
+
+    /// <summary>
+    /// What does not match between a sheet symbol and the sheet it stands for. A pin with no label inside is
+    /// reported on the sheet the symbol is drawn on; a label with no pin, on the sheet that carries the label.
+    /// </summary>
+    private IEnumerable<Issue> SheetPins()
+    {
+        if (FilePath is not { } path)
+        {
+            yield break;
+        }
+
+        string own = Path.GetFullPath(path);
+        foreach (var finding in SchErc.CheckSheets(_design, OpenSheet))
+        {
+            var where = finding.Kind == ErcKind.SheetPinWithoutLabel
+                ? _design.FirstOrDefault(p => string.Equals(p.Path, finding.Place.Parent, StringComparison.Ordinal))
+                : finding.Place;
+
+            if (where is null || !string.Equals(where.File, own, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // The pin belongs to the sheet symbol, which is what can be selected; the label is its own item.
+            var item = finding.Kind == ErcKind.SheetPinWithoutLabel ? (SchItem?)finding.Place.Placement : finding.Item;
+            yield return new Issue(
+                IssueSeverity.Error,
+                Tr.T("sch.issue.erc." + finding.Kind),
+                Tr.T("sch.issue.erc.sheetDetail", finding.Name, finding.Place.Name),
+                Tr.T("sch.issue.erc.location", where.Trail),
+                Action: item is null ? null : () =>
+                {
+                    ShowInstance(where.Path);
+                    _editor.SetSelection([item]);
+                });
         }
     }
 

@@ -159,7 +159,7 @@
         "detail": "{0} names {1} parts: {2}",
         "location": "X {0} Y {1} {2}"
       },
-      "erc": { "PinConflict": "Pins that may not be connected", "NotDriven": "Nothing drives this net", "PowerNotDriven": "No power source on this net", "detail": "{0}: {1}", "location": "{0}" },
+      "erc": { "SheetPinWithoutLabel": "Sheet pin with no label inside", "LabelWithoutSheetPin": "Hierarchical label with no sheet pin", "sheetDetail": "{0} — sheet {1}", "PinConflict": "Pins that may not be connected", "NotDriven": "Nothing drives this net", "PowerNotDriven": "No power source on this net", "detail": "{0}: {1}", "location": "{0}" },
       "loosePin": {
         "title": "Pin leads nowhere",
         "detail": "{0} is connected to nothing",

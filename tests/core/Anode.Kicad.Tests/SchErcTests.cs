@@ -78,4 +78,54 @@ public class SchErcTests
         // Its nets are pins left alone on purpose; the marks say so, so nothing is reported.
         Assert.DoesNotContain(SchErc.Check(SchDesignNets.Build(root)), f => f.Kind is ErcKind.NotDriven or ErcKind.PowerNotDriven);
     }
+
+    [Fact]
+    public void A_sheets_pins_and_the_labels_inside_it_must_answer_each_other()
+    {
+        string folder = Directory.CreateTempSubdirectory("anode-erc-sheets-").FullName;
+        try
+        {
+            const string rootUuid = "11111111-0000-4000-8000-000000000001";
+            File.WriteAllText(Path.Combine(folder, "design.kicad_sch"), $$"""
+                (kicad_sch (version 20250114) (generator "eeschema") (uuid "{{rootUuid}}") (paper "A4")
+                	(sheet (at 101.6 50.8) (size 20.32 20.32) (uuid "22222222-0000-4000-8000-000000000001")
+                		(property "Sheetname" "block" (at 101.6 50 0))
+                		(property "Sheetfile" "block.kicad_sch" (at 101.6 71.9 0))
+                		(pin "IN" input (at 101.6 54.61 180) (uuid "33333333-0000-4000-8000-000000000001"))
+                		(pin "SPARE" input (at 101.6 58.42 180) (uuid "33333333-0000-4000-8000-000000000002")))
+                	(embedded_fonts no))
+
+                """);
+
+            // The child answers IN, does not answer SPARE, and offers OUT that the symbol above has no pin for.
+            File.WriteAllText(Path.Combine(folder, "block.kicad_sch"), """
+                (kicad_sch (version 20250114) (generator "eeschema") (uuid "77777777-0000-4000-8000-000000000001") (paper "A4")
+                	(hierarchical_label "IN" (at 50.8 50.8 0) (effects (font (size 1.27 1.27))) (uuid "44444444-0000-4000-8000-000000000001"))
+                	(hierarchical_label "OUT" (at 50.8 60.96 0) (effects (font (size 1.27 1.27))) (uuid "44444444-0000-4000-8000-000000000002"))
+                	(embedded_fonts no))
+
+                """);
+
+            string root = Path.Combine(folder, "design.kicad_sch");
+            var findings = SchErc.CheckSheets(SchHierarchy.Walk(root, cancellationToken: TestContext.Current.CancellationToken), Anode.Kicad.Schematic.Load);
+
+            Assert.Equal(
+                [(ErcKind.SheetPinWithoutLabel, "SPARE"), (ErcKind.LabelWithoutSheetPin, "OUT")],
+                findings.Select(f => (f.Kind, f.Name)));
+            Assert.All(findings, f => Assert.Equal("block", f.Place.Name));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void A_design_whose_sheets_answer_each_other_says_nothing()
+    {
+        string root = TestData.FullPath("qa/data/eeschema/netlists/test_hier_no_connect/test_hier_no_connect.kicad_sch");
+        Assert.SkipUnless(File.Exists(root), TestData.SkipReason);
+
+        Assert.Empty(SchErc.CheckSheets(SchHierarchy.Walk(root, cancellationToken: TestContext.Current.CancellationToken), Anode.Kicad.Schematic.Load));
+    }
 }

@@ -22,7 +22,17 @@ public enum ErcKind
 
     /// <summary>A power input on a net no supply drives: KiCad's missing power flag.</summary>
     PowerNotDriven,
+
+    /// <summary>A pin of a sheet symbol that names nothing inside the sheet.</summary>
+    SheetPinWithoutLabel,
+
+    /// <summary>A hierarchical label inside a sheet that the sheet symbol above has no pin for.</summary>
+    LabelWithoutSheetPin,
 }
+
+/// <summary>A sheet and what does not match about it, and the item to show for it.</summary>
+/// <param name="Place">Where the item stands: the parent for a pin, the sheet itself for a label.</param>
+public sealed record SheetFinding(ErcKind Kind, SheetInstance Place, string Name, SchItem Item);
 
 /// <summary>
 /// The electrical rules KiCad checks between the pins of a net, ported from its own tables
@@ -124,6 +134,51 @@ public static class SchErc
                     ErcSeverity.Error,
                     net,
                     [waiting]));
+            }
+        }
+
+        return findings;
+    }
+
+    /// <summary>
+    /// What does not match between a sheet symbol and the sheet it stands for: KiCad pairs a pin of the symbol with
+    /// the hierarchical label of the same name inside, and says so when either has no partner. A pin with nothing to
+    /// answer it carries no signal in; a label with no pin carries one nowhere.
+    /// </summary>
+    public static IReadOnlyList<SheetFinding> CheckSheets(IEnumerable<SheetInstance> places, Func<string, Schematic?> open)
+    {
+        var findings = new List<SheetFinding>();
+
+        foreach (var place in places)
+        {
+            if (place.Placement is not { } placement || place.Parent is null || open(place.File) is not { } sheet)
+            {
+                continue;
+            }
+
+            var pins = placement.Pins
+                .GroupBy(p => KicadText.Unescape(p.Name), StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            var labels = sheet.Labels
+                .Where(l => l.Kind == SchLabelKind.Hierarchical)
+                .GroupBy(l => l.Shown, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+            foreach (var (name, pin) in pins.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                if (!labels.ContainsKey(name))
+                {
+                    findings.Add(new SheetFinding(ErcKind.SheetPinWithoutLabel, place, name, pin));
+                }
+            }
+
+            foreach (var (name, label) in labels.OrderBy(l => l.Key, StringComparer.Ordinal))
+            {
+                if (!pins.ContainsKey(name))
+                {
+                    findings.Add(new SheetFinding(ErcKind.LabelWithoutSheetPin, place, name, label));
+                }
             }
         }
 

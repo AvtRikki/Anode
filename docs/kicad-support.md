@@ -53,7 +53,8 @@ an alias one sheet declares is known to them all. Nets are named as KiCad names 
 **Checks.** The electrical rules between the pins of a net, over the whole design and by KiCad's own tables: pins
 that may not be wired together (two outputs, an output and a supply, anything on a no-connect pin) and a net with a
 pin waiting to be driven and nothing driving it — a power input with no power output on the net is KiCad's missing
-power flag. A pin left alone on its net, a designator used twice anywhere in the design (compared per place), the
+power flag — and a sheet symbol's pin that names nothing inside the sheet, or a hierarchical label the symbol above
+has no pin for. A pin left alone on its net, a designator used twice anywhere in the design (compared per place), the
 format version, a symbol whose definition is missing, a drawing sheet that will not read, a face this machine lacks,
 and what went wrong while the hierarchy was walked — a child sheet that will not read, a cycle, or a traversal limit.
 A child sheet that fails to parse leaves the rest of the design open rather than stopping the load; opening that file
@@ -66,8 +67,8 @@ ordered by name, their nodes by designator and pin, power symbols never a node. 
 exported from its own QA schematics — a plain hierarchy, no-connects, a bus running into child sheets, and sheets
 named through bus aliases — where ours says the same, net for net and pin for pin.
 
-Not done: BOM export, sheet-pin mismatches, creating sheets and their pins, numbering unique across a whole design,
-and the alternate (De Morgan) body style. The rules are KiCad's defaults and cannot yet be turned off or changed,
+Not done: BOM export, creating sheets and their pins, numbering unique across a whole design, and the alternate
+(De Morgan) body style. The rules are KiCad's defaults and cannot yet be turned off or changed,
 and a conflict is reported for each pair of pins rather than condensed as KiCad condenses it.
 
 ## Drawing sheets (`.kicad_wks`)
