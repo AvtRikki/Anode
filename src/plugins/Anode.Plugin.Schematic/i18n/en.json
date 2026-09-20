@@ -49,6 +49,7 @@
       "properties": "Properties",
       "annotate": "Number the parts",
       "exportNetlist": "Export netlist…",
+      "exportBom": "Export bill of materials…",
       "highlightNet": "Highlight net",
       "titleBlock": "Edit title block",
       "embedFonts": "Embed fonts on save",
@@ -216,7 +217,7 @@
     "value": { "yes": "yes", "no": "no", "none": "—" },
     "units": { "mm": "mm" },
     "log": {
-      "netlist": "Netlist written to {0}",
+      "exported": "Written to {0}",
       "created": "{0}: a new sheet.",
       "loaded": "{0}: {1} symbols, {2} primitives.",
       "activated": "{0} {1}: .kicad_sch, sheet hierarchy.",

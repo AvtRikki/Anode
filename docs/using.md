@@ -61,6 +61,8 @@ the command palette, which lists every command with its shortcut.
 - **File → Export netlist…** writes the whole design's netlist in KiCad's format, wherever the picker points. It is
   the design's, not the sheet's: exporting from a sheet below the root still describes the project, with this sheet
   as it stands in the editor.
+- **File → Export BOM…** writes the design's bill of materials as the CSV KiCad's default preset writes: one line
+  per part that is the same thing, with its designators, quantity and whether it is to be placed.
 
 ## The inspector
 

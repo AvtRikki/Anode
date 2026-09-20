@@ -191,6 +191,68 @@ public class NetsPanelTests
         });
     }
 
+    /// <summary>
+    /// The bill of materials command writes the design's parts where the picker points, as the CSV KiCad's own
+    /// default preset writes: the columns in its order, one line per part that is the same thing.
+    /// </summary>
+    [Fact]
+    public Task The_bill_of_materials_command_writes_the_designs_parts()
+    {
+        string root = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "complex_hierarchy.kicad_sch");
+        if (!File.Exists(root))
+        {
+            Assert.Skip(TestData.SkipReason);
+            return Task.CompletedTask;
+        }
+
+        return ShellWindowTests.Dispatch(_ =>
+        {
+            GraphicsOptions.Renderer = RendererKind.Skia;
+            string folder = Directory.CreateTempSubdirectory("anode-bom-").FullName;
+            string target = Path.Combine(folder, "design.csv");
+
+            try
+            {
+                var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+                var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+                var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
+                window.Show();
+
+                shell.PickNewFile = (_, _, _, _) => Task.FromResult<string?>(target);
+
+                Assert.NotNull(Pump(shell.OpenAsync(root)));
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.True(shell.Commands.TryExecute("sch.exportBom"));
+                for (int i = 0; i < 2000 && !File.Exists(target); i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    Thread.Sleep(1);
+                }
+
+                Assert.True(File.Exists(target), "the bill of materials was not written");
+                string[] rows = File.ReadAllLines(target);
+
+                Assert.Equal("\"Reference\",\"Value\",\"Datasheet\",\"Footprint\",\"Qty\",\"DNP\"", rows[0]);
+                Assert.True(rows.Length > 1, "the bill of materials has no parts on it");
+
+                // The amplifier sheet stands twice, so its parts are there under the designators of both places.
+                Assert.Contains(rows, r => r.Contains("R201", StringComparison.Ordinal));
+                Assert.Contains(rows, r => r.Contains("R301", StringComparison.Ordinal));
+
+                // Power symbols are not parts.
+                Assert.DoesNotContain(rows, r => r.Contains("\"#", StringComparison.Ordinal));
+
+                Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+                window.Close();
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        });
+    }
+
     private static T Pump<T>(Task<T> task)
     {
         for (int i = 0; i < 4000 && !task.IsCompleted; i++)

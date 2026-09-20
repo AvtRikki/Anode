@@ -1163,7 +1163,14 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.file", MenuOrder = 80,
                 CanExecute = () => FilePath is not null,
-                Execute = () => _ = ExportNetlistAsync(context),
+                Execute = () => _ = ExportAsync(context, "sch.command.exportNetlist", ".net",
+                    () => SchNetlist.Write(RootFile(), OpenSheet, $"Anode {context.Manifest.Version}")),
+            },
+            new("sch.exportBom", "sch.command.exportBom")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.file", MenuOrder = 85,
+                CanExecute = () => FilePath is not null,
+                Execute = () => _ = ExportAsync(context, "sch.command.exportBom", ".csv", () => SchBom.Write(RootFile(), OpenSheet)),
             },
         ];
 
@@ -1385,37 +1392,42 @@ public sealed class SchematicDocument : DocumentBase
             .Select(OpenSheet).OfType<Anode.Kicad.Schematic>()];
     }
 
-    /// <summary>
-    /// Writes the design's netlist where the person asks for it. The design is read from the project's root when
-    /// there is one, so a netlist exported from a sheet below the root is still the whole design's; this sheet is
-    /// taken as it stands in the editor, unsaved edits included.
-    /// </summary>
-    private async Task ExportNetlistAsync(IPluginContext context)
+    /// <summary>The root of the design this sheet belongs to; the sheet itself when it belongs to no project.</summary>
+    private string RootFile()
     {
-        if (FilePath is not { } path)
+        string full = Path.GetFullPath(FilePath ?? throw new InvalidOperationException("The sheet has no path."));
+        return SchematicDocumentType.ProjectRoot(full) ?? full;
+    }
+
+    /// <summary>
+    /// Writes an export of the design where the person asks for it. What is written is the whole design's, not this
+    /// sheet's: exporting from a sheet below the root still describes the project, with this sheet as it stands in
+    /// the editor. The file is written the way a document is — a temp file beside the target, renamed over it — so
+    /// nobody reads one that is only half there.
+    /// </summary>
+    private async Task ExportAsync(IPluginContext context, string titleKey, string extension, Func<string> contents)
+    {
+        if (FilePath is null)
         {
             return;
         }
 
-        string full = Path.GetFullPath(path);
-        string root = SchematicDocumentType.ProjectRoot(full) ?? full;
-        string suggested = Path.GetFileNameWithoutExtension(root) + ".net";
+        string root = RootFile();
+        string suggested = Path.GetFileNameWithoutExtension(root) + extension;
 
         try
         {
-            if (await context.Workbench.AskWhereToWriteAsync(suggested, ".net", "sch.command.exportNetlist", Path.GetDirectoryName(root))
+            if (await context.Workbench.AskWhereToWriteAsync(suggested, extension, titleKey, Path.GetDirectoryName(root))
                 is not { Length: > 0 } target)
             {
                 return;
             }
 
-            // Written the way a document is: a temp file beside the target, renamed over it, so nobody reads a
-            // netlist that is only half there.
-            string netlist = SchNetlist.Write(root, OpenSheet, $"Anode {context.Manifest.Version}");
+            // Worked out once the path is known: a design of any size is not read to be thrown away on a cancel.
             string temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target))!, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.tmp");
-            await File.WriteAllTextAsync(temp, netlist);
+            await File.WriteAllTextAsync(temp, contents());
             File.Move(temp, target, overwrite: true);
-            context.Log.Info(Tr.T("sch.log.netlist", Path.GetFileName(target)));
+            context.Log.Info(Tr.T("sch.log.exported", Path.GetFileName(target)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
         {

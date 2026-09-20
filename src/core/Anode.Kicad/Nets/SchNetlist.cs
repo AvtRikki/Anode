@@ -215,7 +215,7 @@ public static class SchNetlist
     {
         text.Append("  (nets\n");
 
-        var ordered = nets.OrderBy(n => n.Name, NaturalOrder.Instance).ToList();
+        var ordered = nets.OrderBy(n => n.Name, KicadOrder.Instance).ToList();
         var written = new List<string>();
 
         for (int i = 0; i < ordered.Count; i++)
@@ -263,60 +263,4 @@ public static class SchNetlist
         symbol.Fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.Ordinal))?.Value;
 
     private static string Quote(string? value) => SEscape.Quote(value ?? string.Empty);
-
-    /// <summary>
-    /// KiCad's own ordering of net names (<c>StrNumCmp</c>): digits inside a name compare as numbers, so /D2 comes
-    /// before /D10.
-    /// </summary>
-    private sealed class NaturalOrder : IComparer<string>
-    {
-        public static readonly NaturalOrder Instance = new();
-
-        public int Compare(string? x, string? y)
-        {
-            ReadOnlySpan<char> a = x ?? string.Empty, b = y ?? string.Empty;
-            int i = 0, j = 0;
-            while (i < a.Length && j < b.Length)
-            {
-                if (char.IsDigit(a[i]) && char.IsDigit(b[j]))
-                {
-                    int ia = i, jb = j;
-                    while (i < a.Length && char.IsDigit(a[i]))
-                    {
-                        i++;
-                    }
-
-                    while (j < b.Length && char.IsDigit(b[j]))
-                    {
-                        j++;
-                    }
-
-                    var left = a[ia..i].TrimStart('0');
-                    var right = b[jb..j].TrimStart('0');
-                    if (left.Length != right.Length)
-                    {
-                        return left.Length - right.Length;
-                    }
-
-                    int digits = left.SequenceCompareTo(right);
-                    if (digits != 0)
-                    {
-                        return digits;
-                    }
-
-                    continue;
-                }
-
-                if (a[i] != b[j])
-                {
-                    return a[i] - b[j];
-                }
-
-                i++;
-                j++;
-            }
-
-            return (a.Length - i) - (b.Length - j);
-        }
-    }
 }

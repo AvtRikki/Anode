@@ -67,7 +67,14 @@ ordered by name, their nodes by designator and pin, power symbols never a node. 
 exported from its own QA schematics — a plain hierarchy, no-connects, a bus running into child sheets, and sheets
 named through bus aliases — where ours says the same, net for net and pin for pin.
 
-Not done: BOM export, creating sheets and their pins, numbering unique across a whole design, and the alternate
+**Bill of materials.** The parts of the design are exported as the CSV of KiCad's own default preset ("Grouped By
+Value"): the columns `Reference,Value,Datasheet,Footprint,Qty,DNP`, every field quoted, one line per part that is
+the same thing — the same value, datasheet, footprint and do-not-place — with its designators in one field, in
+KiCad's natural order. A part on a sheet placed twice is two parts, under the designator each place gives it. A
+power symbol is not a part, nor is one the file marks `(exclude_from_bom yes)`; a part marked do-not-place is on a
+line of its own, as that column keeps it apart.
+
+Not done: creating sheets and their pins, numbering unique across a whole design, and the alternate
 (De Morgan) body style. The rules are KiCad's defaults and cannot yet be turned off or changed,
 and a conflict is reported for each pair of pins rather than condensed as KiCad condenses it.
 
