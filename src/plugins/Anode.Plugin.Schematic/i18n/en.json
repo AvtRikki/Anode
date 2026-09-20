@@ -1,6 +1,7 @@
 {
   "scope": { "schematic": "schematic" },
   "sch": {
+    "hierarchy": {"Unreadable": "Could not read a sheet in the design", "Cycle": "Cyclic sheet reference", "DepthLimit": "Sheet hierarchy depth limit reached", "InstanceLimit": "Sheet instance limit reached"},
     "document": { "label": "KiCad schematic", "untitled": "schematic" },
     "sheets": { "missing": "file not found" },
     "tool": {

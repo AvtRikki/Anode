@@ -1,3 +1,5 @@
+using System.Text;
+using Anode.Sexpr;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -52,7 +54,11 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
                 ")\n";
 
             _ = Anode.Kicad.Schematic.Parse(text);
-            File.WriteAllText(path, text);
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
+            using (var writer = new StreamWriter(stream))
+            {
+                writer.Write(text);
+            }
             log.Info(Tr.T("sch.log.created", Path.GetFileName(path)));
         },
         cancellationToken);
@@ -61,7 +67,8 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
         () =>
         {
             var schematic = Anode.Kicad.Schematic.Load(path);
-            var design = Design(path, schematic);
+            var diagnostics = new List<HierarchyDiagnostic>();
+            var design = Design(path, schematic, diagnostics.Add, cancellationToken);
             string full = Path.GetFullPath(path);
             var appearances = design.Where(i => string.Equals(i.File, full, StringComparison.Ordinal)).ToList();
             string? shown = appearances.FirstOrDefault()?.Path;
@@ -78,6 +85,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design)
             {
                 DrawingSheetMissing = missing,
+                HierarchyDiagnostics = diagnostics,
                 MissingFaces = OutlineText.StandIns(TextFont.FacesIn(schematic.Document.Root)
                     .Concat(frame.Template?.Items.OfType<WksText>().Select(t => t.Face).OfType<string>() ?? [])),
             };
@@ -106,7 +114,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
         {
             return EmbeddedFile.In(Anode.Kicad.Schematic.Load(root).Document.Root).FirstOrDefault(f => f.Name == name)?.Data;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException or SexprParseException or DecoderFallbackException)
         {
             return null;
         }
@@ -131,18 +139,19 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
                 OutlineText.Embed(EmbeddedFile.In(Anode.Kicad.Schematic.Parse(text).Document.Root));
             }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException or SexprParseException or DecoderFallbackException)
         {
             // The root's fonts are a nicety for this sheet; a root that will not read is reported where it is opened.
         }
     }
 
-    private static IReadOnlyList<SheetInstance> Design(string path, Anode.Kicad.Schematic schematic)
+    private static IReadOnlyList<SheetInstance> Design(string path, Anode.Kicad.Schematic schematic,
+        Action<HierarchyDiagnostic> report, CancellationToken cancellationToken)
     {
         string full = Path.GetFullPath(path);
         if (ProjectRoot(full) is { } root)
         {
-            return SchHierarchy.Walk(root);
+            return SchHierarchy.Walk(root, report: report, cancellationToken: cancellationToken);
         }
 
         return schematic.Uuid is { Length: > 0 } uuid
@@ -331,7 +340,15 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     public override IReadOnlyList<Issue> Issues =>
-        [.. _checks.Select(c => c.ToIssue()), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. LoosePins()];
+        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. LoosePins()];
+
+    internal IReadOnlyList<HierarchyDiagnostic> HierarchyDiagnostics { get; init; } = [];
+
+    private IEnumerable<Issue> HierarchyIssues() => HierarchyDiagnostics.Select(d => new Issue(
+        IssueSeverity.Warning,
+        Tr.T("sch.hierarchy." + d.Problem),
+        d.Detail ?? d.File,
+        d.File));
 
     /// <summary>Faces the sheet and its drawing sheet name that this machine lacks, each with what stands in.</summary>
     internal IReadOnlyList<(string Face, string StandIn)> MissingFaces { get; init; } = [];
@@ -417,7 +434,7 @@ public sealed class SchematicDocument : DocumentBase
             {
                 sheet = written == default ? null : Anode.Kicad.Schematic.Load(file);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException or SexprParseException or DecoderFallbackException)
             {
                 sheet = null;
             }
@@ -1083,7 +1100,7 @@ public sealed class SchematicDocument : DocumentBase
         {
             action();
         }
-        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or KiCadFormatException)
+        catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException or KiCadFormatException or SexprParseException or DecoderFallbackException)
         {
             context.Log.Warn(ex.Message);
             context.Workbench.ShowBanner(new Banner(ex.Message, IsAlert: false));

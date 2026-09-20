@@ -60,7 +60,7 @@ public class SchDuplicatesTests
         string root = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "complex_hierarchy.kicad_sch");
         Assert.SkipWhen(!File.Exists(root), TestData.SkipReason);
 
-        var places = SchHierarchy.Walk(root);
+        var places = SchHierarchy.Walk(root, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(SchDuplicates.Find(places, Schematic.Load));
 
@@ -80,7 +80,7 @@ public class SchDuplicatesTests
             "test_multiunit_reannotate_5", "test_multiunit_reannotate_5.kicad_sch");
         Assert.SkipWhen(!File.Exists(root), TestData.SkipReason);
 
-        var (reference, uses) = Assert.Single(SchDuplicates.Find(SchHierarchy.Walk(root), Schematic.Load));
+        var (reference, uses) = Assert.Single(SchDuplicates.Find(SchHierarchy.Walk(root, cancellationToken: TestContext.Current.CancellationToken), Schematic.Load));
 
         // Two packages of three sections each, both called U2.
         Assert.Equal("U2", reference);

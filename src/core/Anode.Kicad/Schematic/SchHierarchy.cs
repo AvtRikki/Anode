@@ -1,4 +1,11 @@
+using System.Text;
+using Anode.Sexpr;
+
 namespace Anode.Kicad;
+
+public enum HierarchyProblem { Unreadable, Cycle, DepthLimit, InstanceLimit }
+
+public sealed record HierarchyDiagnostic(string File, HierarchyProblem Problem, string? Detail = null);
 
 /// <summary>
 /// One place a sheet file appears in a design. The same file can appear several times — that is what a reused sheet
@@ -25,6 +32,7 @@ public static class SchHierarchy
 {
     /// <summary>Deeper than any real design; it only exists so a sheet that places itself cannot recurse forever.</summary>
     private const int MaxDepth = 32;
+    private const int MaxInstances = 10_000;
 
     /// <summary>
     /// Every sheet instance under <paramref name="rootFile"/>, root first, each parent before its children. Each file
@@ -35,10 +43,13 @@ public static class SchHierarchy
     /// Where a sheet comes from, when not straight from disk: an open tab has edits the file does not have yet. Null
     /// from it falls back to reading the file.
     /// </param>
-    public static IReadOnlyList<SheetInstance> Walk(string rootFile, Func<string, Schematic?>? open = null)
+    public static IReadOnlyList<SheetInstance> Walk(string rootFile, Func<string, Schematic?>? open = null,
+        Action<HierarchyDiagnostic>? report = null, CancellationToken cancellationToken = default)
     {
         var loaded = new Dictionary<string, Schematic?>(StringComparer.Ordinal);
         var found = new List<SheetInstance>();
+        var ancestors = new HashSet<string>(StringComparer.Ordinal);
+        bool exhausted = false;
 
         string root = Path.GetFullPath(rootFile);
         if (Load(root) is { Uuid: { Length: > 0 } uuid } sheet)
@@ -50,39 +61,84 @@ public static class SchHierarchy
 
         void Visit(string file, Schematic sheet, string path, string name, int depth, string trail, string? parent, SchSheet? placement)
         {
-            found.Add(new SheetInstance(file, path, name, depth, trail) { Parent = parent, Placement = placement });
-            if (depth >= MaxDepth)
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ancestors.Add(file))
             {
+                report?.Invoke(new(file, HierarchyProblem.Cycle));
                 return;
             }
 
-            foreach (var child in sheet.Sheets)
+            try
             {
-                if (child.Uuid is not { Length: > 0 } id || child.SheetFile is not { Length: > 0 } relative)
+                if (found.Count >= MaxInstances)
                 {
-                    continue;
+                    exhausted = true;
+                    report?.Invoke(new(file, HierarchyProblem.InstanceLimit));
+                    return;
                 }
 
-                string target = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, relative));
-                if (Load(target) is { } next)
+                found.Add(new SheetInstance(file, path, name, depth, trail) { Parent = parent, Placement = placement });
+                if (depth >= MaxDepth)
                 {
-                    string childName = child.SheetName ?? relative;
-                    Visit(target, next, path + "/" + id, childName, depth + 1, trail + childName + "/", path, child);
+                    if (sheet.Sheets.Count > 0)
+                    {
+                        report?.Invoke(new(file, HierarchyProblem.DepthLimit));
+                    }
+
+                    return;
                 }
+
+                foreach (var child in sheet.Sheets)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (exhausted)
+                    {
+                        break;
+                    }
+
+                    if (child.Uuid is not { Length: > 0 } id || child.SheetFile is not { Length: > 0 } relative)
+                    {
+                        continue;
+                    }
+
+                    string target;
+                    try
+                    {
+                        target = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(file) ?? string.Empty, relative));
+                    }
+                    catch (Exception ex) when (ex is ArgumentException or NotSupportedException)
+                    {
+                        report?.Invoke(new(relative, HierarchyProblem.Unreadable, ex.Message));
+                        continue;
+                    }
+
+                    if (Load(target) is { } next)
+                    {
+                        string childName = child.SheetName ?? relative;
+                        Visit(target, next, path + "/" + id, childName, depth + 1, trail + childName + "/", path, child);
+                    }
+                }
+            }
+            finally
+            {
+                ancestors.Remove(file);
             }
         }
 
         Schematic? Load(string file)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (!loaded.TryGetValue(file, out var sheet))
             {
                 try
                 {
-                    sheet = open?.Invoke(file) ?? (File.Exists(file) ? Schematic.Load(file) : null);
+                    sheet = open?.Invoke(file) ?? Schematic.Load(file);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException
+                    or SexprParseException or DecoderFallbackException)
                 {
                     sheet = null;
+                    report?.Invoke(new(file, HierarchyProblem.Unreadable, ex.Message));
                 }
 
                 loaded[file] = sheet;

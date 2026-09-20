@@ -20,7 +20,7 @@ public class SchHierarchyTests
     {
         Assert.SkipWhen(Missing, TestData.SkipReason);
 
-        var instances = SchHierarchy.Walk(Root);
+        var instances = SchHierarchy.Walk(Root, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(0, instances[0].Depth);
         Assert.Equal(Path.GetFullPath(Root), instances[0].File);
@@ -41,7 +41,7 @@ public class SchHierarchyTests
     {
         Assert.SkipWhen(Missing, TestData.SkipReason);
 
-        var paths = SchHierarchy.Walk(Root).Where(i => i.File == Path.GetFullPath(Amplifier)).Select(i => i.Path).ToList();
+        var paths = SchHierarchy.Walk(Root, cancellationToken: TestContext.Current.CancellationToken).Where(i => i.File == Path.GetFullPath(Amplifier)).Select(i => i.Path).ToList();
         var sheet = Schematic.Load(Amplifier);
 
         // Every part on the reused sheet is named differently in each appearance — that is what reuse means.
@@ -72,7 +72,7 @@ public class SchHierarchyTests
     {
         Assert.SkipWhen(Missing, TestData.SkipReason);
 
-        var paths = SchHierarchy.Walk(Root).Where(i => i.File == Path.GetFullPath(Amplifier)).Select(i => i.Path).ToList();
+        var paths = SchHierarchy.Walk(Root, cancellationToken: TestContext.Current.CancellationToken).Where(i => i.File == Path.GetFullPath(Amplifier)).Select(i => i.Path).ToList();
         var symbol = Schematic.Load(Amplifier).Symbols.First(s => s.Definition?.IsPower != true);
         string other = symbol.ReferenceAt(paths[1])!;
 

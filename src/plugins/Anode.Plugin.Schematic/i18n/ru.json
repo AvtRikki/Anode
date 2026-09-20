@@ -1,6 +1,7 @@
 {
   "scope": { "schematic": "схема" },
   "sch": {
+    "hierarchy": {"Unreadable": "Не удалось прочитать лист проекта", "Cycle": "Циклическая ссылка на лист", "DepthLimit": "Достигнут предел глубины иерархии", "InstanceLimit": "Достигнут предел числа экземпляров листов"},
     "document": { "label": "Схема KiCad", "untitled": "схема" },
     "sheets": { "missing": "файл не найден" },
     "tool": {

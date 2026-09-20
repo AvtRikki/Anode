@@ -16,7 +16,7 @@ public class SceneAppearanceTests
         string amplifier = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "ampli_ht.kicad_sch");
         Assert.SkipWhen(!File.Exists(root) || !File.Exists(amplifier), TestData.SkipReason);
 
-        var paths = SchHierarchy.Walk(root)
+        var paths = SchHierarchy.Walk(root, cancellationToken: TestContext.Current.CancellationToken)
             .Where(i => i.File == Path.GetFullPath(amplifier))
             .Select(i => i.Path)
             .ToList();

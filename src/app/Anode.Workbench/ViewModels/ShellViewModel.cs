@@ -40,6 +40,10 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     private readonly SettingsStore? _settings;
     private DocumentPaneViewModel _activePane;
     private IDocument? _observed;
+    private static readonly StringComparer FilePaths = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    private readonly Dictionary<string, Task<IDocument?>> _opening = new(FilePaths);
+    private readonly HashSet<string> _savingPaths = new(FilePaths);
+    private readonly HashSet<IDocument> _savingDocuments = new(ReferenceEqualityComparer.Instance);
     private double _leftWidth = 212;
     private double _rightWidth = 268;
     private double _bottomHeight = 150;
@@ -322,10 +326,9 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
                 : Path.Combine(parent, name);
             Directory.CreateDirectory(directory);
 
-            await File.WriteAllTextAsync(Path.Combine(directory, name + ".kicad_pro"), ProjectFile(name));
-
+            string project = Path.Combine(directory, name + ".kicad_pro");
             string document = Path.Combine(directory, name + type.Extensions[0]);
-            await type.CreateAsync(document, CancellationToken.None);
+            await CreateFilesAsync(type, document, project, ProjectFile(name));
 
             OpenProject(directory);
             Log.Info(Tr.T("shell.project.created", name));
@@ -359,7 +362,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
         try
         {
-            await type.CreateAsync(Path.GetFullPath(path), CancellationToken.None);
+            await CreateFilesAsync(type, Path.GetFullPath(path));
             ProjectChanged?.Invoke();
             return await OpenAsync(path);
         }
@@ -368,6 +371,50 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             Log.Error(Tr.T("shell.project.createFailed", ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.project.createFailed", ex.Message)));
             return null;
+        }
+    }
+
+    // Stage plugin output before publishing either file. Moves never overwrite existing files, even if
+    // another process creates a target while the plugin is working. Roll back only files we published.
+    private static async Task CreateFilesAsync(IDocumentType type, string document, string? project = null, string? projectText = null)
+    {
+        foreach (string target in project is null ? new[] { document } : new[] { document, project })
+        {
+            if (File.Exists(target) || Directory.Exists(target))
+            {
+                throw new IOException(Tr.T("shell.project.exists", target));
+            }
+        }
+
+        string staging = Path.Combine(Path.GetDirectoryName(document)!, ".anode-create-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(staging);
+        bool publishedProject = false;
+        try
+        {
+            string stagedDocument = Path.Combine(staging, Path.GetFileName(document));
+            await type.CreateAsync(stagedDocument, CancellationToken.None);
+            if (project is not null)
+            {
+                string stagedProject = Path.Combine(staging, Path.GetFileName(project));
+                await File.WriteAllTextAsync(stagedProject, projectText);
+                File.Move(stagedProject, project);
+                publishedProject = true;
+            }
+
+            File.Move(stagedDocument, document);
+        }
+        catch
+        {
+            if (publishedProject)
+            {
+                File.Delete(project!);
+            }
+
+            throw;
+        }
+        finally
+        {
+            Directory.Delete(staging, recursive: true);
         }
     }
 
@@ -396,11 +443,22 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     public async Task<IDocument?> OpenAsync(string path)
     {
         string full = Path.GetFullPath(path);
-        var existing = Panes.SelectMany(p => p.Tabs).FirstOrDefault(t => string.Equals(t.Document.FilePath, full, StringComparison.Ordinal));
+        var existing = Panes.SelectMany(p => p.Tabs).FirstOrDefault(t => t.Document.FilePath is { } file && FilePaths.Equals(Path.GetFullPath(file), full));
         if (existing is not null)
         {
             ActivateTab(existing);
             return existing.Document;
+        }
+
+        if (_opening.TryGetValue(full, out var pending))
+        {
+            return await pending;
+        }
+
+        if (_savingPaths.Contains(full))
+        {
+            ShowBanner(new Banner(Tr.T("shell.banner.pathBusy", full)));
+            return null;
         }
 
         string name = Path.GetFileName(full);
@@ -411,7 +469,10 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             return null;
         }
 
+        var completion = new TaskCompletionSource<IDocument?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _opening.Add(full, completion.Task);
         IsBusy = true;
+        IDocument? opened = null;
         try
         {
             var document = await type.OpenAsync(full, CancellationToken.None);
@@ -419,6 +480,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             SetProject(full);
             Replace(RecentProjects, _recents.Touch(full, DateTime.Now));
             Log.Info(Tr.T("shell.log.opened", name, type.Label));
+            opened = document;
             return document;
         }
         catch (Exception ex)
@@ -429,7 +491,9 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         }
         finally
         {
-            IsBusy = false;
+            _opening.Remove(full);
+            IsBusy = _opening.Count > 0;
+            completion.SetResult(opened);
         }
     }
 
@@ -537,19 +601,36 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
     public async Task<bool> SaveAsync(IDocument document, bool askForPath = false)
     {
-        string? path = null;
-        if (askForPath || document.FilePath is null)
+        if (!_savingDocuments.Add(document))
         {
-            if (PickSavePath is null || await PickSavePath(document) is not { } picked)
+            ShowBanner(new Banner(Tr.T("shell.banner.pathBusy", document.FilePath ?? document.Title)));
+            return false;
+        }
+
+        string? reserved = null;
+        try
+        {
+            string? path = null;
+            if (askForPath || document.FilePath is null)
             {
+                if (PickSavePath is null || await PickSavePath(document) is not { } picked)
+                {
+                    return false;
+                }
+
+                path = Path.GetFullPath(picked);
+            }
+
+            string target = Path.GetFullPath(path ?? document.FilePath!);
+            bool conflict = Documents.Any(d => !ReferenceEquals(d, document) && d.FilePath is { } file
+                && FilePaths.Equals(Path.GetFullPath(file), target));
+            if (conflict || _opening.ContainsKey(target) || !_savingPaths.Add(target))
+            {
+                ShowBanner(new Banner(Tr.T("shell.banner.pathBusy", target)));
                 return false;
             }
 
-            path = picked;
-        }
-
-        try
-        {
+            reserved = target;
             bool saved = await document.SaveAsync(path);
             if (saved)
             {
@@ -563,6 +644,15 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             Log.Error(Tr.T("shell.log.saveFailed", document.Title, ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.log.saveFailed", document.Title, ex.Message)));
             return false;
+        }
+        finally
+        {
+            if (reserved is not null)
+            {
+                _savingPaths.Remove(reserved);
+            }
+
+            _savingDocuments.Remove(document);
         }
     }
 

@@ -1,0 +1,16 @@
+using System;
+using System.IO;
+using Anode.Kicad;
+class Probe {
+ static void Main() {
+  string dir = Path.Combine(Path.GetTempPath(), "anode-review-" + Guid.NewGuid());
+  Directory.CreateDirectory(dir);
+  string root = Path.Combine(dir, "root.kicad_sch");
+  File.WriteAllText(root, "(kicad_sch (uuid root) (sheet (uuid child) (property \"Sheetfile\" \"broken.kicad_sch\")))");
+  File.WriteAllText(Path.Combine(dir,"broken.kicad_sch"), "(kicad_sch");
+  try { SchHierarchy.Walk(root); Console.WriteLine("Malformed child: tolerated"); }
+  catch(Exception ex) { Console.WriteLine("Malformed child: " + ex.GetType().Name); }
+  File.WriteAllText(root, "(kicad_sch (uuid root) (sheet (uuid child) (property \"Sheetfile\" \"root.kicad_sch\")))");
+  Console.WriteLine("One self reference: " + SchHierarchy.Walk(root).Count + " instances");
+ }
+}

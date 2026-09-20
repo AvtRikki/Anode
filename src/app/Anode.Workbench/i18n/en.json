@@ -50,6 +50,7 @@
   },
   "shell": {
     "project": {
+      "exists": "A file or folder already exists at {0}. Choose a different name.",
       "none": "No project",
       "switcher": "Projects",
       "emptyTitle": "No project open",
@@ -157,6 +158,7 @@
       "cancel": "Cancel"
     },
     "banner": {
+      "pathBusy": "This file is already open, opening or being saved. Close its other tab or choose a different path: {0}",
       "noPlugin": "No plugin opens {0}"
     },
     "log": {
