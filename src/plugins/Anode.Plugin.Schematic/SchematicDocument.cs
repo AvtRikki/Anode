@@ -214,6 +214,7 @@ public sealed class SchematicDocument : DocumentBase
     private SchematicCanvas? _canvas;
     private IPluginContext? _context;
     private IReadOnlyList<SchNet>? _nets;
+    private IReadOnlyList<DesignNet>? _designNets;
     private (string LibId, LibSymbol Definition)? _part;
     private string _labelTool = "sch.tool.label";
     private string _shapeTool = "sch.tool.line";
@@ -1207,6 +1208,21 @@ public sealed class SchematicDocument : DocumentBase
     /// </summary>
     public IReadOnlyList<SchNet> Nets => _nets ??= SchConnectivity.Build(Sheet);
 
+    /// <summary>
+    /// The nets of the whole design this sheet belongs to, sheets joined through their pins and global names. Worked
+    /// out from the project's root, this sheet as it stands in the editor and the others as they are on disk; empty
+    /// when the file belongs to no project.
+    /// </summary>
+    public IReadOnlyList<DesignNet> DesignNets =>
+        _designNets ??= FilePath is { } path && SchematicDocumentType.ProjectRoot(Path.GetFullPath(path)) is { } root
+            ? SchDesignNets.Build(root, OpenSheet)
+            : [];
+
+    /// <summary>The part of <paramref name="net"/> that lies on the sheet shown here, if any.</summary>
+    internal SchNet? OnThisSheet(DesignNet net) =>
+        net.Parts.FirstOrDefault(p => string.Equals(p.Place.Path, Instance, StringComparison.Ordinal)).Net
+        ?? net.Parts.FirstOrDefault(p => Nets.Contains(p.Net)).Net;
+
     /// <summary>What an item is connected to, by name; null when it is on nothing or nothing is known.</summary>
     public string? NetOf(SchItem item) =>
         Nets.FirstOrDefault(net => net.Items.Contains(item))?.Name;
@@ -1230,6 +1246,7 @@ public sealed class SchematicDocument : DocumentBase
     private void ForgetDerived()
     {
         _nets = null;
+        _designNets = null;
         _duplicates = null;
         _overview = null;
     }

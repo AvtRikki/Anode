@@ -8,7 +8,17 @@ namespace Anode.Kicad;
 /// <param name="Name">The sheet's name as the sheet symbol above it gives it; the root is named after its file.</param>
 /// <param name="Depth">Zero for the root.</param>
 /// <param name="Trail">The names on the way down, as KiCad prints a sheet's path: "/" for the root, "/amp/" below it.</param>
-public sealed record SheetInstance(string File, string Path, string Name, int Depth, string Trail = "/");
+public sealed record SheetInstance(string File, string Path, string Name, int Depth, string Trail = "/")
+{
+    /// <summary>The path of the sheet this one hangs under; null for the root.</summary>
+    public string? Parent { get; init; }
+
+    /// <summary>
+    /// The sheet symbol that placed it, on the parent's sheet: its pins are where this sheet's hierarchical labels
+    /// reach the design above. Null for the root, which nothing placed.
+    /// </summary>
+    public SchSheet? Placement { get; init; }
+}
 
 /// <summary>The appearances of every sheet in a design, walked down from its root.</summary>
 public static class SchHierarchy
@@ -33,14 +43,14 @@ public static class SchHierarchy
         string root = Path.GetFullPath(rootFile);
         if (Load(root) is { Uuid: { Length: > 0 } uuid } sheet)
         {
-            Visit(root, sheet, "/" + uuid, Path.GetFileNameWithoutExtension(root), 0, "/");
+            Visit(root, sheet, "/" + uuid, Path.GetFileNameWithoutExtension(root), 0, "/", null, null);
         }
 
         return found;
 
-        void Visit(string file, Schematic sheet, string path, string name, int depth, string trail)
+        void Visit(string file, Schematic sheet, string path, string name, int depth, string trail, string? parent, SchSheet? placement)
         {
-            found.Add(new SheetInstance(file, path, name, depth, trail));
+            found.Add(new SheetInstance(file, path, name, depth, trail) { Parent = parent, Placement = placement });
             if (depth >= MaxDepth)
             {
                 return;
@@ -57,7 +67,7 @@ public static class SchHierarchy
                 if (Load(target) is { } next)
                 {
                     string childName = child.SheetName ?? relative;
-                    Visit(target, next, path + "/" + id, childName, depth + 1, trail + childName + "/");
+                    Visit(target, next, path + "/" + id, childName, depth + 1, trail + childName + "/", path, child);
                 }
             }
         }

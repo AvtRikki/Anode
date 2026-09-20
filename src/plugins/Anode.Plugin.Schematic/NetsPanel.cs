@@ -20,8 +20,10 @@ internal sealed class NetsPanel : ContentControl
     private readonly TextBox _filter;
     private readonly StackPanel _rows = new() { Spacing = 3 };
     private readonly TextBlock _summary;
+    private readonly Button _scope;
     private readonly Control _body;
     private string _shown = string.Empty;
+    private bool _design;
 
     public NetsPanel(IWorkbench workbench)
     {
@@ -36,9 +38,20 @@ internal sealed class NetsPanel : ContentControl
 
         // Built once: a panel rebuilt on every announcement would throw the caret out of its own filter box, and
         // the boxes themselves cannot be moved from one parent to another.
+        // The sheet on screen, or the design it belongs to: the same nets, joined through the sheets' own pins.
+        _scope = Ui.TagButton(Tr.T("sch.nets.sheet"), "neutral", () =>
+        {
+            _design = !_design;
+            _shown = string.Empty;
+            Render();
+        });
+
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
         DockPanel.SetDock(_summary, Dock.Bottom);
+        DockPanel.SetDock(_scope, Dock.Right);
+        _scope.Margin = new Thickness(6, 0, 0, 0);
         head.Children.Add(_summary);
+        head.Children.Add(_scope);
         head.Children.Add(_filter);
 
         var body = new DockPanel { LastChildFill = true };
@@ -77,6 +90,7 @@ internal sealed class NetsPanel : ContentControl
     private void Retranslate()
     {
         _filter.PlaceholderText = Tr.T("sch.nets.filter");
+        _scope.Content = Tr.T(_design ? "sch.nets.design" : "sch.nets.sheet");
         _shown = string.Empty;
         Render();
     }
@@ -88,17 +102,25 @@ internal sealed class NetsPanel : ContentControl
             return;
         }
 
+        _scope.Content = Tr.T(_design ? "sch.nets.design" : "sch.nets.sheet");
         string filter = _filter.Text?.Trim() ?? string.Empty;
-        var nets = document.Nets
-            .Where(n => filter.Length == 0 || n.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(n => n.IsNamed)
-            .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        bool Matches(string name) => filter.Length == 0 || name.Contains(filter, StringComparison.OrdinalIgnoreCase);
+
+        var lit = document.HighlightedNet;
+        var rows = _design
+            ? [.. document.DesignNets.Where(n => Matches(n.Name))
+                .OrderByDescending(n => n.IsNamed)
+                .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(n => (n.Name, n.IsNamed, Count: n.Pins.Count, Local: document.OnThisSheet(n)))]
+            : document.Nets.Where(n => Matches(n.Name))
+                .OrderByDescending(n => n.IsNamed)
+                .ThenBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(n => (n.Name, n.IsNamed, Count: n.Connections, Local: (SchNet?)n))
+                .ToList();
 
         // Rebuilding the rows throws away nothing the user is typing into, but it is still work: only when the
         // list, or which net is lit, actually differs from what is drawn.
-        var lit = document.HighlightedNet;
-        string state = string.Join('\u001f', nets.Select(n => $"{n.Name}|{n.Connections}|{ReferenceEquals(n, lit)}"));
+        string state = string.Join('\u001f', rows.Select(r => $"{r.Name}|{r.Count}|{ReferenceEquals(r.Local, lit)}|{r.Local is null}"));
         if (state == _shown)
         {
             return;
@@ -106,22 +128,26 @@ internal sealed class NetsPanel : ContentControl
 
         _shown = state;
         _rows.Children.Clear();
-        foreach (var net in nets)
+        foreach (var row in rows)
         {
-            _rows.Children.Add(Row(document, net, ReferenceEquals(net, lit)));
+            _rows.Children.Add(Row(document, row.Name, row.IsNamed, row.Count, row.Local, ReferenceEquals(row.Local, lit)));
         }
 
+        int total = _design ? document.DesignNets.Count : document.Nets.Count;
         _summary.Text = filter.Length == 0
-            ? Tr.T("sch.nets.count", document.Nets.Count, Tr.Plural("sch.net", document.Nets.Count))
-            : Tr.T("sch.nets.found", nets.Count, document.Nets.Count);
+            ? Tr.T("sch.nets.count", total, Tr.Plural("sch.net", total))
+            : Tr.T("sch.nets.found", rows.Count, total);
     }
 
-    private static Control Row(SchematicDocument document, SchNet net, bool lit)
+    /// <summary>
+    /// One net: its name, and how many pins it reaches. A design net that does not touch the sheet on screen has
+    /// nothing here to light, and reads faint.
+    /// </summary>
+    private static Control Row(SchematicDocument document, string name, bool named, int count, SchNet? local, bool lit)
     {
         var line = new DockPanel { LastChildFill = true };
 
-        // Pins of parts and of child sheets alike: both are things this net reaches on this sheet.
-        var pins = Ui.Mono(net.Connections.ToString(System.Globalization.CultureInfo.InvariantCulture), "faint");
+        var pins = Ui.Mono(count.ToString(System.Globalization.CultureInfo.InvariantCulture), "faint");
         pins.FontSize = 11.5;
         pins.MinWidth = 18;
         pins.Margin = new Thickness(8, 0, 0, 0);
@@ -129,15 +155,25 @@ internal sealed class NetsPanel : ContentControl
         DockPanel.SetDock(pins, Dock.Right);
         line.Children.Add(pins);
 
-        var name = Ui.Mono(net.Name, lit ? "accentText" : net.IsNamed ? string.Empty : "faint");
-        name.FontSize = 11.5;
-        name.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
-        line.Children.Add(name);
+        // A net named on a sheet below carries that sheet's path; the panel is narrow, so the name itself is shown
+        // and the whole of it waits in the tooltip.
+        int cut = name.LastIndexOf('/');
+        var label = Ui.Mono(cut > 0 ? name[(cut + 1)..] : name, lit ? "accentText" : named && local is not null ? string.Empty : "faint");
+        label.FontSize = 11.5;
+        label.TextTrimming = Avalonia.Media.TextTrimming.CharacterEllipsis;
+        ToolTip.SetTip(label, name);
+        line.Children.Add(label);
 
         // What is lit is asked for at the click, not remembered from when the row was drawn: the list is redrawn
         // whenever the sheet changes, and a row that remembered would put out a net it had never lit.
         var row = new Button { Classes = { "row" }, Padding = new Thickness(4, 2), Content = line };
-        row.Click += (_, _) => document.LightNet(ReferenceEquals(document.HighlightedNet, net) ? null : net);
+        row.Click += (_, _) =>
+        {
+            if (local is not null)
+            {
+                document.LightNet(ReferenceEquals(document.HighlightedNet, local) ? null : local);
+            }
+        };
         return row;
     }
 }

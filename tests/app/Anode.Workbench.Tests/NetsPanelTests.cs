@@ -79,6 +79,59 @@ public class NetsPanelTests
         });
     }
 
+    [Fact]
+    public Task The_design_scope_lists_the_nets_of_every_sheet()
+    {
+        string root = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "complex_hierarchy.kicad_sch");
+        if (!File.Exists(root) || !File.Exists(Path.ChangeExtension(root, ".kicad_pro")))
+        {
+            Assert.Skip(TestData.SkipReason);
+            return Task.CompletedTask;
+        }
+
+        return ShellWindowTests.Dispatch(directory =>
+        {
+            GraphicsOptions.Renderer = RendererKind.Skia;
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+
+            var recents = new RecentProjectsStore(Path.Combine(Path.GetTempPath(), $"anode-nets-{Guid.NewGuid():N}.json"));
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+            var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
+            window.Show();
+
+            Assert.NotNull(Pump(shell.OpenAsync(root)));
+            Dispatcher.UIThread.RunJobs();
+
+            var stack = shell.LeftStacks.First(s => s.Tabs.Any(t => t.Descriptor.Id == "sch.nets"));
+            stack.Select(stack.Tabs.First(t => t.Descriptor.Id == "sch.nets"));
+            Dispatcher.UIThread.RunJobs();
+
+            var panel = window.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "NetsPanel");
+            int Rows() => panel.GetVisualDescendants().OfType<Button>().Count(b => b.Classes.Contains("row"));
+            string Names() => string.Join(",", panel.GetVisualDescendants().OfType<Button>()
+                .Where(b => b.Classes.Contains("row"))
+                .Select(b => b.GetVisualDescendants().OfType<TextBlock>().First(t => DockPanel.GetDock(t) != Dock.Right).Text));
+
+            int onSheet = Rows();
+            string sheetNames = Names();
+            Assert.True(onSheet > 0);
+
+            // The scope button turns the list into the design's nets: the amplifier sheet stands twice under this
+            // root, so the design has nets this sheet alone never shows.
+            var scope = panel.GetVisualDescendants().OfType<Button>().First(b => !b.Classes.Contains("row"));
+            scope.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.NotEqual(sheetNames, Names());
+            Assert.True(Rows() > onSheet, $"design {Rows()} rows is not more than the sheet's {onSheet}");
+            Assert.Contains("+12V", Names(), StringComparison.Ordinal);
+            ShellWindowTests.Snapshot(window, directory, "nets-panel-design");
+
+            Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+            window.Close();
+        });
+    }
+
     private static T Pump<T>(Task<T> task)
     {
         for (int i = 0; i < 4000 && !task.IsCompleted; i++)
