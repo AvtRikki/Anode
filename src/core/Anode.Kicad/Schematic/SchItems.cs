@@ -435,6 +435,9 @@ public sealed class SchLabel(SList node) : SchItem(node)
 
     public string Text => Node.Str(1) ?? string.Empty;
 
+    /// <summary>The text as KiCad shows it, with its escapes put back — <c>{slash}</c> is a "/".</summary>
+    public string Shown => KicadText.Unescape(Text);
+
     /// <summary>"input", "output", "bidirectional", "tri_state", "passive" — the arrow drawn around the text.</summary>
     public string Shape => Node.ChildString("shape") ?? "passive";
 
@@ -447,6 +450,9 @@ public sealed class SchLabel(SList node) : SchItem(node)
 public sealed class SchText(SList node) : SchItem(node)
 {
     public string Text => Node.Str(1) ?? string.Empty;
+
+    /// <summary>The text as KiCad shows it, with its escapes put back — <c>{slash}</c> is a "/".</summary>
+    public string Shown => KicadText.Unescape(Text);
 
     public long TextHeight => FontHeight(1_270_000);
 

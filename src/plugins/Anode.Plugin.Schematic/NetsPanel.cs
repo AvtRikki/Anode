@@ -7,7 +7,7 @@ using Anode.Sdk;
 namespace Anode.Plugin.Schematic;
 
 /// <summary>
-/// The nets of the sheet on screen: each with the pins it reaches, named ones first. Choosing one lights it on the
+/// The nets of the sheet on screen: each with the pins it reaches — of parts, and of child sheets — named ones first. Choosing one lights it on the
 /// canvas as the backquote does from a selection, and choosing it again puts it out — so a net can be followed
 /// across a sheet without hunting for a wire to click on first.
 ///
@@ -98,7 +98,7 @@ internal sealed class NetsPanel : ContentControl
         // Rebuilding the rows throws away nothing the user is typing into, but it is still work: only when the
         // list, or which net is lit, actually differs from what is drawn.
         var lit = document.HighlightedNet;
-        string state = string.Join('\u001f', nets.Select(n => $"{n.Name}|{n.Pins.Count}|{ReferenceEquals(n, lit)}"));
+        string state = string.Join('\u001f', nets.Select(n => $"{n.Name}|{n.Connections}|{ReferenceEquals(n, lit)}"));
         if (state == _shown)
         {
             return;
@@ -120,7 +120,8 @@ internal sealed class NetsPanel : ContentControl
     {
         var line = new DockPanel { LastChildFill = true };
 
-        var pins = Ui.Mono(net.Pins.Count.ToString(System.Globalization.CultureInfo.InvariantCulture), "faint");
+        // Pins of parts and of child sheets alike: both are things this net reaches on this sheet.
+        var pins = Ui.Mono(net.Connections.ToString(System.Globalization.CultureInfo.InvariantCulture), "faint");
         pins.FontSize = 11.5;
         pins.MinWidth = 18;
         pins.Margin = new Thickness(8, 0, 0, 0);

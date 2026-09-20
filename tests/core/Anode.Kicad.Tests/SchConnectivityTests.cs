@@ -483,4 +483,99 @@ public class SchConnectivityTests
         var loose = Assert.Single(nets, n => n.Pins.Any(p => p.ToString() == "R1-1"));
         Assert.False(loose.IsNoConnect);
     }
+
+    /// <summary>A label at a place, as KiCad writes one.</summary>
+    private static string Label(string text, double x, double y, string uuid) => $"""
+        	(label "{text}"
+        		(at {x} {y} 0)
+        		(effects
+        			(font
+        				(size 1.27 1.27)
+        			)
+        		)
+        		(uuid "{uuid}")
+        	)
+        """;
+
+    [Fact]
+    public void A_label_part_way_along_a_wire_names_that_wire()
+    {
+        // The label sits in the middle of the wire, where no end of anything is: KiCad asks for a dot only where
+        // two wires meet, never where a label lands on one.
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000102")
+            + Label("VCC", 60.96, 54.61, "0a1b2c3d-0000-4000-8000-000000000103"));
+
+        var named = Assert.Single(SchConnectivity.Build(sheet), n => n.IsNamed);
+
+        Assert.Equal("VCC", named.Name);
+        Assert.Contains(named.Pins, p => p.ToString() == "R1-2");
+    }
+
+    [Fact]
+    public void A_pin_part_way_along_a_wire_is_on_it()
+    {
+        // The wire runs past the top pin of R2 rather than ending on it.
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Resistor("R2", 60.96, 50.8)
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000104"));
+
+        var net = Assert.Single(SchConnectivity.Build(sheet), n => n.Pins.Count > 1);
+
+        Assert.Equal(["R1-2", "R2-2"], net.Pins.Select(p => p.ToString()).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void A_name_written_with_an_escape_is_the_name_it_stands_for()
+    {
+        // KiCad may not write a "/" in a label — that is the hierarchy separator — so it writes {slash}. The two
+        // spellings are one net, and the escape is not part of the name.
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Resistor("R2", 88.9, 50.8)
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000105")
+            + Wire(88.9, 54.61, 109.22, 54.61, "0a1b2c3d-0000-4000-8000-000000000106")
+            + Label("VPP{slash}MCLR", 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000107")
+            + Label("VPP/MCLR", 109.22, 54.61, "0a1b2c3d-0000-4000-8000-000000000108"));
+
+        var named = Assert.Single(SchConnectivity.Build(sheet), n => n.IsNamed);
+
+        Assert.Equal("VPP/MCLR", named.Name);
+        Assert.Equal(2, named.Pins.Count);
+        Assert.Equal("VPP/MCLR", sheet.Labels[0].Shown);
+    }
+
+    [Fact]
+    public void A_pin_of_a_child_sheet_is_a_connection_of_this_one()
+    {
+        var sheet = Sheet(
+            Resistor("R1", 50.8, 50.8)
+            + Wire(50.8, 54.61, 71.12, 54.61, "0a1b2c3d-0000-4000-8000-000000000109")
+            + """
+        	(sheet
+        		(at 71.12 50.8)
+        		(size 20.32 20.32)
+        		(uuid "0a1b2c3d-0000-4000-8000-000000000110")
+        		(property "Sheetname" "Child"
+        			(at 71.12 50.04 0)
+        		)
+        		(property "Sheetfile" "child.kicad_sch"
+        			(at 71.12 71.88 0)
+        		)
+        		(pin "IN" input
+        			(at 71.12 54.61 180)
+        			(uuid "0a1b2c3d-0000-4000-8000-000000000111")
+        		)
+        	)
+        """);
+
+        var net = Assert.Single(SchConnectivity.Build(sheet), n => n.SheetPins.Count > 0);
+
+        Assert.Equal("IN", Assert.Single(net.SheetPins).Name);
+        Assert.Equal("R1-2", Assert.Single(net.Pins).ToString());
+        Assert.Equal(2, net.Connections);
+        Assert.Equal("Net-(R1-2)", net.Name);
+    }
 }

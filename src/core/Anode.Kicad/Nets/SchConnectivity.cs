@@ -25,6 +25,12 @@ public sealed record SchNetPin(SymbolInstance Symbol, SchPin Pin, Vector2L At)
 /// <param name="IsNamed">Whether a label gave it that name, as against one made up here.</param>
 public sealed record SchNet(string Name, bool IsNamed, IReadOnlyList<SchNetPin> Pins, IReadOnlyList<SchItem> Items)
 {
+    /// <summary>The pins of child sheets this net reaches: connections of this sheet as much as a part's pins.</summary>
+    public IReadOnlyList<SchSheetPin> SheetPins => [.. Items.OfType<SchSheetPin>()];
+
+    /// <summary>How many things this net connects on this sheet: the pins of parts, and the pins of child sheets.</summary>
+    public int Connections => Pins.Count + SheetPins.Count;
+
     /// <summary>
     /// Somebody put a no-connect here, which says a pin is meant to lead nowhere. A check that complains about
     /// unconnected pins must keep quiet about these: the mark exists precisely to say "I know".
@@ -68,21 +74,42 @@ public static class SchConnectivity
             groups.Add(dot.Position);
         }
 
+        // A pin, a label or a no-connect that lands part way along a wire is on that wire. KiCad asks for a dot only
+        // where two wires meet — where something else lands on one there is nothing to be ambiguous about.
+        void Attach(Vector2L point)
+        {
+            groups.Add(point);
+            foreach (var (a, b, _) in segments)
+            {
+                if (SchJunctions.IsInside(a, b, point))
+                {
+                    groups.Join(point, a);
+                }
+            }
+        }
+
         var pins = PinsOf(sheet);
         foreach (var pin in pins)
         {
-            groups.Add(pin.At);
+            Attach(pin.At);
         }
 
         foreach (var mark in sheet.NoConnects)
         {
-            groups.Add(mark.Position);
+            Attach(mark.Position);
+        }
+
+        // A pin on the border of a child sheet is a connection of this sheet, whatever it reaches inside.
+        var sheetPins = sheet.Sheets.SelectMany(s => s.Pins).ToList();
+        foreach (var pin in sheetPins)
+        {
+            Attach(pin.Position);
         }
 
         var naming = Names(sheet, pins);
         foreach (var (position, _, _) in naming)
         {
-            groups.Add(position);
+            Attach(position);
         }
 
         // A name written twice on a sheet means one net, wherever the two places are — that is what a label is for,
@@ -97,7 +124,7 @@ public static class SchConnectivity
             }
         }
 
-        return WithBuses(Assemble(groups, segments, pins, naming, sheet.NoConnects), sheet);
+        return WithBuses(Assemble(groups, segments, pins, naming, sheet.NoConnects, sheetPins), sheet);
     }
 
     /// <summary>
@@ -107,7 +134,8 @@ public static class SchConnectivity
     ///
     /// So a labelled bus is read as a declaration rather than a connection — these nets exist — and the wires that
     /// tap it join their members by name, through the ordinary rules. A member already found on the sheet gains the
-    /// bus among its items; one nobody has tapped yet stands as a net with nothing on it.
+    /// bus among its items; one nobody has tapped yet stands as a net with nothing on it, unless the bus runs into a
+    /// child sheet, whose pin carries every member of it inward.
     /// </summary>
     private static IReadOnlyList<SchNet> WithBuses(IReadOnlyList<SchNet> nets, Schematic sheet)
     {
@@ -116,10 +144,16 @@ public static class SchConnectivity
 
         foreach (var label in sheet.Labels)
         {
-            var members = SchBusNames.Members(label.Text, aliases);
-            if (members.Count > 1)
+            if (SchBusNames.IsBus(label.Shown, aliases))
             {
+                var members = SchBusNames.Members(label.Shown, aliases);
                 declared.AddRange(members.Select(m => (m, (SchItem)label)));
+
+                // A child sheet's pin bearing the bus's own name takes the whole bus in: every member reaches it.
+                foreach (var pin in sheet.Sheets.SelectMany(s => s.Pins).Where(p => KicadText.Unescape(p.Name) == label.Shown))
+                {
+                    declared.AddRange(members.Select(m => (m, (SchItem)pin)));
+                }
             }
         }
 
@@ -128,7 +162,14 @@ public static class SchConnectivity
             return nets;
         }
 
-        var byName = nets.ToDictionary(n => n.Name, StringComparer.Ordinal);
+        // Nets made up rather than labelled can share a name — two stubs reaching nothing are both "Net-()" — and a
+        // bus member looks for a net by name, so the first of them answers.
+        var byName = new Dictionary<string, SchNet>(StringComparer.Ordinal);
+        foreach (var net in nets)
+        {
+            byName.TryAdd(net.Name, net);
+        }
+
         var result = new List<SchNet>(nets);
 
         foreach (var (name, bus) in declared)
@@ -168,9 +209,9 @@ public static class SchConnectivity
         foreach (var label in sheet.Labels.Where(l =>
             l.Kind is SchLabelKind.Local or SchLabelKind.Global or SchLabelKind.Hierarchical))
         {
-            if (SchBusNames.Members(label.Text, aliases).Count <= 1)
+            if (!SchBusNames.IsBus(label.Shown, aliases))
             {
-                names.Add((label.Position, label.Text, label));
+                names.Add((label.Position, label.Shown, label));
             }
         }
 
@@ -233,7 +274,8 @@ public static class SchConnectivity
         List<(Vector2L A, Vector2L B, SchWire Wire)> segments,
         IReadOnlyList<SchNetPin> pins,
         List<(Vector2L Position, string Name, SchItem Item)> naming,
-        IReadOnlyList<SchNoConnect> noConnects)
+        IReadOnlyList<SchNoConnect> noConnects,
+        IReadOnlyList<SchSheetPin> sheetPins)
     {
         var pinsOf = new Dictionary<int, List<SchNetPin>>();
         var itemsOf = new Dictionary<int, List<SchItem>>();
@@ -256,6 +298,11 @@ public static class SchConnectivity
         foreach (var mark in noConnects)
         {
             Bucket(itemsOf, groups.Of(mark.Position)).Add(mark);
+        }
+
+        foreach (var pin in sheetPins)
+        {
+            Bucket(itemsOf, groups.Of(pin.Position)).Add(pin);
         }
 
         foreach (var (position, name, item) in naming)
@@ -290,16 +337,27 @@ public static class SchConnectivity
             bool named = namesOf.TryGetValue(group, out var names) && names.Count > 0;
 
             // Several labels on one net: KiCad keeps the first by name, and so do we.
-            string name = named ? names!.First() : Made(groupPins);
+            string name = named ? names!.First() : Made(groupPins, groupItems);
             nets.Add(new SchNet(name, named, groupPins, groupItems));
         }
 
         return [.. nets.OrderByDescending(n => n.IsNamed).ThenBy(n => n.Name, StringComparer.Ordinal)];
     }
 
-    /// <summary>A name for a net nobody labelled, after the first pin on it, as KiCad makes one.</summary>
-    private static string Made(IReadOnlyList<SchNetPin> pins) =>
-        pins.Count == 0 ? "Net-()" : $"Net-({pins.OrderBy(p => p.ToString(), StringComparer.Ordinal).First()})";
+    /// <summary>
+    /// A name for a net nobody labelled, after the first pin on it, as KiCad makes one; a net that only reaches a
+    /// child sheet is named after that pin instead, and one that reaches nothing at all is left plainly nameless.
+    /// </summary>
+    private static string Made(IReadOnlyList<SchNetPin> pins, IReadOnlyList<SchItem> items)
+    {
+        if (pins.Count > 0)
+        {
+            return $"Net-({pins.OrderBy(p => p.ToString(), StringComparer.Ordinal).First()})";
+        }
+
+        var sheetPin = items.OfType<SchSheetPin>().OrderBy(p => p.Name, StringComparer.Ordinal).FirstOrDefault();
+        return sheetPin is null ? "Net-()" : $"Net-({sheetPin.Name})";
+    }
 
     private static List<T> Bucket<T>(Dictionary<int, List<T>> buckets, int key)
     {

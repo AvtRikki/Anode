@@ -21,13 +21,14 @@ Status, 2026-09-19: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
   leaves a part that already carries a number alone. Not done: numbering unique across the whole design rather than
   per sheet, a part placed on a reused sheet getting an entry for its other places, creating sheets and their pins,
   and field editing across the sheet.
-- **Stage 5** — started: nets built from wires, junctions, labels of every kind, buses, power symbols and
-  no-connects; the net a selection sits on, shown in the inspector; and two checks — a pin left alone on its net, and
+- **Stage 5** — started: nets built from wires, junctions, labels of every kind (a label or a pin landing part way
+  along a wire is on it, as KiCad has it), the pins of child sheets, buses — vector and group, an escaped character
+  in a name never read as one — power symbols and no-connects; the net a selection sits on, shown in the inspector; and two checks — a pin left alone on its net, and
   a designator used twice anywhere in the design, compared per place in the hierarchy. The pin-type matrix, missing
   power flags and sheet-pin checks are not done, nor netlist and BOM export. A net can be lit (backquote, the
   inspector's footer, or a row of the nets panel): its wires, labels and dots stand out and the rest of the sheet
-  dims. The nets panel lists the sheet's nets with the pins each reaches, named first, with a filter, and sits
-  where a board keeps its layers.
+  dims. The nets panel lists the sheet's nets with what each reaches — pins of parts and of child
+  sheets — named first, with a filter, and sits where a board keeps its layers.
 - **Stage 6** — not started.
 
 With nothing selected the inspector describes the document itself: a sheet its paper, title block, contents, nets

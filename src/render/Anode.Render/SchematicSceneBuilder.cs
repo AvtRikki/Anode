@@ -113,7 +113,7 @@ public static class SchematicSceneBuilder
                     AddLabel(label, scene.AddOwner(label));
                     break;
                 case SchText text:
-                    Text(LayerStyle.Sch.Text, text.Text, text.Position.ToDouble(), text.TextHeight, text.Font, text.Angle,
+                    Text(LayerStyle.Sch.Text, text.Shown, text.Position.ToDouble(), text.TextHeight, text.Font, text.Angle,
                         text.Alignment, scene.AddOwner(text));
                     break;
                 case SchGraphic graphic:
@@ -148,7 +148,7 @@ public static class SchematicSceneBuilder
 
         private void AddLabel(SchLabel label, int owner)
         {
-            Text(LayerStyle.Sch.Label, label.Text, label.Position.ToDouble(), label.TextHeight, label.Font, label.Angle, label.Alignment, owner);
+            Text(LayerStyle.Sch.Label, label.Shown, label.Position.ToDouble(), label.TextHeight, label.Font, label.Angle, label.Alignment, owner);
         }
 
         private void AddSymbol(SymbolInstance symbol, int owner)

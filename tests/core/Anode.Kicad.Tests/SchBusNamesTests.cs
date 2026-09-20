@@ -52,9 +52,10 @@ public class SchBusNamesTests
     [Fact]
     public void Braces_are_an_escaped_character_and_not_a_group()
     {
-        // VPP{slash}MCLR is one net in the demos whose name holds a slash. Reading braces as a group would tear it
-        // into members that never existed.
-        Assert.Equal(["VPP{slash}MCLR"], SchBusNames.Members("VPP{slash}MCLR"));
+        // VPP{slash}MCLR is one net in the demos whose name holds a slash: the braces are KiCad's escape, and the
+        // net is that one name with the slash put back. Reading them as a group would tear it into members that
+        // never existed.
+        Assert.Equal(["VPP/MCLR"], SchBusNames.Members("VPP{slash}MCLR"));
         Assert.False(SchBusNames.IsBus("VPP{slash}MCLR"));
     }
 
@@ -105,4 +106,31 @@ public class SchBusNamesTests
         // The member list wraps across lines in the demos, so it must be read as atoms rather than as one line.
         Assert.Equal(["D0_N", "D0_P", "C_N", "C_P"], sheet.BusAliases["DPHY"]);
     }
+
+    [Theory]
+    [InlineData("MEM{A B}", "MEM.A", "MEM.B")]
+    [InlineData("{A B}", "A", "B")]
+    [InlineData("P{D[0..1]}", "P.D0", "P.D1")]
+    public void A_group_spells_out_its_members_with_the_groups_own_name(string bus, params string[] members)
+    {
+        Assert.Equal(members, SchBusNames.Members(bus));
+        Assert.True(SchBusNames.IsBus(bus));
+    }
+
+    [Fact]
+    public void A_group_takes_the_members_of_an_alias_it_names()
+    {
+        var aliases = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal) { ["DPHY"] = ["C_N", "C_P"] };
+
+        Assert.Equal(["DPHY0.C_N", "DPHY0.C_P"], SchBusNames.Members("DPHY0{DPHY}", aliases));
+    }
+
+    [Fact]
+    public void A_group_of_one_unknown_member_is_still_a_bus()
+    {
+        // The alias may be declared on another sheet; the member is named for the group all the same.
+        Assert.True(SchBusNames.IsBus("ETH_PI{ETH}"));
+        Assert.Equal(["ETH_PI.ETH"], SchBusNames.Members("ETH_PI{ETH}"));
+    }
+
 }
