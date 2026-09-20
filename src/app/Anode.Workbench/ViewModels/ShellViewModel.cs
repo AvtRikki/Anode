@@ -262,6 +262,10 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     /// <summary>Asks the window where to put a file that does not exist yet: name, extension, dialog title, folder.</summary>
     public Func<string, string, string, string?, Task<string?>>? PickNewFile { get; set; }
 
+    /// <summary>Where a plugin's export goes; the window asks, this hands the answer back.</summary>
+    public async Task<string?> AskWhereToWriteAsync(string suggestedName, string extension, string titleKey, string? startDirectory = null) =>
+        PickNewFile is { } pick ? await pick(suggestedName, extension, titleKey, startDirectory) : null;
+
     /// <summary>The type that can start a file from nothing; null when no plugin offers one.</summary>
     public IDocumentType? CreatableType => DocumentTypes.Types.FirstOrDefault(t => t.CanCreate);
 

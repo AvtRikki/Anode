@@ -74,6 +74,8 @@ change that plugins must be rebuilt for means bumping that number and the manife
 A plugin registers, from `Activate(IPluginContext)`:
 
 - **document types** — an extension, how to open a file and how to create a new one;
+- **a place to write** — `IWorkbench.AskWhereToWriteAsync` asks the person where an export should go; the plugin
+  writes the file itself;
 - **panels** — a control, a dock area, an icon and which document types it belongs to;
 - **commands** — an id, a title key, a shortcut, and what it does; the palette, menus and shortcuts all read them;
 - **project structure** — how a file of this domain appears in the project tree;

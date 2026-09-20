@@ -48,6 +48,16 @@ public interface IWorkbench
     /// </summary>
     void FocusInspector() => InspectorFocus.Request();
 
+    /// <summary>
+    /// Asks where to put a file the plugin is about to write — an export, a report. Answers the path chosen, or null
+    /// when nobody chose one. The plugin writes the file itself; the workbench only asks the question.
+    /// </summary>
+    /// <param name="suggestedName">The name to offer, extension included.</param>
+    /// <param name="extension">The extension the picker should default to, with or without its dot.</param>
+    /// <param name="titleKey">Translation key for the dialog's title.</param>
+    /// <param name="startDirectory">Where to open the picker, when there is a sensible place.</param>
+    Task<string?> AskWhereToWriteAsync(string suggestedName, string extension, string titleKey, string? startDirectory = null);
+
     /// <summary>Interface chrome theme. The drawing sheet stays light in both.</summary>
     ThemeVariant Theme { get; set; }
 

@@ -193,7 +193,13 @@ public static class SchDesignNets
             return (named.Place.Trail + named.Net.Name, true);
         }
 
-        return (pins.Count == 0 ? "Net-()" : $"Net-({pins.OrderBy(p => p.ToString(), StringComparer.Ordinal).First()})", false);
+        if (pins.Count == 0)
+        {
+            return ("Net-()", false);
+        }
+
+        var driver = pins.OrderBy(p => p.Reference, StringComparer.Ordinal).ThenBy(p => p.Pin.Number, StringComparer.Ordinal).First();
+        return (SchNetNames.FromPin(driver.Reference, driver.Pin.Pin, driver.Pin.Symbol.Definition, group.Any(p => p.Net.IsNoConnect)), false);
     }
 
     /// <summary>The names this net carries that mean the same on every sheet: global labels and power symbols.</summary>

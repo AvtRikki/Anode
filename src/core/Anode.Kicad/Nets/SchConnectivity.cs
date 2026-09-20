@@ -352,7 +352,8 @@ public static class SchConnectivity
     {
         if (pins.Count > 0)
         {
-            return $"Net-({pins.OrderBy(p => p.ToString(), StringComparer.Ordinal).First()})";
+            var driver = pins.OrderBy(p => p.Reference, StringComparer.Ordinal).ThenBy(p => p.Number, StringComparer.Ordinal).First();
+            return SchNetNames.FromPin(driver.Reference, driver.Pin, driver.Symbol.Definition, items.OfType<SchNoConnect>().Any());
         }
 
         var sheetPin = items.OfType<SchSheetPin>().OrderBy(p => p.Name, StringComparer.Ordinal).FirstOrDefault();

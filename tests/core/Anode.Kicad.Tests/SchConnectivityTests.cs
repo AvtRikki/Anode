@@ -576,6 +576,6 @@ public class SchConnectivityTests
         Assert.Equal("IN", Assert.Single(net.SheetPins).Name);
         Assert.Equal("R1-2", Assert.Single(net.Pins).ToString());
         Assert.Equal(2, net.Connections);
-        Assert.Equal("Net-(R1-2)", net.Name);
+        Assert.Equal("Net-(R1-Pad2)", net.Name);
     }
 }

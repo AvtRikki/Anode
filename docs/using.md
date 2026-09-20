@@ -58,6 +58,9 @@ the command palette, which lists every command with its shortcut.
 - The nets panel lists the nets of the sheet with what each reaches; a switch turns it to the whole design's nets.
   Choosing a row lights that net, choosing it again puts it out. The backquote does the same from a selection.
 - Annotation numbers the parts that carry no number yet, per place in the hierarchy.
+- **File → Export netlist…** writes the whole design's netlist in KiCad's format, wherever the picker points. It is
+  the design's, not the sheet's: exporting from a sheet below the root still describes the project, with this sheet
+  as it stands in the editor.
 
 ## The inspector
 

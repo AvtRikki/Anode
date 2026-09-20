@@ -132,6 +132,65 @@ public class NetsPanelTests
         });
     }
 
+    /// <summary>
+    /// The netlist command writes the design's netlist where the picker points. The file is KiCad's own export
+    /// form, so the check is that it parses as one and carries the nets of the design.
+    /// </summary>
+    [Fact]
+    public Task The_netlist_command_writes_the_designs_netlist()
+    {
+        string root = Path.Combine(TestData.KiCadDir, "demos", "complex_hierarchy", "complex_hierarchy.kicad_sch");
+        if (!File.Exists(root))
+        {
+            Assert.Skip(TestData.SkipReason);
+            return Task.CompletedTask;
+        }
+
+        return ShellWindowTests.Dispatch(_ =>
+        {
+            GraphicsOptions.Renderer = RendererKind.Skia;
+            string folder = Directory.CreateTempSubdirectory("anode-netlist-").FullName;
+            string target = Path.Combine(folder, "design.net");
+
+            try
+            {
+                var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+                var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+                var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
+                window.Show();
+
+                // The picker is the window's; here it answers with the path the test chose.
+                shell.PickNewFile = (_, _, _, _) => Task.FromResult<string?>(target);
+
+                Assert.NotNull(Pump(shell.OpenAsync(root)));
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.True(shell.Commands.TryExecute("sch.exportNetlist"));
+                for (int i = 0; i < 2000 && !File.Exists(target); i++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    Thread.Sleep(1);
+                }
+
+                Assert.True(File.Exists(target), "the netlist was not written");
+                string netlist = File.ReadAllText(target);
+                Assert.StartsWith("(export (version \"E\")", netlist, StringComparison.Ordinal);
+                Assert.Contains("(components", netlist, StringComparison.Ordinal);
+                Assert.Contains("(net (code ", netlist, StringComparison.Ordinal);
+
+                // The design's supply reaches both places of the amplifier sheet, so it is one net of many pins.
+                Assert.Contains("(name \"+12V\")", netlist, StringComparison.Ordinal);
+
+                Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+                window.Close();
+            }
+            finally
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        });
+    }
+
     private static T Pump<T>(Task<T> task)
     {
         for (int i = 0; i < 4000 && !task.IsCompleted; i++)

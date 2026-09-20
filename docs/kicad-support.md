@@ -55,8 +55,16 @@ and what went wrong while the hierarchy was walked — a child sheet that will n
 A child sheet that fails to parse leaves the rest of the design open rather than stopping the load; opening that file
 itself still fails, as it must.
 
-Not done: the pin-type matrix, missing power flags, sheet-pin mismatches, netlist and BOM export, creating sheets
-and their pins, numbering unique across a whole design, and the alternate (De Morgan) body style.
+**Netlist.** The design is exported as KiCad's own `(export (version "E") …)`: the sheets of the design with their
+title blocks, the parts of every place with what they were drawn from and where they stand, the definitions with
+their pins, and the nets — named as KiCad names them (`/sheet/LABEL`, `Net-(R1-Pad2)`, `unconnected-(U2-NC-Pad3)`),
+ordered by name, their nodes by designator and pin, power symbols never a node. Measured against the netlists KiCad
+exported from its own QA schematics: for designs without buses crossing sheets, ours says the same.
+
+Not done: bus members crossing a sheet's pins — a bus that runs into a child sheet does not yet carry its members
+in, so those nets stay apart and KiCad's bus-derived names (`/S0.BOOT.SDA`) are not produced. Nor are: BOM export,
+the pin-type matrix, missing power flags, sheet-pin mismatches, creating sheets and their pins, numbering unique
+across a whole design, and the alternate (De Morgan) body style.
 
 ## Drawing sheets (`.kicad_wks`)
 

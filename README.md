@@ -81,7 +81,7 @@ The workbench knows nothing about boards or sheets. Domain features are plugins:
   "version": "0.1.0",
   "assembly": "Anode.Plugin.Pcb.dll",
   "entryType": "Anode.Plugin.Pcb.PcbPlugin",
-  "contractVersion": 14
+  "contractVersion": 15
 }
 ```
 

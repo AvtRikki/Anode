@@ -1083,6 +1083,12 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", ShortcutText = "Home", MenuKey = "menu.view", MenuOrder = 5,
                 Execute = () => _canvas?.ZoomToFit(),
             },
+            new("sch.exportNetlist", "sch.command.exportNetlist")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.file", MenuOrder = 80,
+                CanExecute = () => FilePath is not null,
+                Execute = () => _ = ExportNetlistAsync(context),
+            },
         ];
 
         foreach (var command in commands)
@@ -1301,6 +1307,44 @@ public sealed class SchematicDocument : DocumentBase
 
         return [.. SchHierarchy.Walk(root, OpenSheet).Select(p => p.File).Distinct(StringComparer.Ordinal)
             .Select(OpenSheet).OfType<Anode.Kicad.Schematic>()];
+    }
+
+    /// <summary>
+    /// Writes the design's netlist where the person asks for it. The design is read from the project's root when
+    /// there is one, so a netlist exported from a sheet below the root is still the whole design's; this sheet is
+    /// taken as it stands in the editor, unsaved edits included.
+    /// </summary>
+    private async Task ExportNetlistAsync(IPluginContext context)
+    {
+        if (FilePath is not { } path)
+        {
+            return;
+        }
+
+        string full = Path.GetFullPath(path);
+        string root = SchematicDocumentType.ProjectRoot(full) ?? full;
+        string suggested = Path.GetFileNameWithoutExtension(root) + ".net";
+
+        try
+        {
+            if (await context.Workbench.AskWhereToWriteAsync(suggested, ".net", "sch.command.exportNetlist", Path.GetDirectoryName(root))
+                is not { Length: > 0 } target)
+            {
+                return;
+            }
+
+            // Written the way a document is: a temp file beside the target, renamed over it, so nobody reads a
+            // netlist that is only half there.
+            string netlist = SchNetlist.Write(root, OpenSheet, $"Anode {context.Manifest.Version}");
+            string temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target))!, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.tmp");
+            await File.WriteAllTextAsync(temp, netlist);
+            File.Move(temp, target, overwrite: true);
+            context.Log.Info(Tr.T("sch.log.netlist", Path.GetFileName(target)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+        {
+            context.Log.Error(ex.Message, ex);
+        }
     }
 
     /// <summary>KiCad's setting that the design carries its fonts, written as one undoable step.</summary>

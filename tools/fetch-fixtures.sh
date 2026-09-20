@@ -50,6 +50,31 @@ FILES=(
   demos/interf_u/interf_u.kicad_pro
   demos/interf_u/pagelayout_logo.kicad_wks
   qa/data/cli/basic_test/custom_ds.kicad_wks
+  # Netlists KiCad exported from its own schematics: the oracle the exporter is measured against.
+  qa/data/eeschema/netlists/issue14657/issue14657.kicad_sch
+  qa/data/eeschema/netlists/issue14657/issue14657_1.kicad_sch
+  qa/data/eeschema/netlists/issue14657/issue14657_2.kicad_sch
+  qa/data/eeschema/netlists/issue14657/issue14657.kicad_pro
+  qa/data/eeschema/netlists/issue14657/issue14657.net
+  qa/data/eeschema/netlists/test_hier_no_connect/test_hier_no_connect.kicad_sch
+  qa/data/eeschema/netlists/test_hier_no_connect/sub1.kicad_sch
+  qa/data/eeschema/netlists/test_hier_no_connect/sub2.kicad_sch
+  qa/data/eeschema/netlists/test_hier_no_connect/sub3.kicad_sch
+  qa/data/eeschema/netlists/test_hier_no_connect/TEST_LIB.kicad_sym
+  qa/data/eeschema/netlists/test_hier_no_connect/sym-lib-table
+  qa/data/eeschema/netlists/test_hier_no_connect/test_hier_no_connect.kicad_pro
+  qa/data/eeschema/netlists/test_hier_no_connect/test_hier_no_connect.net
+  qa/data/eeschema/netlists/hierarchy_aliases/hierarchy_aliases.kicad_sch
+  qa/data/eeschema/netlists/hierarchy_aliases/sub1.kicad_sch
+  qa/data/eeschema/netlists/hierarchy_aliases/sub2.kicad_sch
+  qa/data/eeschema/netlists/hierarchy_aliases/hierarchy_aliases.kicad_pro
+  qa/data/eeschema/netlists/hierarchy_aliases/hierarchy_aliases.net
+  qa/data/eeschema/netlists/bus_connection/bus_connection.kicad_sch
+  qa/data/eeschema/netlists/bus_connection/a.kicad_sch
+  qa/data/eeschema/netlists/bus_connection/a2.kicad_sch
+  qa/data/eeschema/netlists/bus_connection/b.kicad_sch
+  qa/data/eeschema/netlists/bus_connection/bus_connection.kicad_pro
+  qa/data/eeschema/netlists/bus_connection/bus_connection.net
   demos/pic_programmer/pic_programmer.kicad_sch
   demos/video/video.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod

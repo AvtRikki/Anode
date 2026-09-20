@@ -4,6 +4,6 @@
   "version": "0.1.0",
   "assembly": "Anode.Plugin.Schematic.dll",
   "entryType": "Anode.Plugin.Schematic.SchematicPlugin",
-  "contractVersion": 14,
+  "contractVersion": 15,
   "description": "Viewing .kicad_sch sheets: symbols, wires, labels, hierarchy."
 }
