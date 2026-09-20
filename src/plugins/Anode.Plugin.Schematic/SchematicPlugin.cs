@@ -37,6 +37,14 @@ public sealed class SchematicPlugin : IPlugin
             Order = 10,
         });
 
+        // The nets of the open sheet, where the board's layers sit for a board: a list to follow a net from.
+        context.Panels.Register(new PanelDescriptor("sch.nets", "sch.panel.nets", DockArea.LeftBottom, workbench => new NetsPanel(workbench))
+        {
+            RailLabelKey = "sch.panel.netsRail",
+            DocumentTypes = [SchematicDocumentType.TypeId],
+            Order = 20,
+        });
+
         context.Log.Info(Tr.T("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }

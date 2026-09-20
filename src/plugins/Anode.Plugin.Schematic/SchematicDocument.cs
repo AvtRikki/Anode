@@ -546,6 +546,13 @@ public sealed class SchematicDocument : DocumentBase
         HighlightNet(anchor is not null && !SameNet(anchor) ? anchor : null);
     }
 
+    /// <summary>
+    /// Lights a net chosen away from the canvas — in the nets panel — or puts the light out. A wire is preferred as
+    /// the anchor: a net is lit by an item of it, and a part belongs to as many nets as it has pins.
+    /// </summary>
+    internal void LightNet(SchNet? net) =>
+        HighlightNet(net?.Items.FirstOrDefault(i => i is SchWire) ?? net?.Items.FirstOrDefault(i => i is not SymbolInstance) ?? net?.Items.FirstOrDefault());
+
     internal void HighlightNet(SchItem? anchor)
     {
         _netAnchor = anchor;
@@ -555,7 +562,8 @@ public sealed class SchematicDocument : DocumentBase
 
     private bool SameNet(SchItem item) => HighlightedNet is { } net && net.Items.Contains(item);
 
-    private SchNet? HighlightedNet =>
+    /// <summary>The net the canvas is lighting, if any.</summary>
+    internal SchNet? HighlightedNet =>
         _netAnchor is { IsAttached: true } anchor ? Nets.FirstOrDefault(n => n.Items.Contains(anchor)) : null;
 
     /// <summary>

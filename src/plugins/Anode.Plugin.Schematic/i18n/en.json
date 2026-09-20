@@ -60,7 +60,11 @@
       "tri_state": "tri-state",
       "passive": "passive"
     },
+    "nets": { "filter": "Filter", "empty": "Open a sheet to see its nets.", "count": "{0} {1}", "found": "{0} of {1}" },
+    "net": { "one": "net", "other": "nets" },
     "panel": {
+      "nets": "Nets",
+      "netsRail": "NE",
       "symbols": "Components",
       "symbolsRail": "Co"
     },
