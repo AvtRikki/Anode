@@ -44,4 +44,31 @@ internal static class TextShapes
 
         StrokeTextLayout.Layout(StrokeFont.Default, value, anchor, style, Stroke);
     }
+
+    /// <summary>
+    /// The letters themselves, in board units rather than on a layer: the strokes to be drawn with the pen, and the
+    /// shapes to be filled. What knockout text is cut out of its box with.
+    /// </summary>
+    public static (List<(Vector2D A, Vector2D B)> Strokes, List<PolygonWithHoles> Shapes) Collect(
+        string value,
+        Vector2D anchor,
+        in TextStyle style,
+        TextFont font)
+    {
+        var strokes = new List<(Vector2D, Vector2D)>();
+        var shapes = new List<PolygonWithHoles>();
+
+        if (font.Face is { } face)
+        {
+            OutlineText.Layout(face, font.Bold, value, anchor, style,
+                shape => shapes.Add(new PolygonWithHoles(shape.Outline, shape.Holes)),
+                (a, b) => strokes.Add((a, b)));
+        }
+        else
+        {
+            StrokeTextLayout.Layout(StrokeFont.Default, value, anchor, style, (a, b) => strokes.Add((a, b)));
+        }
+
+        return (strokes, shapes);
+    }
 }

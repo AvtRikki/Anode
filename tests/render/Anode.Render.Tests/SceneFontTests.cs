@@ -195,4 +195,68 @@ public class SceneFontTests
         var turned = SceneBuilder.Build(Kicad.Board.Parse(cached.Replace("(at 10 10 0)", "(at 10 10 90)", StringComparison.Ordinal)));
         Assert.DoesNotContain(turned.Find("F.SilkS")!.Polygons, p => p.Points[0] == turned.ToScene(new Vector2D(9e6, 9e6)));
     }
+
+    /// <summary>
+    /// Knockout text — KiCad's <c>(layer "F.SilkS" knockout)</c> — is a filled box with the letters cut out of it:
+    /// the box is a rectangle of four corners, each letter a hole, and the counter of an "O" an island inside its hole.
+    /// </summary>
+    [Fact]
+    public void Knockout_text_is_a_box_with_the_letters_cut_out()
+    {
+        var board = Kicad.Board.Parse("""
+            (kicad_pcb (version 20241229) (generator "pcbnew")
+              (layers (0 "F.Cu" signal) (5 "F.SilkS" user))
+              (gr_text "IO" (at 10 10 0) (layer "F.SilkS" knockout)
+                (effects (font (size 2 2) (thickness 0.3)))))
+            """);
+        var scene = SceneBuilder.Build(board);
+        var layer = scene.Find("F.SilkS")!;
+
+        Assert.Empty(layer.Lines);
+
+        // Two regions: the box with a hole per letter, and the island inside the "O", filled again on top of its hole.
+        Assert.Equal(2, layer.Polygons.Count);
+        var box = Assert.Single(layer.Polygons, p => p.HoleStarts.Length > 0);
+        Assert.Equal(2, box.HoleStarts.Length);
+
+        var rings = box.Rings.ToList();
+        var outer = Box(box, rings[0]);
+        Assert.Equal(4, rings[0].End.Value - rings[0].Start.Value);
+
+        // The box stands a margin beyond the letters it holds: here a ninth of the 2 mm height, the pen being thinner.
+        var letters = rings.Skip(1).Select(r => Box(box, r)).Aggregate(RectD.Empty, (a, b) => a.Union(b));
+        Assert.Equal(2.0 / 9, letters.MinY - outer.MinY, 0.05);
+        Assert.Equal(2.0 / 9, outer.MaxY - letters.MaxY, 0.05);
+        Assert.Equal(2.0 / 9, letters.MinX - outer.MinX, 0.05);
+    }
+
+    private static RectD Box(PolygonPrim polygon, Range ring)
+    {
+        var box = RectD.Empty;
+        foreach (var point in polygon.Points[ring])
+        {
+            box = box.Union(point.X, point.Y);
+        }
+
+        return box;
+    }
+
+    [Fact]
+    public void A_demo_boards_knockout_texts_are_cut_out_of_their_boxes()
+    {
+        string path = TestData.FullPath("demos/tiny_tapeout/tinytapeout-demo.kicad_pcb");
+        Assert.SkipUnless(File.Exists(path), TestData.SkipReason);
+
+        var board = Kicad.Board.Load(path);
+        var scene = SceneBuilder.Build(board);
+        var knockouts = board.Texts.Where(t => t.IsKnockout && t.DisplayValue.Trim().Length > 0).ToList();
+        Assert.NotEmpty(knockouts);
+
+        foreach (var text in knockouts)
+        {
+            var owners = scene.OwnersOf(text.TopLevel).ToHashSet();
+            var polygons = scene.Layers.SelectMany(l => l.Polygons).Where(p => owners.Contains(p.Owner)).ToList();
+            Assert.Contains(polygons, p => p.HoleStarts.Length > 0);
+        }
+    }
 }

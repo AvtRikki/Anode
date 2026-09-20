@@ -95,6 +95,22 @@ public class FontRenderTests
         Assert.True(Render(scene, box.Inflate(Math.Max(box.Width, box.Height) * 0.6), "fonts-" + Path.GetFileNameWithoutExtension(file)) > 0);
     }
 
+    [Fact]
+    public void Knockout_texts_of_a_demo_board()
+    {
+        string path = TestData.FullPath("demos/tiny_tapeout/tinytapeout-demo.kicad_pcb");
+        Assert.SkipUnless(File.Exists(path), TestData.SkipReason);
+
+        var board = Board.Load(path);
+        var scene = SceneBuilder.Build(board);
+
+        // The corner of the board where several knockout labels sit together.
+        var text = board.Texts.First(t => t.IsKnockout && t.DisplayValue == "SPI MSTR");
+        var box = scene.OwnersOf(text.TopLevel).Select(scene.OwnerBounds).Aggregate(RectD.Empty, (r, b) => r.Union(b));
+
+        Assert.True(Render(scene, box.Inflate(Math.Max(box.Width, box.Height) * 1.5), "fonts-knockout") > 0);
+    }
+
     /// <summary>Renders <paramref name="area"/> and answers how many pixels are not the background.</summary>
     private static int Render(IRenderScene scene, RectD area, string name)
     {

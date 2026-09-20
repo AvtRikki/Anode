@@ -3,4 +3,9 @@
   <PropertyGroup>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Boolean work on regions (Boost Software License), managed. -->
+    <PackageReference Include="Clipper2" Version="2.0.0" />
+  </ItemGroup>
+
 </Project>

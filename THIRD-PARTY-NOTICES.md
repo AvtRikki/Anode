@@ -28,6 +28,9 @@ Files KiCad embeds are decompressed with ZstdSharp.Port (https://github.com/oleg
 port of Zstandard (BSD). Their checksum is MurmurHash3 x64 128 (Austin Appleby, public domain), reimplemented in
 `EmbeddedFiles.cs` together with the tail handling of older KiCad files.
 
+Boolean work on regions — knockout text today, zone fills later — uses Clipper2
+(https://github.com/AngusJohnson/Clipper2, Boost Software License 1.0) through `Anode.Geometry/Clipping.cs`.
+
 ## KiCad file formats and test data
 
 KiCad demo and QA boards used by the tests are downloaded by `tools/fetch-fixtures.sh` and are not part of this

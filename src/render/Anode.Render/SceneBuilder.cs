@@ -117,6 +117,9 @@ public static class SceneBuilder
     {
         private const double Mm = Units.NmPerMm;
 
+        /// <summary>How far the round end of a knocked-out stroke may stray from its arc: KiCad's default, 5 µm.</summary>
+        private const double KnockoutError = 5_000;
+
         public void AddTopLevel(BoardItem item)
         {
             switch (item)
@@ -349,18 +352,18 @@ public static class SceneBuilder
 
             // KiCad draws a text in a face from the letters it saved, as long as they still show this text at this
             // angle — so a board looks as its author saw it, whether or not this machine has the face.
-            if (DrawsFromCache(text) && text.RenderCache is { } cache)
+            var saved = DrawsFromCache(text) && text.RenderCache is { } cache
+                ? cache.Polygons.Where(g => g.Outline.Length >= 3).Select(g => new PolygonWithHoles(
+                    [.. g.Outline.Select(p => p.ToDouble())],
+                    [.. g.Holes.Select(h => h.Select(p => p.ToDouble()).ToArray())])).ToList()
+                : null;
+
+            if (saved is not null && !text.IsKnockout)
             {
                 var geometry = scene.Layer(layerName);
-                foreach (var glyph in cache.Polygons.Where(g => g.Outline.Length >= 3))
+                foreach (var glyph in saved)
                 {
-                    var polygon = PolygonPrim.FromRings(
-                        [.. glyph.Outline.Select(p => p.ToDouble())],
-                        [.. glyph.Holes.Select(h => (IReadOnlyList<Vector2D>)[.. h.Select(p => p.ToDouble())])],
-                        scene.ToScene,
-                        owner);
-                    geometry.Polygons.Add(polygon);
-                    scene.GrowOwner(owner, polygon.Bounds);
+                    Fill(geometry, glyph, owner);
                 }
 
                 return;
@@ -379,9 +382,49 @@ public static class SceneBuilder
                 text.IsItalic,
                 text.LineSpacing);
 
+            var font = new TextFont(text.FontFace, text.IsBold, text.IsItalic, text.Thickness);
+            if (text.IsKnockout)
+            {
+                AddKnockout(text, value, style, font, saved, layerName, owner);
+                return;
+            }
+
             // Text becomes ordinary segments and polygons, so every backend, hit-testing and highlighting handle it.
-            TextShapes.Emit(scene.Layer(layerName), value, text.BoardPosition.ToDouble(), style,
-                new TextFont(text.FontFace, text.IsBold, text.IsItalic, text.Thickness), scene.ToScene, b => scene.GrowOwner(owner, b), owner);
+            TextShapes.Emit(scene.Layer(layerName), value, text.BoardPosition.ToDouble(), style, font,
+                scene.ToScene, b => scene.GrowOwner(owner, b), owner);
+        }
+
+        /// <summary>
+        /// Knockout text: a box the size of the letters with a margin, the letters cut out of it, as KiCad draws a
+        /// text whose layer says <c>knockout</c>. The margin is KiCad's — half the pen, or a ninth of the height.
+        /// </summary>
+        private void AddKnockout(
+            Text text,
+            string value,
+            in TextStyle style,
+            TextFont font,
+            IReadOnlyList<PolygonWithHoles>? saved,
+            string layerName,
+            int owner)
+        {
+            var anchor = text.BoardPosition.ToDouble();
+            var (strokes, shapes) = saved is null
+                ? TextShapes.Collect(value, anchor, style, font)
+                : ([], [.. saved]);
+
+            double margin = Math.Max(Math.Round(style.PenWidth / 2), Math.Round(Math.Min(Math.Abs(style.Width), Math.Abs(style.Height)) / 9));
+            var geometry = scene.Layer(layerName);
+            foreach (var region in Clipping.KnockOut(anchor, style.AngleDegrees, margin, strokes, style.PenWidth, shapes, KnockoutError))
+            {
+                Fill(geometry, region, owner);
+            }
+        }
+
+        private void Fill(LayerGeometry geometry, PolygonWithHoles region, int owner)
+        {
+            var polygon = PolygonPrim.FromRings(region.Outline, region.Holes, scene.ToScene, owner);
+            geometry.Polygons.Add(polygon);
+            scene.GrowOwner(owner, polygon.Bounds);
         }
 
         private void Line(string layer, Vector2D a, Vector2D b, double widthNm, int owner) =>
