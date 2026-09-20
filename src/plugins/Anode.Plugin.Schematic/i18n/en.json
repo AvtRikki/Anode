@@ -150,6 +150,7 @@
       "errors": "Errors",
       "warnings": "Warnings"
     },
+    "pinType": { "input": "input", "output": "output", "bidirectional": "bidirectional", "tri_state": "tri-state", "passive": "passive", "free": "free", "unspecified": "unspecified", "power_in": "power input", "power_out": "power output", "open_collector": "open collector", "open_emitter": "open emitter", "no_connect": "not connected" },
     "issue": {
       "face": { "title": "Font “{0}” not installed", "detail": "“{1}” is drawn in place of “{0}”, as KiCad would on this machine." },
       "drawingSheet": { "title": "Drawing sheet not found", "detail": "{0} could not be read; the default frame is drawn instead." },
@@ -158,6 +159,7 @@
         "detail": "{0} names {1} parts: {2}",
         "location": "X {0} Y {1} {2}"
       },
+      "erc": { "PinConflict": "Pins that may not be connected", "NotDriven": "Nothing drives this net", "PowerNotDriven": "No power source on this net", "detail": "{0}: {1}", "location": "{0}" },
       "loosePin": {
         "title": "Pin leads nowhere",
         "detail": "{0} is connected to nothing",

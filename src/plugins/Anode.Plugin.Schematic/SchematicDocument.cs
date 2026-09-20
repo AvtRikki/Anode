@@ -340,7 +340,45 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     public override IReadOnlyList<Issue> Issues =>
-        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. LoosePins()];
+        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. Electrical(), .. LoosePins()];
+
+    /// <summary>
+    /// The electrical rules, over the whole design: pins that may not be wired together, and nets nothing drives.
+    /// Only what touches the sheet on screen is listed, since every sheet of a design would otherwise repeat the
+    /// same list; a net is checked once, where its first named pin stands.
+    /// </summary>
+    private IEnumerable<Issue> Electrical()
+    {
+        if (FilePath is not { } path)
+        {
+            yield break;
+        }
+
+        string own = Path.GetFullPath(path);
+        foreach (var finding in SchErc.Check(DesignNets))
+        {
+            var here = finding.Pins.FirstOrDefault(p => string.Equals(p.Place.File, own, StringComparison.Ordinal));
+            if (here is null)
+            {
+                continue;
+            }
+
+            string pins = string.Join(", ", finding.Pins.Select(p => $"{p} ({Tr.T("sch.pinType." + p.Pin.Pin.ElectricalType)})"));
+            yield return new Issue(
+                finding.Severity == ErcSeverity.Error ? IssueSeverity.Error : IssueSeverity.Warning,
+                Tr.T("sch.issue.erc." + finding.Kind),
+                Tr.T("sch.issue.erc.detail", finding.Net.Name, pins),
+                Tr.T("sch.issue.erc.location", here.Place.Trail),
+                Action: () => Reveal(here));
+        }
+    }
+
+    /// <summary>Turns the tab to the place a pin stands in and selects the part it belongs to.</summary>
+    private void Reveal(DesignPin pin)
+    {
+        ShowInstance(pin.Place.Path);
+        _editor.SetSelection([pin.Pin.Symbol]);
+    }
 
     internal IReadOnlyList<HierarchyDiagnostic> HierarchyDiagnostics { get; init; } = [];
 

@@ -169,6 +169,44 @@ public class EmbeddedFaceIssueTests
         }
     }
 
+    /// <summary>
+    /// The electrical rules reach the checks of the sheet they are about: a supply pin nothing drives is reported
+    /// where it stands, and the row shows the net and the pins it names.
+    /// </summary>
+    [Fact]
+    public async Task A_net_nothing_drives_is_reported_in_the_checks()
+    {
+        string root = Path.Combine(TestData.KiCadDir, "demos", "pic_programmer", "pic_programmer.kicad_sch");
+        Assert.SkipUnless(File.Exists(root), TestData.SkipReason);
+
+        string folder = Directory.CreateTempSubdirectory("anode-erc-").FullName;
+        string sheet = Path.Combine(folder, Path.GetFileName(root));
+        File.Copy(root, sheet);
+        File.WriteAllText(Path.ChangeExtension(sheet, ".kicad_pro"), "{ \"schematic\": {}, \"text_variables\": {} }");
+
+        try
+        {
+            var type = new SchematicDocumentType(new QuietLog(), new SymbolLibraryList(folder));
+            using var document = (SchematicDocument)await type.OpenAsync(sheet, TestContext.Current.CancellationToken);
+
+            var issues = document.Issues.Where(i => i.Title == Tr.T("sch.issue.erc.PowerNotDriven")).ToList();
+            Assert.NotEmpty(issues);
+            Assert.All(issues, i =>
+            {
+                Assert.Equal(IssueSeverity.Error, i.Severity);
+                Assert.Contains(Tr.T("sch.pinType.power_in"), i.Detail, StringComparison.Ordinal);
+                Assert.NotNull(i.Action);
+            });
+
+            // Two power flags on one net may not meet, and that is reported here too.
+            Assert.Contains(document.Issues, i => i.Title == Tr.T("sch.issue.erc.PinConflict"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private sealed class QuietLog : ILog
     {
         public void Info(string message)

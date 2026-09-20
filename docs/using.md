@@ -74,7 +74,10 @@ file carries.
 
 ## Checks
 
-The bottom dock lists what the checks found, each with a place and a button that shows it. They are recomputed as the
+The bottom dock lists what the checks found, each with a place and a button that shows it — including the
+electrical rules: pins that may not be wired together, and nets nothing drives. Those are worked out across the
+whole design, and each is shown on the sheet the pin stands on, where the button turns the tab to that place and
+selects the part. They are recomputed as the
 document changes; a project's missing drawing sheet or a font this machine lacks is reported there too.
 
 ## Files

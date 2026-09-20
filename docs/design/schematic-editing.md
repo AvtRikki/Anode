@@ -26,8 +26,9 @@ Status, 2026-09-19: **stages 0–3 done, parts of stages 4 and 5.** Written 2026
   in a name never read as one — power symbols and no-connects; nets of a whole design, its sheets joined through a
   sheet's pins and the hierarchical labels inside it, and through global labels and power symbols, each net named as
   KiCad names it and carrying the designator a part has in each place; the net a selection sits on, shown in the inspector; and two checks — a pin left alone on its net, and
-  a designator used twice anywhere in the design, compared per place in the hierarchy. The pin-type matrix, missing
-  power flags and sheet-pin checks are not done, nor netlist and BOM export. A net can be lit (backquote, the
+  a designator used twice anywhere in the design, compared per place in the hierarchy. The pin-type matrix and missing power flags are checked over the whole
+  design from KiCad's own tables, and the netlist is exported in KiCad's format. Sheet-pin checks and BOM export are
+  not done. A net can be lit (backquote, the
   inspector's footer, or a row of the nets panel): its wires, labels and dots stand out and the rest of the sheet
   dims. The nets panel lists the sheet's nets with what each reaches — pins of parts and of child
   sheets — named first, with a filter, and sits where a board keeps its layers; a switch turns it to the design's
