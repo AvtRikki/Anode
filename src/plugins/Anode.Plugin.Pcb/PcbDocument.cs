@@ -28,7 +28,9 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
         {
             var board = Board.Load(path);
             // A board is one page, framed with the drawing sheet its project names for boards.
-            var frame = SheetFrameText.ForProject(path, board: true, out string? missing);
+            // The sheet the project names may be one the board itself carries.
+            var frame = SheetFrameText.ForProject(path, board: true, out string? missing,
+                name => EmbeddedFile.In(board.Document.Root).FirstOrDefault(f => f.Name == name)?.Data);
             var scene = SceneBuilder.Build(board, frame);
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
             {

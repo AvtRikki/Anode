@@ -74,9 +74,18 @@ public sealed partial class ProjectFile
     /// other <c>${NAME}</c>s are project variables or the environment, and a relative path is taken from the project's
     /// folder. Null for an empty one, which means "the default".
     /// </summary>
+    /// <summary>
+    /// The name behind a <c>kicad-embed://…</c> setting — a file the document carries rather than one on disk — or
+    /// null when the setting names an ordinary path.
+    /// </summary>
+    public static string? EmbeddedName(string? written) =>
+        written is { } text && text.StartsWith(EmbedPrefix, StringComparison.Ordinal) ? text[EmbedPrefix.Length..] : null;
+
+    private const string EmbedPrefix = "kicad-embed://";
+
     public string? Resolve(string? written)
     {
-        if (string.IsNullOrWhiteSpace(written))
+        if (string.IsNullOrWhiteSpace(written) || EmbeddedName(written) is not null)
         {
             return null;
         }

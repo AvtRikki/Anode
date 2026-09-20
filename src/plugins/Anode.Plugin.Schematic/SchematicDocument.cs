@@ -65,7 +65,8 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             string full = Path.GetFullPath(path);
             var appearances = design.Where(i => string.Equals(i.File, full, StringComparison.Ordinal)).ToList();
             string? shown = appearances.FirstOrDefault()?.Path;
-            var frame = SheetFrameText.ForProject(path, board: false, out string? missing);
+            // The sheet the project names may be one the design carries; KiCad keeps it in the root sheet's file.
+            var frame = SheetFrameText.ForProject(path, board: false, out string? missing, name => Carried(schematic, full, name));
             EmbedRootFonts(full);
             var scene = SchematicSceneBuilder.Build(schematic, shown, FrameFor(frame, design, shown));
             if (GraphicsOptions.Renderer == RendererKind.OpenGl)
@@ -88,6 +89,29 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
     /// since a file does not know who places it. A sheet with no project around it is its own root. One the root
     /// never reaches has no place at all, and its own fields are all there is to show.
     /// </summary>
+    /// <summary>A file this sheet carries, or — a sheet below the root carrying none — one the root carries.</summary>
+    private static byte[]? Carried(Anode.Kicad.Schematic sheet, string full, string name)
+    {
+        if (EmbeddedFile.In(sheet.Document.Root).FirstOrDefault(f => f.Name == name)?.Data is { } here)
+        {
+            return here;
+        }
+
+        if (ProjectRoot(full) is not { } root || string.Equals(root, full, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            return EmbeddedFile.In(Anode.Kicad.Schematic.Load(root).Document.Root).FirstOrDefault(f => f.Name == name)?.Data;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>
     /// A sheet below the root draws with the fonts the root carries — KiCad keeps a design's embedded fonts in its
     /// root file and has them loaded whichever sheet is shown. The root is read only when it carries a font.

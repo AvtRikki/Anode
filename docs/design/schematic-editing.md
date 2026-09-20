@@ -56,8 +56,10 @@ labels, and a sheet below the root draws with the root's fonts. A face only stoo
 KiCad would carry the stand-in. Knockout text — a layer marked `knockout` — is drawn as KiCad draws it: the box around the
 letters, grown by KiCad's margin, with the letters cut out of it, counters left as islands. Texts are set from the inspector's Type block — the face, from the stroke font
 and everything this machine or the file has, and which of KiCad's four styles — on a sheet's texts and labels and
-on a board's texts, a footprint's included, where it is the one thing that panel writes. Not yet: a drawing sheet
-embedded in the board.
+on a board's texts, a footprint's included, where it is the one thing that panel writes. A drawing sheet the document carries is drawn too: the project names it
+`kicad-embed://name.kicad_wks` and it is read from the file's own embedded files — a schematic's from the root
+sheet, whichever sheet is open — falling back to the default, with the name in the checks, when nothing answers
+to it.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

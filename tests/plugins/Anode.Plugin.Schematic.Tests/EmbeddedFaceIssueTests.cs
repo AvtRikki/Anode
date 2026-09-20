@@ -1,4 +1,5 @@
 using Anode.Kicad;
+using Anode.Render;
 using Anode.Sdk;
 using Anode.Tests;
 
@@ -112,6 +113,55 @@ public class EmbeddedFaceIssueTests
             var carried = Assert.Single(EmbeddedFile.In(Anode.Kicad.Schematic.Parse(saved).Document.Root));
             Assert.Equal("NotoSans-Regular.ttf", carried.Name);
             Assert.Equal(data, carried.Data);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A drawing sheet the design carries: KiCad keeps it in the root sheet's file, and a sheet below the root draws
+    /// with it too, the project naming it <c>kicad-embed://…</c>.
+    /// </summary>
+    [Fact]
+    public async Task A_sheet_below_the_root_draws_the_template_the_root_carries()
+    {
+        string template = TestData.FullPath("demos/vme-wren/cern-ohl-left.kicad_wks");
+        Assert.SkipUnless(File.Exists(template), TestData.SkipReason);
+
+        string folder = Directory.CreateTempSubdirectory("anode-embedded-wks-").FullName;
+        string root = Path.Combine(folder, "design.kicad_sch");
+        string child = Path.Combine(folder, "child.kicad_sch");
+        File.WriteAllText(Path.Combine(folder, "design.kicad_pro"),
+            """{ "schematic": { "page_layout_descr_file": "kicad-embed://cern-ohl-left.kicad_wks" }, "text_variables": {} }""");
+        File.WriteAllText(root, $$"""
+            (kicad_sch (version 20250114) (generator "eeschema") (uuid "6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10") (paper "A4")
+            	(sheet (at 50 50) (size 30 20) (uuid "2b6c1f5e-7d2b-4c8a-9e61-2f4b8d7c9a09")
+            		(property "Sheetname" "Child" (at 50 49 0))
+            		(property "Sheetfile" "child.kicad_sch" (at 50 71 0)))
+            	(embedded_fonts no)
+            	{{EmbeddedFile.Block("cern-ohl-left.kicad_wks", "worksheet", File.ReadAllBytes(template))}})
+
+            """);
+        File.WriteAllText(child, """
+            (kicad_sch (version 20250114) (generator "eeschema") (uuid "7f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b11") (paper "A4")
+            	(embedded_fonts no)
+            )
+
+            """);
+
+        try
+        {
+            var type = new SchematicDocumentType(new QuietLog(), new SymbolLibraryList(folder));
+            using var below = (SchematicDocument)await type.OpenAsync(child, TestContext.Current.CancellationToken);
+
+            Assert.DoesNotContain(below.Issues, i => i.Title == Tr.T("sch.issue.drawingSheet.title"));
+
+            // The carried template, not KiCad's default: its own frame, drawn from the root's file.
+            int carried = below.Scene.Layers.Single(l => l.Name == Anode.Render.LayerStyle.Sch.Frame).Lines.Count;
+            var plain = SchematicSceneBuilder.Build(Anode.Kicad.Schematic.Load(child));
+            Assert.NotEqual(plain.Layers.Single(l => l.Name == Anode.Render.LayerStyle.Sch.Frame).Lines.Count, carried);
         }
         finally
         {

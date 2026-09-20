@@ -27,10 +27,11 @@ public sealed record SheetFrameText(
 
     /// <summary>
     /// What the project around a file says the frame should be: its drawing sheet for schematics or for boards, and
-    /// its variables with <c>${PROJECTNAME}</c> among them. A sheet the project names but that is missing or will not
-    /// read falls back to the default, and <paramref name="problem"/> says why.
+    /// its variables with <c>${PROJECTNAME}</c> among them. The sheet may be a file on disk or one the document
+    /// carries (<c>kicad-embed://…</c>), which <paramref name="embedded"/> hands over by name. One that is missing or
+    /// will not read falls back to the default, and <paramref name="problem"/> says which it was.
     /// </summary>
-    public static SheetFrameText ForProject(string file, bool board, out string? problem)
+    public static SheetFrameText ForProject(string file, bool board, out string? problem, Func<string, byte[]?>? embedded = null)
     {
         problem = null;
         var project = ProjectFile.For(file);
@@ -41,8 +42,28 @@ public sealed record SheetFrameText(
         }
 
         var variables = new Dictionary<string, string>(project.TextVariables) { ["PROJECTNAME"] = project.Name };
+        string? written = board ? project.BoardDrawingSheet : project.SchematicDrawingSheet;
         Kicad.DrawingSheets.DrawingSheetFile? template = null;
-        if (project.Resolve(board ? project.BoardDrawingSheet : project.SchematicDrawingSheet) is { } path)
+
+        if (ProjectFile.EmbeddedName(written) is { } carried)
+        {
+            try
+            {
+                template = embedded?.Invoke(carried) is { } data
+                    ? Kicad.DrawingSheets.DrawingSheetFile.Parse(System.Text.Encoding.UTF8.GetString(data))
+                    : null;
+            }
+            catch (Exception ex) when (ex is KiCadFormatException or Anode.Sexpr.SexprParseException)
+            {
+                template = null;
+            }
+
+            if (template is null)
+            {
+                problem = carried;
+            }
+        }
+        else if (project.Resolve(written) is { } path)
         {
             try
             {
