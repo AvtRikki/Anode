@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\plugins\Anode.Plugin.Pcb\Anode.Plugin.Pcb.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The plugin compiles against the host's copy and never carries one; a test has no host, so it brings its own. -->
+    <PackageReference Include="Avalonia" Version="12.1.2" />
+  </ItemGroup>
+
+</Project>

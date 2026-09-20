@@ -30,6 +30,7 @@
       "many": "площадок"
     },
     "block": {
+      "typography": "Набор",
       "connectionsOf": "Связи · {0}",
       "identity": "Идентификация",
       "geometry": "Геометрия",
@@ -106,7 +107,11 @@
     "side": { "top": "верх", "bottom": "низ" },
     "value": { "yes": "да", "no": "нет", "none": "—", "component": "компонент" },
     "units": { "mm": "мм" },
+    "style": { "normal": "Обычное", "bold": "Жирное", "italic": "Курсив", "boldItalic": "Жирный курсив" },
     "property": {
+      "font": "Шрифт",
+      "style": "Начертание",
+      "strokeFont": "Штриховой",
       "reference": "Обозначение",
       "value": "Значение",
       "library": "Библиотека",

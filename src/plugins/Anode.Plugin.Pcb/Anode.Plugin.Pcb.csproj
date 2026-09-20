@@ -29,4 +29,8 @@
     <ProjectReference Include="..\..\core\Anode.Editing\Anode.Editing.csproj" />
     <ProjectReference Include="..\..\render\Anode.Render.Avalonia\Anode.Render.Avalonia.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Anode.Plugin.Pcb.Tests" />
+  </ItemGroup>
+
 </Project>

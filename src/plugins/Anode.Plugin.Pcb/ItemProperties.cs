@@ -1,6 +1,8 @@
 using System.Globalization;
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
+using Anode.Render.Fonts;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Pcb;
@@ -27,10 +29,10 @@ internal static class ItemProperties
     };
 
     /// <summary>
-    /// The board's inspector, in the blocks the design lays down. Every value here is computed: a board is read and
-    /// moved, but its numbers are not yet written through this panel, so nothing pretends to be editable.
+    /// The board's inspector, in the blocks the design lays down. Values are computed — a board is read and moved,
+    /// but its numbers are not yet written through this panel — except how a text is set, which is chosen here.
     /// </summary>
-    public static IEnumerable<InspectorBlock> Blocks(BoardItem item)
+    public static IEnumerable<InspectorBlock> Blocks(BoardItem item, Action<string, Action>? edit = null)
     {
         switch (item)
         {
@@ -159,6 +161,11 @@ internal static class ItemProperties
 
             case Text t:
                 yield return new InspectorBlock(Block("identity"), [Computed("text", t.Value)]);
+                if (Typography(t, edit) is { } type)
+                {
+                    yield return type;
+                }
+
                 yield return new InspectorBlock(Block("geometry"),
                 [
                     Computed("position", Pair(t.BoardPosition)),
@@ -170,6 +177,51 @@ internal static class ItemProperties
                 break;
         }
     }
+
+    /// <summary>
+    /// How a text is set: its face — the stroke font, or any this machine or the board itself has — and whether it
+    /// is bold, italic or both, the four KiCad offers as one choice. Null for anything but a text.
+    /// </summary>
+    public static InspectorBlock? Typography(BoardItem item, Action<string, Action>? edit)
+    {
+        if (item is not Text text || edit is null)
+        {
+            return null;
+        }
+
+        var font = TextFont.Read(text.Node.Find("effects"));
+        string stroke = Tr.T("pcb.property.strokeFont");
+
+        return new InspectorBlock(Block("typography"),
+        [
+            new InspectorRow(Tr.T("pcb.property.font"), font.Face ?? stroke)
+            {
+                Choices = [stroke, .. OutlineText.Families()],
+                Commit = v => edit(Tr.T("pcb.property.font"), () => FontWrites.SetFace(text.Node, v == stroke ? null : v)),
+            },
+            new InspectorRow(Tr.T("pcb.property.style"), Style(font.Bold, font.Italic))
+            {
+                Choices = [.. Styles.Select(s => Tr.T($"pcb.style.{s.Key}"))],
+                Commit = v =>
+                {
+                    if (Styles.FirstOrDefault(s => Tr.T($"pcb.style.{s.Key}") == v) is { Key: not null } picked)
+                    {
+                        edit(Tr.T("pcb.property.style"), () =>
+                        {
+                            FontWrites.SetBold(text.Node, picked.Bold);
+                            FontWrites.SetItalic(text.Node, picked.Italic);
+                        });
+                    }
+                },
+            },
+        ]);
+    }
+
+    private static readonly (string Key, bool Bold, bool Italic)[] Styles =
+        [("normal", false, false), ("bold", true, false), ("italic", false, true), ("boldItalic", true, true)];
+
+    private static string Style(bool bold, bool italic) =>
+        Tr.T($"pcb.style.{Styles.First(s => s.Bold == bold && s.Italic == italic).Key}");
 
     private static string Block(string key) => Tr.T($"pcb.block.{key}");
 

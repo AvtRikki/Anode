@@ -89,6 +89,9 @@ public sealed class PcbDocument : DocumentBase
 
     public BoardScene Scene { get; }
 
+    /// <summary>The editor behind the canvas; the tests drive selection and history through it.</summary>
+    internal BoardEditor Editor => _editor;
+
     public override string? DocumentTypeId => PcbDocumentType.TypeId;
 
     public override string Title => Path.GetFileName(FilePath ?? Tr.T("pcb.document.untitled"));
@@ -142,6 +145,27 @@ public sealed class PcbDocument : DocumentBase
     /// <summary>The board itself, for the inspector when nothing is selected; worked out once per state of the board.</summary>
     public override SelectionInfo? Overview =>
         _overview ??= BoardOverview.Build(_board, FilePath, Scene.BoardOutline, Issues, EditTitleBlock, DocumentFonts.Of(_board), EmbedFonts);
+
+    /// <summary>
+    /// One change to an item of the board, as one undoable step. The step remembers the top-level item — a text of a
+    /// footprint belongs to the footprint — which is also what the scene redraws.
+    /// </summary>
+    private void EditItem(string name, Action mutate)
+    {
+        if (_editor.Selection is not { Count: > 0 } selection)
+        {
+            return;
+        }
+
+        try
+        {
+            _editor.Run(new Anode.Kicad.Editing.ModifyNodesCommand(name, [selection[0].TopLevel], mutate));
+        }
+        catch (Exception ex) when (ex is KiCadFormatException or ArgumentException)
+        {
+            _context?.Log.Error(ex.Message, ex);
+        }
+    }
 
     /// <summary>KiCad's setting that the board carries its fonts, written as one undoable step.</summary>
     internal void EmbedFonts(bool on)
@@ -227,8 +251,10 @@ public sealed class PcbDocument : DocumentBase
             List<PropertyItem> properties = [.. ItemProperties.For(item)];
 
             // For a footprint, also show the pad, text or graphic that was clicked.
-            if (Scene.IsLive(_editor.FocusOwner) && Scene.Owner(_editor.FocusOwner) is var focus && !ReferenceEquals(focus, item))
+            BoardItem? focus = null;
+            if (Scene.IsLive(_editor.FocusOwner) && Scene.Owner(_editor.FocusOwner) is { } clicked && !ReferenceEquals(clicked, item))
             {
+                focus = clicked;
                 properties.Add(new PropertyItem(ItemProperties.Header(focus).Title, string.Empty, IsSection: true));
                 properties.AddRange(ItemProperties.For(focus));
             }
@@ -244,7 +270,8 @@ public sealed class PcbDocument : DocumentBase
 
             return new SelectionInfo(title, where, properties, tag)
             {
-                Blocks = [.. ItemProperties.Blocks(item)],
+                // A text of the footprint that was clicked is set from here too, though the footprint is what is selected.
+                Blocks = [.. ItemProperties.Blocks(item, EditItem), .. focus is null ? [] : ItemProperties.Typography(focus, EditItem) is { } type ? new[] { type } : []],
             };
         }
     }

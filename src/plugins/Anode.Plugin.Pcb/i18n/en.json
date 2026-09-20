@@ -29,6 +29,7 @@
       "other": "pads"
     },
     "block": {
+      "typography": "Type",
       "connectionsOf": "Connections · {0}",
       "identity": "Identification",
       "geometry": "Geometry",
@@ -105,7 +106,11 @@
     "side": { "top": "top", "bottom": "bottom" },
     "value": { "yes": "yes", "no": "no", "none": "—", "component": "component" },
     "units": { "mm": "mm" },
+    "style": { "normal": "Regular", "bold": "Bold", "italic": "Italic", "boldItalic": "Bold italic" },
     "property": {
+      "font": "Font",
+      "style": "Style",
+      "strokeFont": "Stroke font",
       "reference": "Reference",
       "value": "Value",
       "library": "Library",
