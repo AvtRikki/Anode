@@ -29,7 +29,7 @@ public class InspectorTests
             return Task.CompletedTask;
         }
 
-        return ShellWindowTests.Dispatch(_ =>
+        return ShellWindowTests.Dispatch(directory =>
         {
             GraphicsOptions.Renderer = RendererKind.Skia;
             Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
@@ -84,7 +84,7 @@ public class InspectorTests
                 // Blocks, in the order the document asked for. A label names a net whether or not anything is
                 // wired to it yet, so what it is connected to sits between what it is and where it is.
                 Assert.Equal(
-                    [Tr.T("sch.block.identity"), Tr.T("sch.block.electrics"), Tr.T("sch.block.geometry")],
+                    [Tr.T("sch.block.identity"), Tr.T("sch.block.electrics"), Tr.T("sch.block.typography"), Tr.T("sch.block.geometry")],
                     selection.Blocks.Select(b => b.Title));
 
                 var electrics = selection.Blocks[1];
@@ -96,7 +96,16 @@ public class InspectorTests
                 Assert.Equal("VCC", text.Value);
                 Assert.NotNull(text.Commit);
 
-                var geometry = selection.Blocks[2];
+                // How it is set is chosen from a list rather than typed, and the panel draws the list.
+                var typography = selection.Blocks[2];
+                var face = typography.Rows[0];
+                Assert.Equal(Tr.T("sch.property.strokeFont"), face.Value);
+                Assert.Equal(Tr.T("sch.property.strokeFont"), face.Choices![0]);
+                Assert.Equal(2, window.GetVisualDescendants().OfType<ComboBox>().Count(c => c.IsVisible));
+
+                ShellWindowTests.Snapshot(window, directory, "inspector-typography");
+
+                var geometry = selection.Blocks[3];
                 Assert.All(geometry.Rows, row => Assert.NotNull(row.Commit));
 
                 // A position is a pair of millimetres with no unit appended — the unit cost the panel the width it
@@ -144,6 +153,19 @@ public class InspectorTests
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(Pump(document.SaveAsync()));
                 Assert.Contains("(label \"VCC\"", File.ReadAllText(sheet), StringComparison.Ordinal);
+
+                // Choosing a face from the list is one step of the history too, and it reaches the file.
+                var list = window.GetVisualDescendants().OfType<ComboBox>().First(c => c.IsVisible);
+                string chosen = (string)list.Items[1]!;
+                list.SelectedIndex = 1;
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(Pump(document.SaveAsync()));
+                Assert.Contains($"(face \"{chosen}\")", File.ReadAllText(sheet), StringComparison.Ordinal);
+
+                Assert.True(shell.Commands.TryExecute("edit.undo"));
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(Pump(document.SaveAsync()));
+                Assert.DoesNotContain("(face ", File.ReadAllText(sheet), StringComparison.Ordinal);
 
                 Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
                 window.Close();

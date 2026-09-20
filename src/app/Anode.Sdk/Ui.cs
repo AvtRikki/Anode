@@ -87,6 +87,27 @@ public static class Ui
         return box;
     }
 
+    /// <summary>One of a list of values, chosen from a drop-down; the value chosen is handed back as written.</summary>
+    public static ComboBox Choice(IReadOnlyList<string> choices, string value, Action<string> chosen)
+    {
+        var box = new ComboBox
+        {
+            Classes = { "choice" },
+            ItemsSource = choices,
+            SelectedItem = choices.Contains(value) ? value : null,
+            PlaceholderText = value,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        box.SelectionChanged += (_, _) =>
+        {
+            if (box.SelectedItem is string picked && picked != value)
+            {
+                chosen(picked);
+            }
+        };
+        return box;
+    }
+
     public static TextBox EditableField(string value, Action<string> commit)
     {
         // A long value — a sheet's title, say — wraps inside its field rather than hiding past the edge. Enter still

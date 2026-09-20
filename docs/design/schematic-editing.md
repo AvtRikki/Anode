@@ -54,8 +54,9 @@ carried under that name is kept, and with `no` carried fonts are dropped. A boar
 footprints'; a schematic keeps the setting and the files in its root sheet and looks at every sheet's texts and
 labels, and a sheet below the root draws with the root's fonts. A face only stood in for is not carried, where
 KiCad would carry the stand-in. Knockout text — a layer marked `knockout` — is drawn as KiCad draws it: the box around the
-letters, grown by KiCad's margin, with the letters cut out of it, counters left as islands. Not yet: a drawing
-sheet embedded in the board, and choosing a face in the inspector.
+letters, grown by KiCad's margin, with the letters cut out of it, counters left as islands. A sheet's texts and labels are set from the inspector's Type block: the face,
+from the stroke font and everything this machine or the file has, and which of KiCad's four styles. Not yet: the
+same on a board, whose inspector is still read-only, and a drawing sheet embedded in the board.
 
 Known gaps outside the stages: `G` (drag keeping wires attached), breaking a wire, cleaning up collinear wires,
 aligning to grid, and a menu bar for Windows and Linux.

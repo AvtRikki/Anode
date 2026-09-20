@@ -123,7 +123,7 @@ public sealed class InspectorPanel : ContentControl
             {
                 text.Append('\u001f').Append(row.Name).Append('=').Append(row.Value)
                     .Append('|').Append(row.Trailing).Append(row.IsUnresolved)
-                    .Append(row.Commit is null ? '-' : '+').Append(row.Switch);
+                    .Append(row.Commit is null ? '-' : '+').Append(row.Switch).Append(row.Choices?.Count);
             }
         }
 
@@ -238,6 +238,10 @@ public sealed class InspectorPanel : ContentControl
             if (rows[i] is { Switch: { } on, Commit: { } flip })
             {
                 value = Ui.Switch(on, rows[i].Value, v => flip(v ? "yes" : "no"));
+            }
+            else if (rows[i] is { Choices: { Count: > 0 } choices, Commit: { } choose })
+            {
+                value = Ui.Choice(choices, rows[i].Value, choose);
             }
             else if (rows[i].Commit is { } commit)
             {

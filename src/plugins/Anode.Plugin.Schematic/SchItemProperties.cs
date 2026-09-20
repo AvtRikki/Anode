@@ -2,6 +2,7 @@ using System.Globalization;
 using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
+using Anode.Render.Fonts;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Schematic;
@@ -131,6 +132,7 @@ internal static class SchItemProperties
                     yield return electrics;
                 }
 
+                yield return Typography(label, edit);
                 yield return Geometry(item, edit);
                 break;
 
@@ -140,6 +142,7 @@ internal static class SchItemProperties
                     Writable("text", text.Text, v => edit(Name("text"), () => SchWrites.SetText(text, v))),
                 ]);
 
+                yield return Typography(text, edit);
                 yield return Geometry(item, edit);
                 break;
 
@@ -197,6 +200,47 @@ internal static class SchItemProperties
             yield return new InspectorBlock(Tr.T("sch.block.electrics"), [Computed("net", net)]);
         }
     }
+
+    /// <summary>
+    /// How the text is set: its face — the stroke font, or any this machine or the file itself has — and whether it
+    /// is bold, italic or both, the four KiCad offers as one choice.
+    /// </summary>
+    private static InspectorBlock Typography(SchItem item, Action<string, Action> edit)
+    {
+        var font = item.Font;
+        string stroke = Tr.T("sch.property.strokeFont");
+        string style = Style(font.Bold, font.Italic);
+
+        return new InspectorBlock(Tr.T("sch.block.typography"),
+        [
+            new InspectorRow(Name("font"), font.Face ?? stroke)
+            {
+                Choices = [stroke, .. OutlineText.Families()],
+                Commit = v => edit(Name("font"), () => FontWrites.SetFace(item.Node, v == stroke ? null : v)),
+            },
+            new InspectorRow(Name("style"), style)
+            {
+                Choices = [.. Styles.Select(s => Tr.T($"sch.style.{s.Key}"))],
+                Commit = v =>
+                {
+                    if (Styles.FirstOrDefault(s => Tr.T($"sch.style.{s.Key}") == v) is { Key: not null } picked)
+                    {
+                        edit(Name("style"), () =>
+                        {
+                            FontWrites.SetBold(item.Node, picked.Bold);
+                            FontWrites.SetItalic(item.Node, picked.Italic);
+                        });
+                    }
+                },
+            },
+        ]);
+    }
+
+    private static readonly (string Key, bool Bold, bool Italic)[] Styles =
+        [("normal", false, false), ("bold", true, false), ("italic", false, true), ("boldItalic", true, true)];
+
+    private static string Style(bool bold, bool italic) =>
+        Tr.T($"sch.style.{Styles.First(s => s.Bold == bold && s.Italic == italic).Key}");
 
     /// <summary>Where the item sits, and which way it faces — the one block almost everything on a sheet has.</summary>
     private static InspectorBlock Geometry(SchItem item, Action<string, Action> edit) =>

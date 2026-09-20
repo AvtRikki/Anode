@@ -284,6 +284,19 @@ public static class OutlineText
         return added;
     }
 
+    /// <summary>Every face that can be drawn here: the machine's own and those files have carried, in name order.</summary>
+    public static IReadOnlyList<string> Families()
+    {
+        lock (Embedded)
+        {
+            return [.. SKFontManager.Default.FontFamilies
+                .Concat(Embedded.Select(e => e.Typeface.FamilyName))
+                .Where(f => !string.IsNullOrWhiteSpace(f))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(f => f, StringComparer.CurrentCultureIgnoreCase)];
+        }
+    }
+
     /// <summary>Whether <paramref name="face"/> is drawn from a font a file carried rather than one installed.</summary>
     public static bool IsEmbedded(string face) => Resolve(face, false, false).Carried is not null;
 

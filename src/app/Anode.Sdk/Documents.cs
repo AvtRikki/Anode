@@ -177,6 +177,12 @@ public sealed record InspectorRow(string Name, string Value)
     /// it calls <see cref="Commit"/> with "yes" or "no". Null for any other row.
     /// </summary>
     public bool? Switch { get; init; }
+
+    /// <summary>
+    /// The values this row may take, shown as a list to choose from with <see cref="InspectorRow.Value"/> chosen;
+    /// choosing calls <see cref="Commit"/> with the value. Null for a row that is typed or computed.
+    /// </summary>
+    public IReadOnlyList<string>? Choices { get; init; }
 }
 
 /// <param name="IsPrimary">The one action that answers the block above it; the rest are outlined.</param>

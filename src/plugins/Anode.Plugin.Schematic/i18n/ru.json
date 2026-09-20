@@ -84,6 +84,7 @@
       "capped": "первые {0}"
     },
     "block": {
+      "typography": "Набор",
       "identity": "Идентификация",
       "electrics": "Электрика",
       "geometry": "Геометрия",
@@ -181,7 +182,11 @@
       "graphic": "Графика",
       "other": "Объект"
     },
+    "style": { "normal": "Обычное", "bold": "Жирное", "italic": "Курсив", "boldItalic": "Жирный курсив" },
     "property": {
+      "font": "Шрифт",
+      "style": "Начертание",
+      "strokeFont": "Штриховой",
       "reference": "Обозначение",
       "value": "Значение",
       "library": "Библиотека",

@@ -84,6 +84,7 @@
       "capped": "first {0}"
     },
     "block": {
+      "typography": "Type",
       "identity": "Identification",
       "electrics": "Electrics",
       "geometry": "Geometry",
@@ -180,7 +181,11 @@
       "graphic": "Graphic",
       "other": "Object"
     },
+    "style": { "normal": "Regular", "bold": "Bold", "italic": "Italic", "boldItalic": "Bold italic" },
     "property": {
+      "font": "Font",
+      "style": "Style",
+      "strokeFont": "Stroke font",
       "reference": "Reference",
       "value": "Value",
       "library": "Library",
