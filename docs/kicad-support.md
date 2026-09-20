@@ -46,8 +46,9 @@ time, chosen in the project tree, and designators and units are read and written
 **Nets.** Built from wires, junctions, labels of every kind, buses (vector and group, with `bus_alias`), power
 symbols, no-connects and the pins of child sheets. A label or a pin landing part way along a wire is on that wire;
 a junction dot is required only where two wires meet, as in KiCad. Across a design, sheets are joined through a
-sheet symbol's pins and the hierarchical labels inside the sheet, and through global labels and power symbols; nets
-are named as KiCad names them.
+sheet symbol's pins and the hierarchical labels inside the sheet, and through global labels and power symbols; a
+bus running into a child sheet carries its members in, each meeting the member of the same short name inside, and
+an alias one sheet declares is known to them all. Nets are named as KiCad names them.
 
 **Checks.** A pin left alone on its net, a designator used twice anywhere in the design (compared per place), the
 format version, a symbol whose definition is missing, a drawing sheet that will not read, a face this machine lacks,
@@ -59,12 +60,11 @@ itself still fails, as it must.
 title blocks, the parts of every place with what they were drawn from and where they stand, the definitions with
 their pins, and the nets — named as KiCad names them (`/sheet/LABEL`, `Net-(R1-Pad2)`, `unconnected-(U2-NC-Pad3)`),
 ordered by name, their nodes by designator and pin, power symbols never a node. Measured against the netlists KiCad
-exported from its own QA schematics: for designs without buses crossing sheets, ours says the same.
+exported from its own QA schematics — a plain hierarchy, no-connects, a bus running into child sheets, and sheets
+named through bus aliases — where ours says the same, net for net and pin for pin.
 
-Not done: bus members crossing a sheet's pins — a bus that runs into a child sheet does not yet carry its members
-in, so those nets stay apart and KiCad's bus-derived names (`/S0.BOOT.SDA`) are not produced. Nor are: BOM export,
-the pin-type matrix, missing power flags, sheet-pin mismatches, creating sheets and their pins, numbering unique
-across a whole design, and the alternate (De Morgan) body style.
+Not done: BOM export, the pin-type matrix, missing power flags, sheet-pin mismatches, creating sheets and their
+pins, numbering unique across a whole design, and the alternate (De Morgan) body style.
 
 ## Drawing sheets (`.kicad_wks`)
 

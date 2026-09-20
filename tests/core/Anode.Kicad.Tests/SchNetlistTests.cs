@@ -5,8 +5,9 @@ namespace Anode.Kicad.Tests;
 
 /// <summary>
 /// The netlist, checked against KiCad's own. Its QA cases each ship the schematic and the netlist KiCad exported
-/// from it, so what we write can be compared with what KiCad writes for the same design: the same nets, each
-/// reaching the same pins.
+/// from it, so what we write can be compared with what KiCad writes for the same design: the same nets, by the same
+/// names, each reaching the same pins. The cases cover a plain hierarchy, no-connects, a bus running into child
+/// sheets, and sheets named through bus aliases.
 /// </summary>
 public class SchNetlistTests
 {
@@ -27,6 +28,8 @@ public class SchNetlistTests
     [Theory]
     [InlineData("issue14657")]
     [InlineData("test_hier_no_connect")]
+    [InlineData("bus_connection")]
+    [InlineData("hierarchy_aliases")]
     public void A_netlist_says_what_KiCads_own_says(string name)
     {
         Assert.SkipUnless(File.Exists(Case(name) + ".net"), TestData.SkipReason);
@@ -39,23 +42,6 @@ public class SchNetlistTests
         {
             Assert.Equal(pins, ours[net]);
         }
-    }
-
-    /// <summary>
-    /// A design whose sheets are named through bus aliases: the same nets reaching the same pins, but KiCad calls
-    /// them after the bus they came in on ("/S0.BOOT.SDA") where we call them after the sheet that named them.
-    /// </summary>
-    [Fact]
-    public void Bus_alias_names_still_group_the_same_pins()
-    {
-        Assert.SkipUnless(File.Exists(Case("hierarchy_aliases") + ".net"), TestData.SkipReason);
-
-        var ours = Nets(SchNetlist.Write(Case("hierarchy_aliases") + ".kicad_sch"));
-        var kicad = Nets(File.ReadAllText(Case("hierarchy_aliases") + ".net"));
-
-        Assert.Equal(
-            kicad.Values.Select(v => string.Join(" ", v)).Order(StringComparer.Ordinal),
-            ours.Values.Select(v => string.Join(" ", v)).Order(StringComparer.Ordinal));
     }
 
     [Fact]

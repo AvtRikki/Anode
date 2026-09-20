@@ -49,7 +49,11 @@ public sealed record SchNet(string Name, bool IsNamed, IReadOnlyList<SchNetPin> 
 public static class SchConnectivity
 {
     /// <summary>The nets of a sheet, in a stable order: named ones first, then by name.</summary>
-    public static IReadOnlyList<SchNet> Build(Schematic sheet)
+    /// <param name="designAliases">
+    /// The bus aliases of the whole design, when there is one: a sheet may use an alias another sheet declares, and
+    /// KiCad looks them up across the design rather than in the file the label stands in.
+    /// </param>
+    public static IReadOnlyList<SchNet> Build(Schematic sheet, IReadOnlyDictionary<string, IReadOnlyList<string>>? designAliases = null)
     {
         var groups = new PointGroups();
         var segments = Segments(sheet);
@@ -106,7 +110,7 @@ public static class SchConnectivity
             Attach(pin.Position);
         }
 
-        var naming = Names(sheet, pins);
+        var naming = Names(sheet, pins, designAliases);
         foreach (var (position, _, _) in naming)
         {
             Attach(position);
@@ -124,7 +128,7 @@ public static class SchConnectivity
             }
         }
 
-        return WithBuses(Assemble(groups, segments, pins, naming, sheet.NoConnects, sheetPins), sheet);
+        return WithBuses(Assemble(groups, segments, pins, naming, sheet.NoConnects, sheetPins), sheet, designAliases);
     }
 
     /// <summary>
@@ -137,9 +141,12 @@ public static class SchConnectivity
     /// bus among its items; one nobody has tapped yet stands as a net with nothing on it, unless the bus runs into a
     /// child sheet, whose pin carries every member of it inward.
     /// </summary>
-    private static IReadOnlyList<SchNet> WithBuses(IReadOnlyList<SchNet> nets, Schematic sheet)
+    private static IReadOnlyList<SchNet> WithBuses(
+        IReadOnlyList<SchNet> nets,
+        Schematic sheet,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? designAliases)
     {
-        var aliases = sheet.BusAliases;
+        var aliases = Aliases(sheet, designAliases);
         var declared = new List<(string Name, SchItem Bus)>();
 
         foreach (var label in sheet.Labels)
@@ -201,11 +208,14 @@ public static class SchConnectivity
     ///
     /// A label naming a bus is left out here: it names several nets at once, which is handled where buses are.
     /// </summary>
-    private static List<(Vector2L Position, string Name, SchItem Item)> Names(Schematic sheet, IReadOnlyList<SchNetPin> pins)
+    private static List<(Vector2L Position, string Name, SchItem Item)> Names(
+        Schematic sheet,
+        IReadOnlyList<SchNetPin> pins,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? designAliases)
     {
         var names = new List<(Vector2L, string, SchItem)>();
 
-        var aliases = sheet.BusAliases;
+        var aliases = Aliases(sheet, designAliases);
         foreach (var label in sheet.Labels.Where(l =>
             l.Kind is SchLabelKind.Local or SchLabelKind.Global or SchLabelKind.Hierarchical))
         {
@@ -225,6 +235,25 @@ public static class SchConnectivity
         }
 
         return names;
+    }
+
+    /// <summary>The aliases a sheet may use: its own, and those the rest of the design declares.</summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> Aliases(
+        Schematic sheet,
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? designAliases)
+    {
+        if (designAliases is null || designAliases.Count == 0)
+        {
+            return sheet.BusAliases;
+        }
+
+        var all = new Dictionary<string, IReadOnlyList<string>>(designAliases, StringComparer.Ordinal);
+        foreach (var (name, members) in sheet.BusAliases)
+        {
+            all[name] = members;
+        }
+
+        return all;
     }
 
     /// <summary>Every pin of every placed part, in sheet coordinates.</summary>
@@ -370,46 +399,4 @@ public static class SchConnectivity
         return bucket;
     }
 
-    /// <summary>Points joined to points: the plainest union-find, keyed by the exact nanometre.</summary>
-    private sealed class PointGroups
-    {
-        private readonly Dictionary<Vector2L, int> _index = [];
-        private readonly List<int> _parent = [];
-
-        public int Add(Vector2L point)
-        {
-            if (_index.TryGetValue(point, out int existing))
-            {
-                return existing;
-            }
-
-            int id = _parent.Count;
-            _parent.Add(id);
-            _index[point] = id;
-            return id;
-        }
-
-        public int Of(Vector2L point) => Root(Add(point));
-
-        public void Join(Vector2L a, Vector2L b)
-        {
-            int rootA = Root(Add(a));
-            int rootB = Root(Add(b));
-            if (rootA != rootB)
-            {
-                _parent[rootB] = rootA;
-            }
-        }
-
-        private int Root(int id)
-        {
-            while (_parent[id] != id)
-            {
-                _parent[id] = _parent[_parent[id]];
-                id = _parent[id];
-            }
-
-            return id;
-        }
-    }
 }

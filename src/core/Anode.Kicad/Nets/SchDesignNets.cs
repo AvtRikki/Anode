@@ -66,13 +66,33 @@ public static class SchDesignNets
         }
 
         var places = SchHierarchy.Walk(rootFile, Open);
+
+        // A sheet may use a bus alias another sheet declares, so the design's aliases are gathered before its nets
+        // are worked out — and the nets of every sheet are then worked out with all of them.
+        var aliases = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var file in read.Values.OfType<(Schematic Sheet, IReadOnlyList<SchNet> Nets)>())
+        {
+            foreach (var (name, members) in file.Sheet.BusAliases)
+            {
+                aliases[name] = members;
+            }
+        }
+
         var locals = new List<(SheetInstance Place, Schematic Sheet, IReadOnlyList<SchNet> Nets)>();
+        var byFile = new Dictionary<string, IReadOnlyList<SchNet>>(StringComparer.Ordinal);
         foreach (var place in places)
         {
-            if (read.GetValueOrDefault(place.File) is { } sheet)
+            if (read.GetValueOrDefault(place.File) is not { } sheet)
             {
-                locals.Add((place, sheet.Sheet, sheet.Nets));
+                continue;
             }
+
+            if (!byFile.TryGetValue(place.File, out var built))
+            {
+                byFile[place.File] = built = SchConnectivity.Build(sheet.Sheet, aliases);
+            }
+
+            locals.Add((place, sheet.Sheet, built));
         }
 
         // One entry per local net; joining is by index, as within a sheet it is by point.
@@ -127,6 +147,24 @@ public static class SchDesignNets
             foreach (var pin in placement.Pins)
             {
                 string name = KicadText.Unescape(pin.Name);
+
+                // A bus pin carries several nets in at once: each member of the bus above meets the member of the
+                // same short name inside, and the plain rule below would fuse the lot into one net.
+                if (SchBusNames.IsBus(name, aliases))
+                {
+                    foreach (var (outside, inside) in Members(locals[parent], parent, place, pin, name, aliases))
+                    {
+                        int here = locals[parent].Nets.ToList().FindIndex(net => net.IsNamed && net.Name == outside);
+                        int there = nets.ToList().FindIndex(net => net.IsNamed && net.Name == inside);
+                        if (here >= 0 && there >= 0)
+                        {
+                            Join(index[(parentPath, locals[parent].Nets[here])], index[(place.Path, nets[there])]);
+                        }
+                    }
+
+                    continue;
+                }
+
                 int above = locals[parent].Nets.ToList().FindIndex(net => net.SheetPins.Contains(pin));
                 int below = nets.ToList().FindIndex(net => net.Items.OfType<SchLabel>()
                     .Any(l => l.Kind == SchLabelKind.Hierarchical && l.Shown == name));
@@ -139,6 +177,42 @@ public static class SchDesignNets
         }
 
         return Assemble(locals, keys, Find);
+    }
+
+    /// <summary>
+    /// The pairs a bus pin joins: a member of the bus the pin stands on, above, and the member of the same short
+    /// name inside the sheet. The bus above names its members — <c>top{a_xyz}</c> gives <c>top.x</c> — while the
+    /// pin and the label inside give theirs; what pairs them is the last part of the name, which is the member.
+    /// </summary>
+    private static IEnumerable<(string Outside, string Inside)> Members(
+        (SheetInstance Place, Schematic Sheet, IReadOnlyList<SchNet> Nets) parent,
+        int parentIndex,
+        SheetInstance place,
+        SchSheetPin pin,
+        string pinName,
+        IReadOnlyDictionary<string, IReadOnlyList<string>> aliases)
+    {
+        // What the bus is called where the pin stands: a label on it, or the pin's own name when nobody wrote one.
+        var bus = SchBuses.Of(parent.Sheet).FirstOrDefault(b => b.SheetPins.Contains(pin));
+        var outside = (bus?.Names.Count > 0 ? bus.Names : [pinName])
+            .SelectMany(n => SchBusNames.Members(n, aliases))
+            .GroupBy(Short, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+
+        foreach (string inside in SchBusNames.Members(pinName, aliases))
+        {
+            if (outside.TryGetValue(Short(inside), out string? above))
+            {
+                yield return (above, inside);
+            }
+        }
+    }
+
+    /// <summary>The member's own name, without the group it came in with: <c>top.x</c> is <c>x</c>.</summary>
+    private static string Short(string member)
+    {
+        int dot = member.LastIndexOf('.');
+        return dot < 0 ? member : member[(dot + 1)..];
     }
 
     private static IReadOnlyList<DesignNet> Assemble(
