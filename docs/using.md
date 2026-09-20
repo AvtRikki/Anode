@@ -1,0 +1,80 @@
+# Using Anode
+
+```bash
+dotnet run --project src/app/Anode.Workbench -- path/to/board.kicad_pcb
+```
+
+A file can also be opened with ⌘O or dropped on the window; the start page lists recent projects. `--lang=ru` sets
+the language, `--renderer=skia` the backend.
+
+## Creating and saving files
+
+New projects and new sheets refuse to replace existing files at their final locations. If a name is already in
+use, choose another name. Repeated requests to open the same file share a single loading operation and tab.
+
+Save As cannot use the path of another open, opening or saving document. Save or close the other tab before
+choosing its path; saving to the current document's own path is allowed.
+
+When a project's hierarchy contains a cyclic reference or an unreadable child sheet, the readable part opens
+and Checks reports the affected file. Hierarchy traversal also has depth and instance limits; a limit warning
+means the design was loaded only partially. Reopen the document after repairing a child file externally to
+refresh these loading diagnostics.
+
+## The window
+
+- **Left top — Project.** The project's schematics and boards, the sheets of a hierarchy under their root. A sheet
+  placed twice appears twice; choosing a place opens that place in the tab.
+- **Left bottom — Layers** (board) **or Nets** (sheet).
+- **Right top — Inspector**, beside the **Components** panel on a sheet.
+- **Bottom — Checks** and **Console.**
+
+Every panel is also an icon in the rail; a stack can be collapsed, and a panel sent to the rail and back. ⌘K opens
+the command palette, which lists every command with its shortcut.
+
+## Looking around
+
+- Wheel: zoom around the cursor. Shift + wheel: pan horizontally.
+- Middle or right drag, or Space + left drag: pan.
+- Home: zoom to fit.
+- The status bar shows the cursor in millimetres, what is selected, the lit net, and the renderer with its frame time.
+
+## Boards
+
+- Click selects; Shift+click adds or removes. Clicking a pad selects its footprint and lights the pad's net.
+- Drag from empty space to box-select: left-to-right takes what is enclosed, right-to-left what is touched.
+- Drag a selected item, or press M and click to place it: the anchor snaps to a 0.1 mm grid.
+- R rotates 90° counter-clockwise, Shift+R clockwise, also while moving. Delete or Backspace deletes.
+- Esc cancels a move or clears the selection.
+- The layers panel shows copper first with a digit each; a click hides or shows a layer, and the button at the bottom
+  lists every layer the board has rather than the usual few.
+
+## Schematics
+
+- The same selection, move, rotate and delete; M, R, Shift+R, and Y and X mirror.
+- Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, line, rectangle,
+  circle. Esc returns to selecting.
+- The components panel searches the symbol libraries and places a part; the pointer stays armed, so a row of them
+  can be laid down. A part drawn in sections asks which one to place.
+- The nets panel lists the nets of the sheet with what each reaches; a switch turns it to the whole design's nets.
+  Choosing a row lights that net, choosing it again puts it out. The backquote does the same from a selection.
+- Annotation numbers the parts that carry no number yet, per place in the hierarchy.
+
+## The inspector
+
+With something selected, the inspector describes it in blocks — what it is, what it connects to, how it is set, where
+it stands. A value on the field fill can be written; a bare one was computed. E puts the caret in the first value
+that can be written.
+
+With nothing selected it describes the document itself: a sheet its paper, title block, contents, nets and checks; a
+board its size, layers, what is placed and routed. The title block is written from there, and so is which fonts the
+file carries.
+
+## Checks
+
+The bottom dock lists what the checks found, each with a place and a button that shows it. They are recomputed as the
+document changes; a project's missing drawing sheet or a font this machine lacks is reported there too.
+
+## Files
+
+⌘S saves, ⌘⇧S saves as. Undoing every edit gives the file back byte for byte, so saving an untouched file changes
+nothing. Closing a document with unsaved changes, or opening another one, asks first.
