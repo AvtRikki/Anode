@@ -90,4 +90,41 @@ public class StrokeDashTests
             Assert.Equal(piece.To.X * 4 / 3, piece.To.Y, 3);
         });
     }
+
+    [Fact]
+    public void A_step_that_does_not_move_along_the_line_ends_the_cutting()
+    {
+        // A pattern whose lengths are lost in the rounding would otherwise go round for ever, drawing pieces on top
+        // of each other until the memory ran out. What is left of the line is drawn as it stands instead.
+        var piece = Assert.Single(StrokeDashes.Cut(new Vector2(0, 0), new Vector2(10, 0), [0f, 0f]));
+
+        Assert.Equal(new Vector2(0, 0), piece.From);
+        Assert.Equal(new Vector2(10, 0), piece.To);
+    }
+
+    [Fact]
+    public void The_pieces_of_any_pattern_are_few_enough_to_draw_and_stay_on_the_line()
+    {
+        // Widths from a hair to a hand, over a line long enough to be worth cutting.
+        foreach (float width in new[] { 0.0001f, 0.01f, 0.1524f, 1f, 10f })
+        {
+            var pattern = StrokeDashes.Pattern("dash_dot_dot", width)!;
+            var pieces = StrokeDashes.Cut(new Vector2(0, 0), new Vector2(500, 0), pattern).Take(20_000).ToList();
+
+            // Cutting a hairline into a hundred thousand pieces would cost a great deal to draw something that
+            // looks exactly like the line it started as, so there is an end to how finely a line is cut.
+            Assert.InRange(pieces.Count, 1, 4_000);
+            Assert.All(pieces, piece => Assert.InRange(piece.To.X, 0, 500));
+        }
+    }
+
+    [Fact]
+    public void A_line_whose_dashes_are_too_fine_to_tell_apart_is_drawn_whole()
+    {
+        var pattern = StrokeDashes.Pattern("dash", 0.0001f)!;
+        var piece = Assert.Single(StrokeDashes.Cut(new Vector2(0, 0), new Vector2(500, 0), pattern));
+
+        Assert.Equal(new Vector2(0, 0), piece.From);
+        Assert.Equal(new Vector2(500, 0), piece.To);
+    }
 }

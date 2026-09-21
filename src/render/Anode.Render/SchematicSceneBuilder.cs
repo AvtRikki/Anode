@@ -176,6 +176,9 @@ public static class SchematicSceneBuilder
                 case SchRuleArea area:
                     AddRuleArea(area, scene.AddOwner(area));
                     break;
+                case SchTable table:
+                    AddTable(table, scene.AddOwner(table));
+                    break;
                 case SchSheet sheet:
                     AddSheet(sheet, scene.AddOwner(sheet));
                     break;
@@ -216,7 +219,9 @@ public static class SchematicSceneBuilder
                 var t = symbol.ToSheet;
                 foreach (var graphic in definition.GraphicsOf(unit, symbol.BodyStyle))
                 {
-                    AddGraphic(graphic, t, LayerStyle.Sch.Symbol, owner);
+                    // A shape inside a part is styled like any other: how it is drawn should not depend on whether
+                    // it was drawn on the sheet or in the library it came from.
+                    Styled(graphic.StrokeStyle, () => AddGraphic(graphic, t, LayerStyle.Sch.Symbol, owner));
                 }
 
                 foreach (var pin in definition.PinsOf(unit, symbol.BodyStyle))
@@ -303,6 +308,96 @@ public static class SchematicSceneBuilder
         }
 
         /// <summary>
+        /// A table: the text of every cell, and the lines between them. KiCad draws the lines cell by cell rather
+        /// than from the grid — each cell draws its own right and bottom edge unless it reaches the table's edge —
+        /// which is what makes a cell spanning two columns leave out the line it spans.
+        ///
+        /// The first row's lines are the border's rather than the separators', when the table asks for a header.
+        /// </summary>
+        private void AddTable(SchTable table, int owner)
+        {
+            if (table.Cells.Count == 0)
+            {
+                return;
+            }
+
+            long right = table.Cells.Max(c => c.Position.X + c.Size.X);
+            long bottom = table.Cells.Max(c => c.Position.Y + c.Size.Y);
+            long left = table.Cells.Min(c => c.Position.X);
+            long top = table.Cells.Min(c => c.Position.Y);
+
+            foreach (var cell in table.Cells)
+            {
+                AddTableCell(cell, owner);
+            }
+
+            long borderWidth = table.BorderWidth > 0 ? table.BorderWidth : SymbolWidth;
+            long separatorWidth = table.SeparatorWidth > 0 ? table.SeparatorWidth : SymbolWidth;
+
+            foreach (var cell in table.Cells)
+            {
+                var corner = cell.Position;
+                var far = new Vector2L(corner.X + cell.Size.X, corner.Y + cell.Size.Y);
+                bool header = table.HasHeaderSeparator && corner.Y == top;
+
+                if (far.X < right && (header || table.SeparatesColumns))
+                {
+                    Styled(header ? table.BorderStyle : table.SeparatorStyle, () =>
+                        Line(LayerStyle.Sch.Text, new Vector2D(far.X, corner.Y), far.ToDouble(),
+                            header ? borderWidth : separatorWidth, owner));
+                }
+
+                if (far.Y < bottom && (header || table.SeparatesRows))
+                {
+                    Styled(header ? table.BorderStyle : table.SeparatorStyle, () =>
+                        Line(LayerStyle.Sch.Text, new Vector2D(corner.X, far.Y), far.ToDouble(),
+                            header ? borderWidth : separatorWidth, owner));
+                }
+            }
+
+            if (table.HasBorder)
+            {
+                Vector2D[] corners = [new(left, top), new(right, top), new(right, bottom), new(left, bottom)];
+                Styled(table.BorderStyle, () =>
+                    Outline(LayerStyle.Sch.Text, corners, borderWidth, false, Transform2D.Identity, owner));
+            }
+        }
+
+        /// <summary>
+        /// The text of one cell, kept inside the box by its own margins and put where its justification asks: at the
+        /// left margin when it reads from the left, at the right margin when from the right, in the middle when
+        /// centred — and the same down the box.
+        /// </summary>
+        private void AddTableCell(SchTableCell cell, int owner)
+        {
+            if (cell.Shown.Length == 0)
+            {
+                return;
+            }
+
+            var (horizontal, vertical) = cell.Alignment;
+            var corner = cell.Position;
+            var margins = cell.Margins;
+
+            double x = horizontal switch
+            {
+                "right" => corner.X + cell.Size.X - margins.Right,
+                "center" => corner.X + (cell.Size.X / 2.0),
+                _ => corner.X + margins.Left,
+            };
+
+            double y = vertical switch
+            {
+                "bottom" => corner.Y + cell.Size.Y - margins.Bottom,
+                "center" => corner.Y + (cell.Size.Y / 2.0),
+                _ => corner.Y + margins.Top,
+            };
+
+            Text(LayerStyle.Sch.Text, cell.Shown, new Vector2D(x, y), cell.TextHeight, cell.Font, cell.Angle,
+                (horizontal, vertical), owner);
+        }
+
+        /// <summary>
         /// An area the design rules are told about. Its outline is a closed shape — the file lists its corners once
         /// and means the boundary to come back round, so drawing it as an open polyline would leave a gap along the
         /// side that matters most.
@@ -348,6 +443,17 @@ public static class SchematicSceneBuilder
                     }
 
                     Polyline(layer, points, width, toSheet, owner);
+                    break;
+
+                case SchShapeKind.Ellipse:
+                case SchShapeKind.EllipseArc:
+                    var ellipse = Ellipse(graphic);
+                    if (graphic.IsFilled && graphic.Kind == SchShapeKind.Ellipse)
+                    {
+                        Polygon(layer, ellipse, toSheet, owner);
+                    }
+
+                    Polyline(layer, ellipse, width, toSheet, owner);
                     break;
 
                 case SchShapeKind.Circle:
@@ -442,6 +548,36 @@ public static class SchematicSceneBuilder
             {
                 LineScene(layer, points[i - 1], points[i], widthNm, owner);
             }
+        }
+
+        /// <summary>
+        /// An ellipse as a run of points: KiCad turns one by its rotation and, for an arc, draws only the sweep
+        /// between its two angles. A whole ellipse comes back round to where it started, so the run closes.
+        /// </summary>
+        private static Vector2D[] Ellipse(SchGraphic graphic)
+        {
+            const int steps = 64;
+            double major = graphic.MajorRadius, minor = graphic.MinorRadius;
+            var centre = graphic.Center.ToDouble();
+            double turn = graphic.RotationAngle * Math.PI / 180;
+            double cos = Math.Cos(turn), sin = Math.Sin(turn);
+
+            bool whole = graphic.Kind == SchShapeKind.Ellipse;
+            var (from, to) = whole ? (0.0, 360.0) : graphic.SweepAngles;
+            if (!whole && to <= from)
+            {
+                to += 360;
+            }
+
+            var points = new Vector2D[steps + 1];
+            for (int i = 0; i <= steps; i++)
+            {
+                double angle = (from + ((to - from) * i / steps)) * Math.PI / 180;
+                double x = major * Math.Cos(angle), y = minor * Math.Sin(angle);
+                points[i] = new Vector2D(centre.X + (x * cos) - (y * sin), centre.Y + (x * sin) + (y * cos));
+            }
+
+            return points;
         }
 
         private void Outline(string layer, Vector2D[] points, long widthNm, bool filled, Transform2D t, int owner)

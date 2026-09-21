@@ -77,6 +77,8 @@ public enum SchShapeKind
     Circle,
     Arc,
     Bezier,
+    Ellipse,
+    EllipseArc,
     Unsupported,
 }
 
@@ -90,6 +92,8 @@ public sealed class SchGraphic(SList node) : SchItem(node)
         "circle" => SchShapeKind.Circle,
         "arc" => SchShapeKind.Arc,
         "bezier" => SchShapeKind.Bezier,
+        "ellipse" => SchShapeKind.Ellipse,
+        "ellipse_arc" => SchShapeKind.EllipseArc,
         _ => SchShapeKind.Unsupported,
     };
 
@@ -104,6 +108,19 @@ public sealed class SchGraphic(SList node) : SchItem(node)
     /// <summary>Schematic circles store the radius, unlike board circles.</summary>
     public long Radius => Node.ChildNm("radius") ?? 0;
 
+    /// <summary>The long half of an ellipse, along the direction its rotation gives.</summary>
+    public long MajorRadius => Node.ChildNm("major_radius") ?? 0;
+
+    /// <summary>The short half of an ellipse, across that direction.</summary>
+    public long MinorRadius => Node.ChildNm("minor_radius") ?? 0;
+
+    /// <summary>How far the ellipse is turned, in degrees.</summary>
+    public double RotationAngle => Node.ChildDouble("rotation_angle") ?? 0;
+
+    /// <summary>Where an elliptical arc begins and ends, in degrees; a whole ellipse ignores them.</summary>
+    public (double Start, double End) SweepAngles =>
+        (Node.ChildDouble("start_angle") ?? 0, Node.ChildDouble("end_angle") ?? 90);
+
     public Vector2L[] Points => Node.Find("pts")?.Points() ?? [];
 
     /// <summary>Filled bodies are drawn in their fill colour; <c>none</c> and <c>background</c> stay outlines.</summary>
@@ -113,7 +130,8 @@ public sealed class SchGraphic(SList node) : SchItem(node)
         ? ArcMath.FromStartMidEnd(Start.ToDouble(), Mid.ToDouble(), End.ToDouble())
         : null;
 
-    public static bool IsGraphicHead(string? head) => head is "polyline" or "rectangle" or "circle" or "arc" or "bezier";
+    public static bool IsGraphicHead(string? head) =>
+        head is "polyline" or "rectangle" or "circle" or "arc" or "bezier" or "ellipse" or "ellipse_arc";
 }
 
 /// <summary>A pin of a symbol definition: the line sticking out of the body, plus its name and number.</summary>
@@ -342,6 +360,16 @@ public sealed class SymbolInstance : SchItem
 
     public bool IsDnp => Node.ChildBool("dnp");
 
+    /// <summary>
+    /// Whether the part belongs on the bill of materials. KiCad says this the positive way round — <c>(in_bom no)</c>
+    /// is what keeps a part off the bill — and a part that says nothing is on it. The board's files spell the same
+    /// idea as <c>exclude_from_bom</c>, which is a word the schematic format does not have at all.
+    /// </summary>
+    public bool InBom => Node.ChildBool("in_bom", true);
+
+    /// <summary>Whether the part is meant to reach the board, as <c>(on_board no)</c> says it is not.</summary>
+    public bool OnBoard => Node.ChildBool("on_board", true);
+
     /// <summary><c>(mirror y)</c> flips the symbol left to right, <c>(mirror x)</c> top to bottom.</summary>
     public string? Mirror => Node.Find("mirror")?.Str(1);
 
@@ -559,6 +587,91 @@ public sealed class SchText(SList node) : SchItem(node)
     public long TextHeight => FontHeight(1_270_000);
 
     public (string Horizontal, string Vertical) Alignment => Justify();
+}
+
+/// <summary>
+/// One cell of a table: a piece of text in a box of its own. The point it carries is the box's top-left corner,
+/// and the margins are the space kept clear inside it.
+/// </summary>
+public sealed class SchTableCell(SList node) : SchItem(node)
+{
+    public string Text => Node.Str(1) ?? string.Empty;
+
+    public string Shown => KicadText.Unescape(Text);
+
+    public Vector2L Size => Node.ChildPoint("size") ?? default;
+
+    public long TextHeight => FontHeight(1_270_000);
+
+    public (string Horizontal, string Vertical) Alignment => Justify();
+
+    /// <summary>How far the text is kept from each side: left, top, right, bottom, in nanometres.</summary>
+    public (long Left, long Top, long Right, long Bottom) Margins
+    {
+        get
+        {
+            if (Node.Find("margins") is not { } margins)
+            {
+                return default;
+            }
+
+            long At(int index) => margins.AtomAt(index) is { } atom && double.TryParse(
+                atom.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double mm)
+                ? (long)Math.Round(mm * 1_000_000)
+                : 0;
+
+            return (At(1), At(2), At(3), At(4));
+        }
+    }
+}
+
+/// <summary>
+/// A table drawn on the sheet: cells of text in a grid, with borders around and between them. What is drawn between
+/// the cells is the table's to say — a border round the outside, a line under the header row, lines between rows,
+/// lines between columns — and each may be off.
+/// </summary>
+public sealed class SchTable : SchItem
+{
+    private readonly List<SchTableCell> _cells = [];
+
+    internal SchTable(SList node)
+        : base(node)
+    {
+        Rebuild();
+    }
+
+    public IReadOnlyList<SchTableCell> Cells => _cells;
+
+    public int ColumnCount => (int)(Node.ChildDouble("column_count") ?? 0);
+
+    /// <summary>Whether a line is drawn round the whole table.</summary>
+    public bool HasBorder => Node.Find("border")?.ChildBool("external") ?? false;
+
+    /// <summary>Whether the first row is separated from the rest, which is drawn in the border's own stroke.</summary>
+    public bool HasHeaderSeparator => Node.Find("border")?.ChildBool("header") ?? false;
+
+    public bool SeparatesRows => Node.Find("separators")?.ChildBool("rows") ?? false;
+
+    public bool SeparatesColumns => Node.Find("separators")?.ChildBool("cols") ?? false;
+
+    public long BorderWidth => Node.Find("border")?.Find("stroke")?.ChildNm("width") ?? 0;
+
+    public string BorderStyle => Node.Find("border")?.Find("stroke")?.ChildString("type") ?? "default";
+
+    public long SeparatorWidth => Node.Find("separators")?.Find("stroke")?.ChildNm("width") ?? 0;
+
+    public string SeparatorStyle => Node.Find("separators")?.Find("stroke")?.ChildString("type") ?? "default";
+
+    public override void AfterRestore() => Rebuild();
+
+    private void Rebuild()
+    {
+        _cells.Clear();
+        foreach (var cell in Node.Find("cells")?.Lists().Where(l => l.Head == "table_cell") ?? [])
+        {
+            _cells.Add(new SchTableCell(cell));
+        }
+    }
 }
 
 /// <summary>A pin on the border of a child sheet.</summary>

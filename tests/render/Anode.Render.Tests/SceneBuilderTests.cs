@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Tests;
 
@@ -219,5 +220,116 @@ public class SceneBuilderTests(ITestOutputHelper output)
             float at = System.Numerics.Vector2.Dot(offset, along) / length;
             return across < 0.001f && at >= -0.001f && at <= length + 0.001f;
         }
+    }
+
+    /// <summary>
+    /// A table's lines are drawn cell by cell, as KiCad draws them: each cell adds its right and bottom edge unless
+    /// it already reaches the table's own edge, and the border goes round the outside.
+    /// </summary>
+    [Fact]
+    public void A_tables_lines_are_the_edges_of_its_cells()
+    {
+        string file = Path.Combine(TestData.KiCadDir, "demos", "jetson-agx-thor-baseboard", "power.kicad_sch");
+        Assert.SkipUnless(File.Exists(file), TestData.SkipReason);
+
+        var sheet = Anode.Kicad.Schematic.Load(file);
+        var table = sheet.Tables[0];
+        var scene = SchematicSceneBuilder.Build(sheet);
+        var drawn = scene.Layers.Where(l => l.Name == LayerStyle.Sch.Text).SelectMany(l => l.Lines).ToList();
+
+        long right = table.Cells.Max(c => c.Position.X + c.Size.X);
+        long bottom = table.Cells.Max(c => c.Position.Y + c.Size.Y);
+        long left = table.Cells.Min(c => c.Position.X);
+        long top = table.Cells.Min(c => c.Position.Y);
+
+        // Every cell that does not reach the edge is separated from its neighbour, right and below.
+        foreach (var cell in table.Cells)
+        {
+            var far = new Vector2L(cell.Position.X + cell.Size.X, cell.Position.Y + cell.Size.Y);
+
+            if (far.X < right)
+            {
+                AssertDrawn(new Vector2L(far.X, cell.Position.Y), far);
+            }
+
+            if (far.Y < bottom)
+            {
+                AssertDrawn(new Vector2L(cell.Position.X, far.Y), far);
+            }
+        }
+
+        // And the border runs round the outside.
+        AssertDrawn(new Vector2L(left, top), new Vector2L(right, top));
+        AssertDrawn(new Vector2L(right, bottom), new Vector2L(left, bottom));
+
+        void AssertDrawn(Vector2L from, Vector2L to)
+        {
+            var a = scene.ToScene(from.ToDouble());
+            var b = scene.ToScene(to.ToDouble());
+            Assert.Contains(drawn, line =>
+                (Close(line.A, a) && Close(line.B, b)) || (Close(line.A, b) && Close(line.B, a)));
+        }
+
+        static bool Close(System.Numerics.Vector2 p, System.Numerics.Vector2 q) =>
+            Math.Abs(p.X - q.X) < 0.001f && Math.Abs(p.Y - q.Y) < 0.001f;
+    }
+
+    /// <summary>
+    /// The ellipses KiCad 10 added. There are none in its own demos yet, so these are written by hand: what matters
+    /// is that an ellipse is drawn as the ellipse it describes and an elliptical arc as only its sweep.
+    /// </summary>
+    [Fact]
+    public void An_ellipse_is_drawn_round_its_centre_at_its_two_radii()
+    {
+        var sheet = Anode.Kicad.Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(ellipse (center 100 50) (major_radius 20) (minor_radius 10) (rotation_angle 0)\n"
+            + "\t\t(stroke (width 0.1524) (type solid)) (fill (type none)) (uuid \"0a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        var graphic = Assert.Single(sheet.Graphics);
+        Assert.Equal(SchShapeKind.Ellipse, graphic.Kind);
+
+        var lines = SchematicSceneBuilder.Build(sheet).Layers
+            .Where(l => l.Name == LayerStyle.Sch.Symbol).SelectMany(l => l.Lines).ToList();
+        Assert.NotEmpty(lines);
+
+        // Every point of it lies on the ellipse: twenty across, ten down, about the centre it was given.
+        var scene = SchematicSceneBuilder.Build(sheet);
+        var centre = scene.ToScene(new Vector2D(100_000_000, 50_000_000));
+        foreach (var point in lines.Select(l => l.A).Concat(lines.Select(l => l.B)))
+        {
+            double dx = (point.X - centre.X) / 20;
+            double dy = (point.Y - centre.Y) / 10;
+            Assert.Equal(1, (dx * dx) + (dy * dy), 2);
+        }
+
+        // And it comes back round to where it started.
+        Assert.Equal(lines[0].A.X, lines[^1].B.X, 3);
+        Assert.Equal(lines[0].A.Y, lines[^1].B.Y, 3);
+    }
+
+    [Fact]
+    public void An_elliptical_arc_is_drawn_only_between_its_angles()
+    {
+        var sheet = Anode.Kicad.Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(ellipse_arc (center 100 50) (major_radius 20) (minor_radius 10) (rotation_angle 0)\n"
+            + "\t\t(start_angle 0) (end_angle 90)\n"
+            + "\t\t(stroke (width 0.1524) (type solid)) (fill (type none)) (uuid \"0a1b2c3d-0000-4000-8000-000000000002\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        var scene = SchematicSceneBuilder.Build(sheet);
+        var lines = scene.Layers.Where(l => l.Name == LayerStyle.Sch.Symbol).SelectMany(l => l.Lines).ToList();
+        var centre = scene.ToScene(new Vector2D(100_000_000, 50_000_000));
+
+        Assert.NotEmpty(lines);
+
+        // A quarter turn: it starts to the right of the centre and ends below it, and never crosses back over.
+        Assert.Equal(centre.X + 20, lines[0].A.X, 2);
+        Assert.Equal(centre.Y, lines[0].A.Y, 2);
+        Assert.Equal(centre.X, lines[^1].B.X, 2);
+        Assert.Equal(centre.Y + 10, lines[^1].B.Y, 2);
+        Assert.All(lines, line => Assert.True(line.A.X >= centre.X - 0.01f, "the arc ran past its start"));
     }
 }

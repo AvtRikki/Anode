@@ -32,7 +32,7 @@ editing pads or footprints.
 Read and drawn: symbols with their libraries' definitions, units and body styles, wires and buses, junctions,
 no-connects, bus entries, labels of every kind (local, global, hierarchical, net-class flags), text and text boxes,
 graphics, sheets and their pins, pictures the sheet carries (PNG, drawn about their point at the size the picture
-itself gives), rule areas (drawn closed, as the boundary they are), the title block, and instance data — the
+itself gives), rule areas (drawn closed, as the boundary they are), tables, the title block, and instance data — the
 designator and unit a part carries in each place of the hierarchy.
 
 A stroke's style is read: a line written as dashed, dotted or a mixture of the two is drawn that way, with the
@@ -40,7 +40,14 @@ lengths KiCad takes from ISO 128-2 — eleven widths of dash, a fifth of a width
 cutting is done in the world the drawing lives in, so a dash is a length on the sheet and looks the same at any
 zoom and through either backend.
 
-Not drawn, though kept in the file untouched: tables, groups, and the ellipses KiCad 10 added.
+Tables are drawn as KiCad draws them: the text of every cell inside its own margins, and the lines between the
+cells added cell by cell — each one draws its right and bottom edge unless it already reaches the table's edge,
+which is what makes a cell spanning two columns leave out the line it spans. The first row's lines are the border's
+rather than the separators', when the table asks for a header. Ellipses and elliptical arcs, which KiCad 10 added
+and none of its demos use yet, are drawn too.
+
+A group is not drawn, and KiCad does not draw one either: it is a way of holding items together, and only its
+members are ever on the page. What we lack is selecting them together, which belongs with editing rather than here.
 
 Edited: everything above can be moved, rotated, mirrored and deleted; wires, buses, labels, junctions, no-connects,
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries
