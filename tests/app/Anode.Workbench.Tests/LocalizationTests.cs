@@ -9,6 +9,15 @@ public class LocalizationTests
 {
     private static readonly CultureInfo Russian = CultureInfo.GetCultureInfo("ru");
 
+    /// <summary>
+    /// Runs a test that moves the language, or the catalogs, out from under everything else. Both are global, and
+    /// xUnit runs test classes side by side, so a test doing this on a thread of its own can flip the interface to
+    /// Russian while another test is reading an English menu off the screen — which fails rarely and for no reason
+    /// anyone can see. The headless session runs one body at a time, and puts the language back after each, so
+    /// borrowing its thread is what keeps these tests to themselves.
+    /// </summary>
+    private static Task Alone(Action body) => ShellWindowTests.Dispatch(_ => body());
+
     public static TheoryData<string> CatalogAssemblies() =>
     [
         typeof(App).Assembly.Location,
@@ -37,7 +46,7 @@ public class LocalizationTests
     }
 
     [Fact]
-    public void Texts_fall_back_to_english_and_finally_to_the_key()
+    public Task Texts_fall_back_to_english_and_finally_to_the_key() => Alone(() =>
     {
         var catalog = JsonTextCatalog.FromTexts(
             ("en", new Dictionary<string, string> { ["a"] = "A", ["b"] = "B" }),
@@ -56,10 +65,10 @@ public class LocalizationTests
 
         // Once the catalog is gone the key is all that is left.
         Assert.Equal("a", Tr.T("a"));
-    }
+    });
 
     [Fact]
-    public void Diagnostic_text_stays_english_when_interface_language_changes()
+    public Task Diagnostic_text_stays_english_when_interface_language_changes() => Alone(() =>
     {
         using var registration = Tr.Register(JsonTextCatalog.FromTexts(
             ("en", new Dictionary<string, string> { ["test.diagnostic"] = "Loaded {0}: {1:F1}." }),
@@ -77,10 +86,10 @@ public class LocalizationTests
         {
             Tr.SetCulture(previous);
         }
-    }
+    });
 
     [Fact]
-    public void Plurals_follow_the_language()
+    public Task Plurals_follow_the_language() => Alone(() =>
     {
         var catalog = JsonTextCatalog.FromTexts(
             ("en", new Dictionary<string, string> { ["layer.one"] = "layer", ["layer.other"] = "layers" }),
@@ -99,10 +108,10 @@ public class LocalizationTests
             Assert.Equal("слой", Tr.Plural("layer", 21));
             Tr.SetCulture(Tr.Neutral);
         }
-    }
+    });
 
     [Fact]
-    public void Available_languages_include_every_catalog_and_english()
+    public Task Available_languages_include_every_catalog_and_english() => Alone(() =>
     {
         using (Tr.Register(JsonTextCatalog.FromAssembly(typeof(App).Assembly)))
         {
@@ -111,5 +120,5 @@ public class LocalizationTests
             Assert.Equal("ru", Tr.Match(CultureInfo.GetCultureInfo("ru-RU")).Name);
             Assert.Equal("en", Tr.Match(CultureInfo.GetCultureInfo("fr-FR")).Name);
         }
-    }
+    });
 }

@@ -115,7 +115,7 @@ public class ShellServicesTests
     }
 
     [Fact]
-    public void Recent_projects_keep_most_recent_first_without_duplicates()
+    public async Task Recent_projects_keep_most_recent_first_without_duplicates()
     {
         string file = Path.Combine(Path.GetTempPath(), $"recent-{Guid.NewGuid():N}.json");
         try
@@ -128,11 +128,16 @@ public class ShellServicesTests
 
             Assert.Equal(["a", "b"], list.Select(p => p.Name));
             Assert.Equal(list, store.Load());
-            using (Tr.Register(JsonTextCatalog.FromAssembly(typeof(App).Assembly)))
+            // Registering a catalog tells every live view to rebuild, which is the headless session's business:
+            // done from a thread of its own it reaches views whose application is not there to be read.
+            await ShellWindowTests.Dispatch(_ =>
             {
-                Assert.Equal("12 min ago", RecentProjectsStore.Ago(now, now.AddMinutes(12)));
-                Assert.Equal("yesterday", RecentProjectsStore.Ago(now, now.AddHours(30)));
-            }
+                using (Tr.Register(JsonTextCatalog.FromAssembly(typeof(App).Assembly)))
+                {
+                    Assert.Equal("12 min ago", RecentProjectsStore.Ago(now, now.AddMinutes(12)));
+                    Assert.Equal("yesterday", RecentProjectsStore.Ago(now, now.AddHours(30)));
+                }
+            });
         }
         finally
         {
