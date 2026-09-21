@@ -70,8 +70,8 @@ public static class SchErc
             var pins = net.Pins
                 .GroupBy(p => (p.Reference, p.Pin.Number))
                 .Select(g => g.First())
-                .OrderBy(p => p.Reference, StringComparer.Ordinal)
-                .ThenBy(p => p.Pin.Number, StringComparer.Ordinal)
+                .OrderBy(p => p.Reference, KicadOrder.Instance)
+                .ThenBy(p => p.Pin.Number, KicadOrder.Instance)
                 .ToList();
 
             if (pins.Count == 0)
@@ -83,17 +83,7 @@ public static class SchErc
             bool driven = pins.Any(p => (power ? DrivingPower : Driving).Contains(Type(p)));
             bool marked = net.Parts.Any(part => part.Net.IsNoConnect);
 
-            // Every pair that may not meet; what to show of them is the caller's to decide.
-            for (int i = 0; i < pins.Count; i++)
-            {
-                for (int j = i + 1; j < pins.Count; j++)
-                {
-                    if (settings.Conflict(Type(pins[i]), Type(pins[j])) is { } severity)
-                    {
-                        findings.Add(new ErcFinding(ErcKind.PinConflict, severity, net, [pins[i], pins[j]]));
-                    }
-                }
-            }
+            findings.AddRange(Conflicts(net, pins, settings));
 
             var kind = power ? ErcKind.PowerNotDriven : ErcKind.NotDriven;
             if (!driven && !marked && settings.Severity(kind) is { } howBad
@@ -161,6 +151,121 @@ public static class SchErc
 
         return findings;
     }
+
+    /// <summary>
+    /// The conflicts of one net, condensed as KiCad condenses them (<c>ERC_TESTER::TestPinToPin</c>). Every pair
+    /// that may not meet is found first, but they are not all reported: a net where six pins quarrel has fifteen
+    /// pairs, and fifteen lines saying the same thing is a list nobody reads.
+    ///
+    /// So the pins are taken in the order of how well each speaks for a conflict — an unspecified pin says more
+    /// than a power output, which is what KiCad's weights mean — and each one, in its turn, swallows every pair it
+    /// takes part in and is reported once, against whichever of those partners is nearest to it on the sheet. A
+    /// partner on another sheet is taken only while nothing on this one has been found.
+    /// </summary>
+    private static IEnumerable<ErcFinding> Conflicts(DesignNet net, List<DesignPin> pins, ErcRules settings)
+    {
+        var mismatches = new List<(int First, int Second, ErcSeverity Severity)>();
+        for (int i = 0; i < pins.Count; i++)
+        {
+            for (int j = i + 1; j < pins.Count; j++)
+            {
+                if (!Stacked(pins[i], pins[j]) && settings.Conflict(Type(pins[i]), Type(pins[j])) is { } severity)
+                {
+                    mismatches.Add((i, j, severity));
+                }
+            }
+        }
+
+        var order = Enumerable.Range(0, pins.Count)
+            .Where(i => mismatches.Any(m => m.First == i || m.Second == i))
+            .OrderByDescending(i => Weight(Type(pins[i])))
+            .ThenBy(i => i)
+            .ToList();
+
+        var findings = new List<ErcFinding>();
+        foreach (int i in order)
+        {
+            if (mismatches.Count == 0)
+            {
+                break;
+            }
+
+            int nearest = -1;
+            double smallest = double.PositiveInfinity;
+            var severity = ErcSeverity.Warning;
+
+            mismatches.RemoveAll(m =>
+            {
+                int other = m.First == i ? m.Second : m.Second == i ? m.First : -1;
+                if (other < 0)
+                {
+                    return false;
+                }
+
+                if (pins[i].Place.Path != pins[other].Place.Path)
+                {
+                    if (double.IsInfinity(smallest))
+                    {
+                        (nearest, severity) = (other, m.Severity);
+                    }
+                }
+                else
+                {
+                    double distance = Distance(pins[i], pins[other]);
+                    if (double.IsInfinity(smallest) || distance < smallest)
+                    {
+                        (smallest, nearest, severity) = (distance, other, m.Severity);
+                    }
+                }
+
+                return true;
+            });
+
+            if (nearest >= 0)
+            {
+                findings.Add(new ErcFinding(ErcKind.PinConflict, severity, net, [pins[i], pins[nearest]]));
+            }
+        }
+
+        return findings;
+    }
+
+    /// <summary>
+    /// Pins of one part drawn on top of each other — the several ground pins of a chip, shown as one — are stacked,
+    /// and stacked pins are one connection, not a conflict with themselves.
+    /// </summary>
+    private static bool Stacked(DesignPin first, DesignPin second) =>
+        first.Place.Path == second.Place.Path
+        && string.Equals(first.Reference, second.Reference, StringComparison.Ordinal)
+        && first.Pin.At == second.Pin.At
+        && string.Equals(first.Pin.Pin.Name, second.Pin.Pin.Name, StringComparison.Ordinal)
+        && string.Equals(Type(first), Type(second), StringComparison.Ordinal);
+
+    private static double Distance(DesignPin first, DesignPin second)
+    {
+        double dx = first.Pin.At.X - second.Pin.At.X, dy = first.Pin.At.Y - second.Pin.At.Y;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
+    /// <summary>
+    /// How well a pin type speaks for a conflict, as KiCad weighs them: the vaguer the type, the more likely it is
+    /// the one at fault and so the one the finding is written against.
+    /// </summary>
+    private static int Weight(string type) => type switch
+    {
+        "free" => 11,
+        "unspecified" => 10,
+        "passive" => 9,
+        "open_collector" => 8,
+        "open_emitter" => 7,
+        "input" => 6,
+        "tri_state" => 5,
+        "bidirectional" => 4,
+        "output" => 3,
+        "power_in" => 2,
+        "power_out" => 1,
+        _ => 0,
+    };
 
     /// <summary>What KiCad's own matrix says about two pin types meeting; null when they may.</summary>
     public static ErcSeverity? Conflict(string first, string second) => ErcRules.Default.Conflict(first, second);

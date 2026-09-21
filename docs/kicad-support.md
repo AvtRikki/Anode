@@ -91,9 +91,16 @@ A part that carries a second body — KiCad's De Morgan alternative — can be s
 drawn from the inspector, and is drawn, wired and counted from the bodies of the way it is in. A body written for
 unit 0 is common to every section but still belongs to one way of drawing, which is the rule KiCad reads it by.
 
-Not done: renumbering a design that is already numbered (annotation only fills in what is missing), the exclusions
-a project lists for single findings, and condensing a conflict as KiCad condenses it rather than reporting each
-pair of pins.
+A net where many pins quarrel is not a line for every pair, which KiCad also refuses to be: the pins are taken in
+the order of how well each type speaks for a conflict — an unspecified pin says more than a power output, which is
+what KiCad's weights mean — and each pin swallows every pair it takes part in and is reported once, against
+whichever of those partners stands nearest to it. A partner on another sheet is taken only while nothing on this one
+has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
+connection rather than a quarrel with themselves.
+
+Not done: renumbering a design that is already numbered (annotation only fills in what is missing), and the
+exclusions a project lists for single findings — matching one needs the marker written exactly as KiCad writes it,
+down to its position.
 
 ## Drawing sheets (`.kicad_wks`)
 
