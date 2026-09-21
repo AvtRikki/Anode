@@ -370,6 +370,9 @@ public sealed class SymbolInstance : SchItem
     /// <summary>Whether the part is meant to reach the board, as <c>(on_board no)</c> says it is not.</summary>
     public bool OnBoard => Node.ChildBool("on_board", true);
 
+    /// <summary>Whether the part is kept out of simulation. This one KiCad writes the excluding way round.</summary>
+    public bool ExcludedFromSim => Node.ChildBool("exclude_from_sim");
+
     /// <summary><c>(mirror y)</c> flips the symbol left to right, <c>(mirror x)</c> top to bottom.</summary>
     public string? Mirror => Node.Find("mirror")?.Str(1);
 
@@ -730,4 +733,27 @@ public sealed class SchSheet : SchItem
     public string? SheetName => _fields.FirstOrDefault(f => f.Name == "Sheetname")?.Value;
 
     public string? SheetFile => _fields.FirstOrDefault(f => f.Name == "Sheetfile")?.Value;
+
+    /// <summary>
+    /// The page this sheet is where it stands. A sheet placed twice is two pages of the design, so the answer
+    /// depends on which place is being asked about; without a place, the first page written is the answer.
+    /// </summary>
+    public string? PageAt(string? sheetPath = null)
+    {
+        foreach (var project in Node.Find("instances")?.Lists().Where(l => l.Head == "project") ?? [])
+        {
+            foreach (var entry in project.Lists().Where(l => l.Head == "path"))
+            {
+                if (sheetPath is null || string.Equals(entry.Str(1), sheetPath, StringComparison.Ordinal))
+                {
+                    if (entry.ChildString("page") is { Length: > 0 } page)
+                    {
+                        return page;
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
 }

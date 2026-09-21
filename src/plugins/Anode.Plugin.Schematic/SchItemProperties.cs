@@ -74,6 +74,14 @@ internal static class SchItemProperties
                             }),
                         }
                         : [],
+                    // What the part is left out of. KiCad keeps these words in two minds — a part is in the bill
+                    // and on the board, but excluded from simulation — so each switch is read the way its own word
+                    // is written and shown the way the designer thinks of it: what this part is kept out of.
+                    Flag(symbol, "dnp", "doNotPopulate", symbol.IsDnp, edit),
+                    Flag(symbol, "in_bom", "excludeFromBom", !symbol.InBom, edit, inverted: true),
+                    Flag(symbol, "on_board", "excludeFromBoard", !symbol.OnBoard, edit, inverted: true),
+                    Flag(symbol, "exclude_from_sim", "excludeFromSim", symbol.ExcludedFromSim, edit),
+
                     // De Morgan: only a part that carries a second body can be asked which way it is drawn.
                     .. symbol.Definition is { HasAlternateBody: true }
                         ? new[]
@@ -109,6 +117,20 @@ internal static class SchItemProperties
                 [
                     Writable("name", sheet.SheetName ?? None, v => edit(Name("name"), () => SchWrites.SetField(sheet, "Sheetname", v))),
                     Writable("file", sheet.SheetFile ?? None, v => edit(Name("file"), () => SchWrites.SetField(sheet, "Sheetfile", v))),
+
+                    // The page is this appearance's: a sheet placed twice is two pages, numbered apart.
+                    .. sheet.PageAt(sheetPath) is { Length: > 0 } page || sheet.Node.Find("instances") is not null
+                        ? new[]
+                        {
+                            Writable("page", sheet.PageAt(sheetPath) ?? None, v =>
+                            {
+                                if (v.Length > 0)
+                                {
+                                    edit(Name("page"), () => SchWrites.SetPage(sheet, v, sheetPath));
+                                }
+                            }),
+                        }
+                        : [],
                 ]);
 
                 yield return new InspectorBlock(Tr.T("sch.block.geometry"),
@@ -275,6 +297,29 @@ internal static class SchItemProperties
                 edit(Name("position"), () => SchWrites.SetPosition(item, at));
             }
         });
+
+    /// <summary>
+    /// A switch for one of the words a part carries. <paramref name="on"/> is what the designer sees — what the
+    /// part is kept out of — and <paramref name="inverted"/> says the file writes the opposite of that.
+    /// </summary>
+    private static InspectorRow Flag(
+        SymbolInstance symbol,
+        string word,
+        string nameKey,
+        bool on,
+        Action<string, Action> edit,
+        bool inverted = false)
+    {
+        return new InspectorRow(Name(nameKey), Tr.T("sch.value.excluded"))
+        {
+            Switch = on,
+            Commit = v =>
+            {
+                bool wanted = v == "yes";
+                edit(Name(nameKey), () => SchWrites.SetFlag(symbol, word, inverted ? !wanted : wanted));
+            },
+        };
+    }
 
     private static InspectorRow Writable(string nameKey, string value, Action<string> commit) =>
         new(Name(nameKey), value) { Commit = commit };

@@ -978,6 +978,35 @@ public sealed class SchematicDocument : DocumentBase
         _context?.Log.Info(Tr.English("sch.log.renumbered", changed.Count));
     }
 
+    /// <summary>What in the selection has words on it that could be written as another kind of thing.</summary>
+    private IReadOnlyList<SchItem> Relabelable() =>
+        [.. _editor.Selection.Where(item => item switch
+        {
+            SchLabel label => label.Text.Length > 0,
+            SchText text => text.Text.Length > 0,
+            _ => false,
+        })];
+
+    /// <summary>
+    /// Writes the selected labels as another kind — a local name made global, a hierarchical one made into a note.
+    /// The old item goes and a new one takes its place, which is one step to undo; what is already of that kind is
+    /// left alone rather than rewritten for nothing.
+    /// </summary>
+    private void Relabel(SchLabelKind? kind)
+    {
+        var change = Relabelable()
+            .Where(item => !(kind is { } wanted ? item is SchLabel label && label.Kind == wanted : item is SchText))
+            .ToList();
+
+        if (change.Count == 0)
+        {
+            return;
+        }
+
+        var fresh = change.Select(item => SchNodes.Relabel(item, kind)).ToList();
+        _editor.Apply(Tr.T(kind is null ? "sch.command.toText" : "sch.command.toLabel"), fresh, change);
+    }
+
     /// <summary>The project a sheet belongs to, as its .kicad_pro is named; the sheet's own name otherwise.</summary>
     private string ProjectName()
     {
@@ -1360,6 +1389,45 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
                 CanExecute = () => SchAnnotation.Unannotated(Sheet, Instance).Count > 0,
                 Execute = () => Guard(Annotate, context),
+            },
+            .. new[]
+            {
+                ("sch.alignLeft", SchematicEditor.AlignTo.Left, 90),
+                ("sch.alignRight", SchematicEditor.AlignTo.Right, 91),
+                ("sch.alignTop", SchematicEditor.AlignTo.Top, 92),
+                ("sch.alignBottom", SchematicEditor.AlignTo.Bottom, 93),
+                ("sch.alignMiddleAcross", SchematicEditor.AlignTo.MiddleAcross, 94),
+                ("sch.alignMiddleDown", SchematicEditor.AlignTo.MiddleDown, 95),
+                ("sch.alignToGrid", SchematicEditor.AlignTo.Grid, 96),
+            }.Select(a => new CommandDescriptor(a.Item1, $"sch.command.{a.Item1["sch.".Length..]}")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = a.Item3,
+                CanExecute = () => _editor.Selection.Count >= (a.Item2 == SchematicEditor.AlignTo.Grid ? 1 : 2),
+                Execute = () => Guard(() => _editor.Align(a.Item2), context),
+            }),
+            new("sch.toLabel", "sch.command.toLabel")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 80,
+                CanExecute = () => Relabelable().Count > 0,
+                Execute = () => Guard(() => Relabel(SchLabelKind.Local), context),
+            },
+            new("sch.toGlobalLabel", "sch.command.toGlobalLabel")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 81,
+                CanExecute = () => Relabelable().Count > 0,
+                Execute = () => Guard(() => Relabel(SchLabelKind.Global), context),
+            },
+            new("sch.toHierarchicalLabel", "sch.command.toHierarchicalLabel")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 82,
+                CanExecute = () => Relabelable().Count > 0,
+                Execute = () => Guard(() => Relabel(SchLabelKind.Hierarchical), context),
+            },
+            new("sch.toText", "sch.command.toText")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 83,
+                CanExecute = () => Relabelable().Count > 0,
+                Execute = () => Guard(() => Relabel(null), context),
             },
             new("sch.renumber", "sch.command.renumber")
             {

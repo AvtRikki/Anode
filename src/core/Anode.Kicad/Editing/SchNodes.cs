@@ -56,6 +56,48 @@ public static class SchNodes
             + $" (effects (font (size 1.27 1.27))) (uuid \"{Guid.NewGuid()}\"))"));
     }
 
+    /// <summary>
+    /// The same words written as another kind of thing: a local label made global, a hierarchical one made into
+    /// plain text. What is on the sheet stays where it is and looks as it did — the point, the angle and the font
+    /// travel with it — because only what the words <em>mean</em> is being changed.
+    ///
+    /// A label that leaves the sheet carries the direction of its signal, and one that does not has nowhere to keep
+    /// it, so a shape is taken from the old item when it had one and is otherwise the plainest that will do.
+    /// </summary>
+    /// <param name="to">The kind to write it as; null writes it as free text, which is no kind of label at all.</param>
+    public static SchItem Relabel(SchItem item, SchLabelKind? to)
+    {
+        string words = item switch
+        {
+            SchLabel label => label.Text,
+            SchText text => text.Text,
+            _ => throw new NotSupportedException($"{item.GetType().Name} is not something with words on it."),
+        };
+
+        if (words.Length == 0)
+        {
+            throw new InvalidOperationException("There is nothing written on it to carry over.");
+        }
+
+        SchItem fresh = to is { } kind
+            ? Label(kind, KicadText.Unescape(words), item.Position, item.Angle, Shape(item))
+            : Text(KicadText.Unescape(words), item.Position, item.Angle);
+
+        // The look is the designer's, not the kind's: whatever font, size and justification it had, it keeps.
+        if (item.Node.Find("effects") is { } effects && fresh.Node.Find("effects") is { } theirs)
+        {
+            int at = fresh.Node.IndexOf(theirs);
+            fresh.Node.RemoveAt(at);
+            fresh.Node.Insert(at, Adopt(effects));
+        }
+
+        return fresh;
+    }
+
+    /// <summary>The direction an item says its signal goes, for one that says so at all.</summary>
+    private static string Shape(SchItem item) =>
+        item.Node.ChildString("shape") is { Length: > 0 } shape ? shape : "input";
+
     /// <summary>The little diagonal that takes a wire off a bus. The size is the step, and it carries the direction.</summary>
     public static SchBusEntry BusEntry(Vector2L at, Vector2L size) =>
         new(Fresh(

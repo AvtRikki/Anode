@@ -133,6 +133,101 @@ public static class SchWrites
         symbol.Node.Insert(symbol.Node.Find("unit") is { } unit ? symbol.Node.IndexOf(unit) + 1 : 1, node);
     }
 
+    /// <summary>
+    /// The page a child sheet is, where it stands. A sheet placed twice is two pages of the design and keeps a
+    /// number per place, so writing one without saying which place would give both the same number — the mistake
+    /// a designator makes too.
+    /// </summary>
+    /// <param name="sheetPath">The appearance to number; null numbers every one, which is right for a sheet placed once.</param>
+    public static void SetPage(SchSheet sheet, string page, string? sheetPath = null)
+    {
+        if (page.Length == 0)
+        {
+            throw new ArgumentException("A page needs a number, even if it is not a number.", nameof(page));
+        }
+
+        bool written = false;
+        foreach (var project in sheet.Node.Find("instances")?.Lists().Where(l => l.Head == "project") ?? [])
+        {
+            foreach (var entry in project.Lists().Where(l => l.Head == "path"))
+            {
+                if (sheetPath is not null && !string.Equals(entry.Str(1), sheetPath, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (entry.Find("page") is { } already)
+                {
+                    (already.AtomAt(1) ?? throw new KiCadFormatException("An instance has no page.")).SetString(page);
+                }
+                else
+                {
+                    entry.Add(SchNodes.Adopt(Sexpr.SDocument.Parse($"(page {SEscape.Quote(page)})").Root));
+                }
+
+                written = true;
+            }
+        }
+
+        if (!written)
+        {
+            throw new InvalidOperationException("The sheet does not stand anywhere that could be numbered.");
+        }
+    }
+
+    /// <summary>
+    /// The order KiCad writes a placed symbol's own words in. A word that is not there yet is put where KiCad would
+    /// have put it, so a file we touch still reads the way one of its own does.
+    /// </summary>
+    private static readonly string[] SymbolWords =
+    [
+        "lib_id", "at", "unit", "body_style", "exclude_from_sim", "in_bom", "on_board", "in_pos_files", "dnp",
+        "locked", "fields_autoplaced", "uuid",
+    ];
+
+    /// <summary>
+    /// A yes-or-no word of an item — <c>dnp</c>, <c>in_bom</c>, <c>on_board</c>, <c>exclude_from_sim</c>.
+    ///
+    /// Mind which way round each one reads: KiCad writes what a part <em>is</em> for the bill and the board
+    /// (<c>in_bom no</c> keeps it off) and what it is <em>excluded</em> from for simulation. The caller says what
+    /// the file should say, not what the designer was asked.
+    /// </summary>
+    public static void SetFlag(SchItem item, string word, bool value)
+    {
+        var fresh = SchNodes.Adopt(Sexpr.SDocument.Parse($"({word} {(value ? "yes" : "no")})").Root);
+
+        if (item.Node.Find(word) is { } written)
+        {
+            int at = item.Node.IndexOf(written);
+            item.Node.RemoveAt(at);
+            item.Node.Insert(at, fresh);
+            return;
+        }
+
+        item.Node.Insert(Place(item.Node, word), fresh);
+    }
+
+    /// <summary>Where a word belongs among the ones the item already has.</summary>
+    private static int Place(SList node, string word)
+    {
+        int rank = Array.IndexOf(SymbolWords, word);
+        if (rank < 0)
+        {
+            return node.Count;
+        }
+
+        for (int i = 0; i < node.Count; i++)
+        {
+            if (node[i] is SList child && Array.IndexOf(SymbolWords, child.Head) is > -1 and var other && other > rank)
+            {
+                return i;
+            }
+        }
+
+        // Nothing it should come before: after the last word it should come after, or at the end.
+        return node.Find("uuid") is { } uuid ? node.IndexOf(uuid) : node.Count;
+    }
+
     /// <summary>Moves the item to a point, keeping whatever angle it has.</summary>
     public static void SetPosition(SchItem item, Vector2L at)
     {

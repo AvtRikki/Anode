@@ -153,6 +153,54 @@ public class SchSheetCreationTests
         }
     }
 
+    /// <summary>
+    /// A sheet's page number belongs to the place it stands in, not to the sheet: one placed twice is two pages of
+    /// the design, and numbering both at once would give them the same number.
+    /// </summary>
+    [Fact]
+    public void A_page_number_is_written_for_the_place_it_belongs_to()
+    {
+        var sheet = SchNodes.Sheet(
+            "block",
+            "block.kicad_sch",
+            new Vector2L(100 * Mm, 100 * Mm),
+            new Vector2L(40 * Mm, 20 * Mm),
+            [("design", "/aaaa", "2"), ("design", "/bbbb", "3")]);
+
+        Assert.Equal("2", sheet.PageAt("/aaaa"));
+        Assert.Equal("3", sheet.PageAt("/bbbb"));
+
+        SchWrites.SetPage(sheet, "7", "/bbbb");
+
+        Assert.Equal("2", sheet.PageAt("/aaaa"));
+        Assert.Equal("7", sheet.PageAt("/bbbb"));
+    }
+
+    [Fact]
+    public void Without_a_place_every_appearance_is_numbered()
+    {
+        var sheet = SchNodes.Sheet(
+            "block",
+            "block.kicad_sch",
+            new Vector2L(100 * Mm, 100 * Mm),
+            new Vector2L(40 * Mm, 20 * Mm),
+            [("design", "/aaaa", "2"), ("design", "/bbbb", "3")]);
+
+        SchWrites.SetPage(sheet, "9");
+
+        Assert.Equal("9", sheet.PageAt("/aaaa"));
+        Assert.Equal("9", sheet.PageAt("/bbbb"));
+    }
+
+    [Fact]
+    public void A_sheet_that_stands_nowhere_cannot_be_numbered()
+    {
+        var sheet = SchNodes.Sheet("block", "block.kicad_sch", new Vector2L(100 * Mm, 100 * Mm), new Vector2L(40 * Mm, 20 * Mm));
+
+        Assert.Null(sheet.PageAt());
+        Assert.Throws<InvalidOperationException>(() => SchWrites.SetPage(sheet, "2"));
+    }
+
     private static SchSheet Sheet(Vector2L at, Vector2L size, (string Project, string Path, string Page)[]? places = null) =>
         SchNodes.Sheet("block", "block.kicad_sch", at, size, places);
 }
