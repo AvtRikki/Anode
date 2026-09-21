@@ -74,6 +74,7 @@
       "alignMiddleAcross": "Align down the middle",
       "alignMiddleDown": "Align across the middle",
       "alignToGrid": "Bring to the grid",
+      "drag": "Drag, keeping the wires",
       "lock": "Hold in place",
       "unlock": "Let go",
       "showHiddenFields": "Show hidden fields",

@@ -521,6 +521,102 @@ public class SchematicEditorTests
         Assert.False(held.IsLocked);
     }
 
+    /// <summary>
+    /// Dragging keeps the wiring. Moving a part takes it away from its wires, which is right when it is being put
+    /// somewhere else and wrong when it is being nudged: the drawing would quietly lose its connections.
+    /// </summary>
+    [Fact]
+    public void Dragging_a_part_takes_the_wires_that_meet_it_along()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+
+        var was = wire.Points;
+        editor.SetSelection([part]);
+        Assert.True(editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true));
+
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(0, 2_540_000)).ToDouble()));
+        editor.CommitMove();
+
+        // The end that met the pin came along; the far end stayed where the drawing put it.
+        Assert.Equal(was[0], wire.Points[0]);
+        Assert.Equal(was[1] + new Vector2L(0, 2_540_000), wire.Points[1]);
+    }
+
+    [Fact]
+    public void Moving_a_part_leaves_its_wires_where_they_are()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+        var was = wire.Points;
+
+        editor.SetSelection([part]);
+        Assert.True(editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble())));
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(0, 2_540_000)).ToDouble()));
+        editor.CommitMove();
+
+        Assert.Equal(was, wire.Points);
+    }
+
+    [Fact]
+    public void A_drag_is_one_step_to_undo_wires_and_all()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(2_540_000, 0)).ToDouble()));
+        editor.CommitMove();
+
+        Assert.NotEqual(original, sheet.Document.ToBytes());
+
+        editor.Undo();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void A_wire_that_is_itself_being_dragged_is_not_stretched_as_well()
+    {
+        var editor = Wired(out var sheet);
+        var wire = sheet.Wires.Single();
+        var was = wire.Points;
+
+        editor.SetSelection([wire]);
+        editor.BeginMove(wire, editor.Scene.ToSceneMm(was[0].ToDouble()), stretching: true);
+        editor.UpdateMove(editor.Scene.ToSceneMm((was[0] + new Vector2L(0, 2_540_000)).ToDouble()));
+        editor.CommitMove();
+
+        // It travels whole: both ends moved by the same amount, rather than one end being pulled away.
+        Assert.Equal(was[0] + new Vector2L(0, 2_540_000), wire.Points[0]);
+        Assert.Equal(was[1] + new Vector2L(0, 2_540_000), wire.Points[1]);
+    }
+
+    /// <summary>A resistor with a wire running from its lower pin.</summary>
+    private static SchematicEditor Wired(out Schematic sheet)
+    {
+        sheet = Schematic.Parse(
+            "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(lib_symbols\n"
+            + "\t\t(symbol \"Device:R\" (property \"Reference\" \"R\" (at 0 0 0))\n"
+            + "\t\t\t(symbol \"R_1_1\"\n"
+            + "\t\t\t\t(pin passive line (at 0 3.81 270) (length 1.27) (name \"~\") (number \"1\"))\n"
+            + "\t\t\t\t(pin passive line (at 0 -3.81 90) (length 1.27) (name \"~\") (number \"2\")))))\n"
+            + "\t(symbol (lib_id \"Device:R\") (at 50.8 50.8 0) (unit 1) (uuid \"0a1b2c3d-0000-4000-8000-000000000001\")\n"
+            + "\t\t(property \"Reference\" \"R1\" (at 50.8 45 0)))\n"
+
+            // From the lower pin, straight down: its end sits exactly on the pin, which is what joins them.
+            + "\t(wire (pts (xy 50.8 63.5) (xy 50.8 54.61)) (stroke (width 0) (type default))\n"
+            + "\t\t(uuid \"1a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        return new SchematicEditor(SchematicSceneBuilder.Build(sheet));
+    }
+
     /// <summary>Three rectangles of different sizes, none of them lined up with another.</summary>
     private static SchematicEditor Scattered(out Schematic sheet)
     {

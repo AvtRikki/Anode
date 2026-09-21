@@ -31,6 +31,9 @@ public sealed class SchMoveOperation
     /// <summary>Degrees, counter-clockwise on screen, about the anchor.</summary>
     public double Rotation { get; internal set; }
 
+    /// <summary>The wire ends that are following what is being moved; empty for an ordinary move.</summary>
+    public IReadOnlyList<WireEnd> Stretching { get; init; } = [];
+
     /// <summary>Scene-space (mm) transform for <see cref="Preview"/>.</summary>
     public Transform2D PreviewTransform { get; internal set; } = Transform2D.Identity;
 }
@@ -165,8 +168,14 @@ public sealed class SchematicEditor
         PublishSelection();
     }
 
-    /// <summary>Starts moving the movable part of the selection, grabbing <paramref name="grabbed"/> if it is selected.</summary>
-    public bool BeginMove(SchItem? grabbed, Vector2D cursorScene)
+    /// <summary>
+    /// Starts moving the movable part of the selection, grabbing <paramref name="grabbed"/> if it is selected.
+    ///
+    /// With <paramref name="stretching"/>, the wires that meet what is moving keep hold of it: the ends that sit on
+    /// its pins travel with it and the wires stretch. That is the difference between taking a part away from its
+    /// wiring and nudging it while the wiring follows.
+    /// </summary>
+    public bool BeginMove(SchItem? grabbed, Vector2D cursorScene, bool stretching = false)
     {
         if (Move is not null)
         {
@@ -181,7 +190,10 @@ public sealed class SchematicEditor
 
         var anchorItem = grabbed is not null && items.Contains(grabbed) ? grabbed : items[0];
         var preview = Scene.Remove(items, collect: true);
-        Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene));
+        Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene))
+        {
+            Stretching = stretching ? SchDrag.Following(Sheet, items) : [],
+        };
         SceneChanged?.Invoke();
         return true;
     }
@@ -214,16 +226,36 @@ public sealed class SchematicEditor
         }
 
         var (items, anchor, rotation, delta) = (move.Items, move.AnchorNm, move.Rotation, move.Delta);
-        var command = new ModifyNodesCommand(rotation == 0 ? "Move" : "Move and rotate", items, () =>
+
+        // The wires that are keeping hold of it change too, so they are part of the same step: one undo has to put
+        // the drawing back as it was, wires and all.
+        var stretching = move.Stretching;
+        var touched = items.Concat(stretching.Select(end => (SchItem)end.Wire)).Distinct().ToList();
+
+        var command = new ModifyNodesCommand(Named(rotation, stretching.Count), touched, () =>
         {
             foreach (var item in items)
             {
                 SchEdits.Transform(item, anchor, SchEdits.CanRotate(item) ? rotation : 0, delta);
             }
+
+            foreach (var end in stretching)
+            {
+                SchDrag.Stretch(end, delta);
+            }
         });
+
+        if (stretching.Count > 0)
+        {
+            Scene.Remove([.. stretching.Select(end => (SchItem)end.Wire).Distinct()]);
+        }
 
         Execute(command, removedFromScene: true);
     }
+
+    /// <summary>What the step is called, which is what the reader is offered to undo.</summary>
+    private static string Named(double rotation, int stretched) =>
+        stretched > 0 ? "Drag" : rotation == 0 ? "Move" : "Move and rotate";
 
     public void CancelMove()
     {

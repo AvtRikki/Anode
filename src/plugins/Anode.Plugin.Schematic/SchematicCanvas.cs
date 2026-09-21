@@ -338,9 +338,13 @@ public sealed class SchematicCanvas : Panel
     }
 
     /// <summary>Starts a move from the keyboard, the way KiCad's M does: the selection follows the cursor.</summary>
-    public void BeginMoveWithCursor()
+    /// <param name="stretching">
+    /// Whether the wires that meet the selection keep hold of it. That is the difference between taking a part away
+    /// from its wiring and nudging it while the wiring follows.
+    /// </param>
+    public void BeginMoveWithCursor(bool stretching = false)
     {
-        if (Editor is { } editor && _gesture == Gesture.None && editor.BeginMove(null, World(_lastPoint)))
+        if (Editor is { } editor && _gesture == Gesture.None && editor.BeginMove(null, World(_lastPoint), stretching))
         {
             _gesture = Gesture.Moving;
             editor.UpdateMove(World(_lastPoint));
@@ -600,6 +604,9 @@ public sealed class SchematicCanvas : Panel
                 break;
             case Key.M:
                 BeginMoveWithCursor();
+                break;
+            case Key.G:
+                BeginMoveWithCursor(stretching: true);
                 break;
             default:
                 return;

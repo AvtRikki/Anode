@@ -1526,6 +1526,13 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", MenuKey = "menu.view", MenuOrder = 61,
                 Execute = () => Guard(() => Reveal(LayerStyle.Sch.HiddenPin), context),
             },
+            new("sch.drag", "sch.command.drag")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "G", Gesture = new KeyGesture(Key.G),
+                MenuKey = "menu.edit", MenuOrder = 96,
+                CanExecute = () => _editor.Selection.Any(SchEdits.CanTransform),
+                Execute = () => _canvas?.BeginMoveWithCursor(stretching: true),
+            },
             new("sch.lock", "sch.command.lock")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 97,
