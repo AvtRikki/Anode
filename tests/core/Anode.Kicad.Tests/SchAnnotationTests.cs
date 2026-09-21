@@ -99,6 +99,66 @@ public class SchAnnotationTests
     }
 
     [Fact]
+    public void Renumbering_gives_the_sheet_its_numbers_again_from_one()
+    {
+        var sheet = Sheet("R7", "R3", "R?");
+
+        var given = SchAnnotation.Renumber(sheet.Symbols, null, DesignNumbers.Of(sheet));
+
+        // Parts are numbered left to right, and the numbers start from one again rather than past what was there.
+        Assert.Equal(["R1", "R2", "R3"], given.Select(g => g.Reference));
+        Assert.Equal(["R7", "R3", "R?"], given.Select(g => g.Symbol.Reference));
+    }
+
+    [Fact]
+    public void Renumbering_runs_left_to_right()
+    {
+        // Three parts standing out of order across the sheet: the rightmost carries the lowest number to begin with.
+        var sheet = Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + Placed("R1", 150) + Placed("R2", 50) + Placed("R3", 100)
+            + "\t(embedded_fonts no))\n");
+
+        var given = SchAnnotation.Renumber(sheet.Symbols, null, DesignNumbers.Of(sheet));
+
+        // KiCad numbers within a prefix by position, left to right (SORT_BY_X_POSITION, its default).
+        Assert.Equal([("R2", "R1"), ("R3", "R2"), ("R1", "R3")], given.Select(g => (g.Symbol.Reference, g.Reference)));
+
+        static string Placed(string reference, int x) =>
+            $"\t(symbol (lib_id \"Device:R\") (at {x} 50 0) (unit 1)"
+            + $" (uuid \"0a1b2c3d-0000-4000-8000-0000000000{x}\")\n"
+            + $"\t\t(property \"Reference\" \"{reference}\" (at {x} 50 0)))\n";
+    }
+
+    [Fact]
+    public void Renumbering_one_sheet_leaves_the_rest_of_the_design_its_numbers()
+    {
+        var sheet = Sheet("R7", "R3");
+
+        // Another sheet of the design already holds R1, so this one starts at R2.
+        var taken = DesignNumbers.Of(sheet);
+        taken.Take("R", 1);
+
+        Assert.Equal(["R2", "R3"], SchAnnotation.Renumber(sheet.Symbols, null, taken).Select(g => g.Reference));
+    }
+
+    [Fact]
+    public void The_sections_of_one_part_go_on_sharing_a_designator()
+    {
+        // Two placements of one part, as a two-gate chip is drawn, and a third part beside them.
+        var sheet = Sheet("U5", "U5", "U2");
+
+        var given = SchAnnotation.Renumber(sheet.Symbols, null, DesignNumbers.Of(sheet));
+
+        var byPart = given
+            .GroupBy(g => g.Symbol.Reference ?? string.Empty, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(x => x.Reference).Distinct(StringComparer.Ordinal).ToList(), StringComparer.Ordinal);
+
+        Assert.Equal(["U1"], byPart["U5"]);
+        Assert.Equal(["U2"], byPart["U2"]);
+    }
+
+    [Fact]
     public void The_sheet_can_say_what_is_still_waiting()
     {
         var sheet = Sheet("R1", "R?", "C?");

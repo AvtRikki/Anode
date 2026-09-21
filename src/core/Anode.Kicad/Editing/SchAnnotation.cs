@@ -72,6 +72,62 @@ public static class SchAnnotation
         return given;
     }
 
+    /// <summary>
+    /// Numbers the parts again from scratch, in the order KiCad numbers them: within a prefix, left to right and
+    /// then top to bottom (<c>SORT_BY_X_POSITION</c>, its default). Where <see cref="Annotate"/> fills in what is
+    /// missing and leaves the rest alone, this renames parts that already carry a number — which is what a design
+    /// numbered in the order it happened to be drawn needs, and what nothing else should do by accident.
+    ///
+    /// The sections of one part go on sharing a designator: they are grouped by the one they carry now, so a quad
+    /// gate stays one part rather than becoming four. What the parts hold is given back to <paramref name="taken"/>
+    /// first, so they are numbered from one again rather than past themselves — but nothing else in the design is,
+    /// so a number another sheet uses is still not offered here.
+    /// </summary>
+    public static IReadOnlyList<(SymbolInstance Symbol, string Reference)> Renumber(
+        IEnumerable<SymbolInstance> symbols,
+        string? sheetPath,
+        DesignNumbers taken)
+    {
+        var all = symbols.ToList();
+        foreach (var symbol in all)
+        {
+            if (symbol.ReferenceAt(sheetPath) is { Length: > 0 } reference)
+            {
+                taken.Forget(reference);
+            }
+        }
+
+        // A part drawn in sections carries one designator across them; parts still waiting for one stand alone,
+        // since nothing in the file says which of them belong together.
+        var parts = all
+            .Select(symbol => (Symbol: symbol, Reference: symbol.ReferenceAt(sheetPath) ?? string.Empty))
+            .GroupBy(p => IsUnannotated(p.Reference) ? $"?{p.Symbol.Uuid}" : p.Reference, StringComparer.Ordinal)
+            .Select(group => new
+            {
+                Prefix = PrefixOf(group.First().Reference is { Length: > 0 } written && !IsUnannotated(written)
+                    ? written
+                    : group.First().Symbol.Definition?.Reference ?? group.First().Reference),
+                Symbols = group.Select(p => p.Symbol).ToList(),
+            })
+            .OrderBy(part => part.Prefix, StringComparer.Ordinal)
+            .ThenBy(part => part.Symbols.Min(s => s.Position.X))
+            .ThenBy(part => part.Symbols.Min(s => s.Position.Y))
+            .ThenBy(part => part.Symbols.Min(s => s.Uuid), StringComparer.Ordinal)
+            .ToList();
+
+        var given = new List<(SymbolInstance, string)>();
+        foreach (var part in parts)
+        {
+            string reference = part.Prefix + taken.TakeFirstFree(part.Prefix).ToString(CultureInfo.InvariantCulture);
+            foreach (var symbol in part.Symbols)
+            {
+                given.Add((symbol, reference));
+            }
+        }
+
+        return given;
+    }
+
     /// <summary>Everything on the sheet that is still waiting for a number.</summary>
     public static IReadOnlyList<SymbolInstance> Unannotated(Schematic sheet, string? sheetPath = null) =>
         [.. sheet.Symbols.Where(s => IsUnannotated(s.ReferenceAt(sheetPath)))];

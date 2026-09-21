@@ -951,6 +951,33 @@ public sealed class SchematicDocument : DocumentBase
         });
     }
 
+    /// <summary>
+    /// Numbers this sheet's parts again from scratch, left to right — for a sheet numbered in the order it happened
+    /// to be drawn. Unlike annotation it renames parts that already carry a number, so it is one undo away from
+    /// being taken back, and it is this sheet's alone: the numbers of the rest of the design are still respected,
+    /// and nothing on another sheet is touched.
+    /// </summary>
+    private void Renumber()
+    {
+        _numbers = null;
+        var given = SchAnnotation.Renumber(Sheet.Symbols, Instance, Numbers());
+        var changed = given.Where(g => !string.Equals(g.Symbol.ReferenceAt(Instance), g.Reference, StringComparison.Ordinal)).ToList();
+        if (changed.Count == 0)
+        {
+            return;
+        }
+
+        _editor.Modify(Tr.T("sch.command.renumber"), [.. changed.Select(g => g.Symbol)], () =>
+        {
+            foreach (var (symbol, reference) in changed)
+            {
+                SchWrites.SetReference(symbol, reference, Instance);
+            }
+        });
+
+        _context?.Log.Info(Tr.English("sch.log.renumbered", changed.Count));
+    }
+
     /// <summary>The project a sheet belongs to, as its .kicad_pro is named; the sheet's own name otherwise.</summary>
     private string ProjectName()
     {
@@ -1333,6 +1360,12 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
                 CanExecute = () => SchAnnotation.Unannotated(Sheet, Instance).Count > 0,
                 Execute = () => Guard(Annotate, context),
+            },
+            new("sch.renumber", "sch.command.renumber")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 75,
+                CanExecute = () => Sheet.Symbols.Count > 0,
+                Execute = () => Guard(Renumber, context),
             },
             new("sch.fit", "sch.command.fit")
             {

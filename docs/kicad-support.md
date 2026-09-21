@@ -40,7 +40,10 @@ bus entries, text, lines, rectangles and circles are drawn with tools; parts are
 another part, and a sheet's fields and title block are written from the inspector. Annotation numbers what is
 unnumbered, per place, and takes the first number nobody in the design has — counting every place of every sheet,
 as KiCad does, so that no two parts of one design are called the same thing. A part placed from the panel is named
-the same way as it lands, and a number handed out is not offered again.
+the same way as it lands, and a number handed out is not offered again. A sheet can also be numbered again from
+scratch, which renames what already carries a number: within a prefix the parts are numbered left to right and then
+top to bottom, as KiCad's own default ordering does it, the sections of one part go on sharing a designator, and
+the numbers the rest of the design holds are still not offered.
 
 **Hierarchy.** A design is walked from the project's root; a sheet placed twice is one tab showing one place at a
 time, chosen in the project tree, and designators and units are read and written per place. A sheet can be made:
@@ -98,9 +101,9 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
-Not done: renumbering a design that is already numbered (annotation only fills in what is missing), and the
-exclusions a project lists for single findings — matching one needs the marker written exactly as KiCad writes it,
-down to its position.
+Not done: numbering a whole design again in one step (a sheet at a time is what the editor offers, since renaming
+parts on sheets that are not open would edit files behind the designer's back), and the exclusions a project lists
+for single findings — matching one needs the marker written exactly as KiCad writes it, down to its position.
 
 ## Drawing sheets (`.kicad_wks`)
 

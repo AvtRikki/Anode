@@ -53,6 +53,7 @@
       "mirrorVertical": "Mirror vertically",
       "properties": "Properties",
       "annotate": "Number the parts",
+      "renumber": "Renumber the sheet",
       "exportNetlist": "Export netlist…",
       "exportBom": "Export bill of materials…",
       "highlightNet": "Highlight net",
@@ -225,6 +226,7 @@
     "units": { "mm": "mm" },
     "log": {
       "exported": "Written to {0}",
+      "renumbered": "Renumbered {0} parts.",
       "created": "{0}: a new sheet.",
       "loaded": "{0}: {1} symbols, {2} primitives.",
       "activated": "{0} {1}: .kicad_sch, sheet hierarchy.",

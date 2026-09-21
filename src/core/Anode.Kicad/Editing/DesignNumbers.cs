@@ -93,6 +93,19 @@ public sealed class DesignNumbers
         used.Add(number);
     }
 
+    /// <summary>
+    /// Gives a designator back, so that the part carrying it can be numbered afresh. Without this a renumbering
+    /// would count the parts it is about to rename among the numbers that are taken, and number them past
+    /// themselves: R1 R2 R3 would become R4 R5 R6.
+    /// </summary>
+    public void Forget(string reference)
+    {
+        if (NumberOf(reference) is { } number && _taken.TryGetValue(SchAnnotation.PrefixOf(reference), out var used))
+        {
+            used.Remove(number);
+        }
+    }
+
     /// <summary>Reads what a sheet uses in one of its places, adding it to what is already known.</summary>
     public void Read(Schematic sheet, string? sheetPath = null)
     {

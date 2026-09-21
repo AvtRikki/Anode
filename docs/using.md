@@ -63,6 +63,8 @@ the command palette, which lists every command with its shortcut.
 - Annotation numbers the parts that carry no number yet, per place in the hierarchy. The number is the first one
   free in the whole design, not on this sheet alone, so two sheets never hand out the same designator; parts that
   already carry a number are left alone.
+- **Edit → Renumber the sheet** is the other half of that: it numbers this sheet's parts again from scratch, left to
+  right, renaming what already carries a number. One undo takes it back, and no other sheet is touched.
 - **File → Export netlist…** writes the whole design's netlist in KiCad's format, wherever the picker points. It is
   the design's, not the sheet's: exporting from a sheet below the root still describes the project, with this sheet
   as it stands in the editor.
