@@ -815,6 +815,8 @@ public sealed class SchematicDocument : DocumentBase
     public override string? ActiveToolId => _tool;
 
     /// <summary>KiCad's bus entry steps one grid square down and to the right.</summary>
+    private DesignNumbers? _numbers;
+
     private static readonly Vector2L BusStep = new(2_540_000, 2_540_000);
 
     /// <summary>How far outside a sheet's border a click still means that sheet: one grid step, as KiCad allows.</summary>
@@ -884,14 +886,42 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     /// <summary>
-    /// What the part is called as it lands: the library's own prefix and the next free number on the sheet. KiCad
-    /// writes "R?" and numbers later; a part that arrives already named saves that second pass, and the numbering
-    /// rule is the same one either way — never take a number the sheet has already used.
+    /// What the part is called as it lands: the library's own prefix and the first number the design does not use.
+    /// KiCad writes "R?" and numbers later; a part that arrives already named saves that second pass, and the rule
+    /// is the same one either way — never take a number anything in the design already carries.
     /// </summary>
     private string Designator(LibSymbol definition)
     {
         string prefix = SchAnnotation.PrefixOf(definition.Reference);
-        return prefix + SchAnnotation.NextNumber(Sheet, prefix, Instance).ToString(CultureInfo.InvariantCulture);
+        return prefix + Numbers().TakeFirstFree(prefix).ToString(CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// The numbers the design has already used. Reading a whole design is too much to do on every click, so it is
+    /// read once and then kept: a number handed out is remembered in it, which is what stops a row of parts laid
+    /// down one after another from all taking the same one. It is read again after a save, when what is on disk —
+    /// and what the other sheets of the design say — may have moved on.
+    /// </summary>
+    private DesignNumbers Numbers()
+    {
+        if (_numbers is not null)
+        {
+            return _numbers;
+        }
+
+        try
+        {
+            return _numbers = FilePath is null
+                ? DesignNumbers.Of(Sheet, Instance)
+                : DesignNumbers.Of(RootFile(), OpenSheet);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException
+            or Anode.Sexpr.SexprParseException or InvalidOperationException)
+        {
+            // A design that will not walk is still a sheet to place parts on; its own numbers are better than none.
+            _context?.Log.Warn(ex.Message);
+            return _numbers = DesignNumbers.Of(Sheet, Instance);
+        }
     }
 
     /// <summary>
@@ -900,7 +930,10 @@ public sealed class SchematicDocument : DocumentBase
     /// </summary>
     private void Annotate()
     {
-        var given = SchAnnotation.Annotate(Sheet, Sheet.Symbols, Instance);
+        // The whole design is read again here: annotating is the one moment where being right matters more than
+        // being quick, and a number another sheet took since must not be handed out twice.
+        _numbers = null;
+        var given = SchAnnotation.Annotate(Sheet, Sheet.Symbols, Instance, Numbers());
         if (given.Count == 0)
         {
             return;
@@ -1104,6 +1137,7 @@ public sealed class SchematicDocument : DocumentBase
 
         _editor.Save(target);
         FilePath = target;
+        _numbers = null;
         _overview = null;
         OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty), nameof(Overview));
         return Task.FromResult(true);

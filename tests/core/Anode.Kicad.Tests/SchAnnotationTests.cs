@@ -36,11 +36,12 @@ public class SchAnnotationTests
         Assert.Equal(prefix, SchAnnotation.PrefixOf(reference));
 
     [Fact]
-    public void The_next_number_steps_over_what_is_already_used()
+    public void The_next_number_is_the_first_one_nobody_has()
     {
         var sheet = Sheet("R1", "R7", "C1");
 
-        Assert.Equal(8, SchAnnotation.NextNumber(sheet, "R"));
+        // KiCad fills the gap rather than stepping past it: R2, not R8.
+        Assert.Equal(2, SchAnnotation.NextNumber(sheet, "R"));
         Assert.Equal(2, SchAnnotation.NextNumber(sheet, "C"));
         Assert.Equal(1, SchAnnotation.NextNumber(sheet, "U"));
     }

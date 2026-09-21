@@ -6,8 +6,10 @@ namespace Anode.Kicad.Editing;
 /// Giving placed parts their numbers. A part arrives from a library called "R?" — the prefix its library gives it,
 /// with a question mark where the number will go — and stays that way until something numbers it.
 ///
-/// The rule is KiCad's: numbers run per prefix, and a number already taken on the sheet is never handed out again,
-/// whether it was placed a moment ago or has been in the file for years.
+/// The rule is KiCad's: numbers run per prefix, a part takes the first number nobody has, and a number already used
+/// is never handed out again — whether it was placed a moment ago or has been in the file for years. What counts as
+/// used is the whole design, not one sheet (<see cref="DesignNumbers"/>): two sheets numbered apart would each hand
+/// out R1, and a sheet placed twice would call both of its copies the same thing.
 /// </summary>
 public static class SchAnnotation
 {
@@ -34,29 +36,13 @@ public static class SchAnnotation
     }
 
     /// <summary>
-    /// The next free number for <paramref name="prefix"/> on this sheet, counting every designator already there.
+    /// The first number for <paramref name="prefix"/> that this sheet does not use. For a design of several sheets,
+    /// gather the numbers with <see cref="DesignNumbers.Of(string, Func{string, Schematic}, CancellationToken)"/>
+    /// instead: one sheet's numbers say nothing about its neighbours'.
     /// </summary>
     /// <param name="sheetPath">The appearance of the sheet being numbered; a reused sheet names its parts per appearance.</param>
-    public static int NextNumber(Schematic sheet, string prefix, string? sheetPath = null)
-    {
-        int highest = 0;
-        foreach (var symbol in sheet.Symbols)
-        {
-            if (symbol.ReferenceAt(sheetPath) is not { Length: > 0 } reference
-                || !string.Equals(PrefixOf(reference), prefix, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            string digits = new([.. reference.SkipWhile(c => !char.IsAsciiDigit(c))]);
-            if (digits.Length > 0 && int.TryParse(digits, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
-            {
-                highest = Math.Max(highest, number);
-            }
-        }
-
-        return highest + 1;
-    }
+    public static int NextNumber(Schematic sheet, string prefix, string? sheetPath = null) =>
+        DesignNumbers.Of(sheet, sheetPath).FirstFree(prefix);
 
     /// <summary>
     /// Numbers the parts that are waiting for it, in the order given, and answers what each was called. Parts that
@@ -66,9 +52,10 @@ public static class SchAnnotation
     public static IReadOnlyList<(SymbolInstance Symbol, string Reference)> Annotate(
         Schematic sheet,
         IEnumerable<SymbolInstance> symbols,
-        string? sheetPath = null)
+        string? sheetPath = null,
+        DesignNumbers? taken = null)
     {
-        var next = new Dictionary<string, int>(StringComparer.Ordinal);
+        var numbers = taken ?? DesignNumbers.Of(sheet, sheetPath);
         var given = new List<(SymbolInstance, string)>();
 
         foreach (var symbol in symbols)
@@ -79,14 +66,7 @@ public static class SchAnnotation
             }
 
             string prefix = PrefixOf(symbol.ReferenceAt(sheetPath));
-            if (!next.TryGetValue(prefix, out int number))
-            {
-                number = NextNumber(sheet, prefix, sheetPath);
-            }
-
-            string reference = prefix + number.ToString(CultureInfo.InvariantCulture);
-            next[prefix] = number + 1;
-            given.Add((symbol, reference));
+            given.Add((symbol, prefix + numbers.TakeFirstFree(prefix).ToString(CultureInfo.InvariantCulture)));
         }
 
         return given;

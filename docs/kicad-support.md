@@ -38,7 +38,9 @@ Edited: everything above can be moved, rotated, mirrored and deleted; wires, bus
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries
 (both library tables, an index with search and previews), a placement can be updated from its library or swapped for
 another part, and a sheet's fields and title block are written from the inspector. Annotation numbers what is
-unnumbered, per place.
+unnumbered, per place, and takes the first number nobody in the design has — counting every place of every sheet,
+as KiCad does, so that no two parts of one design are called the same thing. A part placed from the panel is named
+the same way as it lands, and a number handed out is not offered again.
 
 **Hierarchy.** A design is walked from the project's root; a sheet placed twice is one tab showing one place at a
 time, chosen in the project tree, and designators and units are read and written per place. A sheet can be made:
@@ -79,7 +81,8 @@ KiCad's natural order. A part on a sheet placed twice is two parts, under the de
 power symbol is not a part, nor is one the file marks `(exclude_from_bom yes)`; a part marked do-not-place is on a
 line of its own, as that column keeps it apart.
 
-Not done: numbering unique across a whole design, and the alternate (De Morgan) body style. The rules are KiCad's
+Not done: the alternate (De Morgan) body style, and renumbering a design that is already numbered (annotation only
+fills in what is missing). The rules are KiCad's
 defaults and cannot yet be turned off or changed, and a conflict is reported for each pair of pins rather than
 condensed as KiCad condenses it.
 
