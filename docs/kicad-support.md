@@ -102,8 +102,9 @@ named through bus aliases — where ours says the same, net for net and pin for 
 Value"): the columns `Reference,Value,Datasheet,Footprint,Qty,DNP`, every field quoted, one line per part that is
 the same thing — the same value, datasheet, footprint and do-not-place — with its designators in one field, in
 KiCad's natural order. A part on a sheet placed twice is two parts, under the designator each place gives it. A
-power symbol is not a part, nor is one the file marks `(exclude_from_bom yes)`; a part marked do-not-place is on a
-line of its own, as that column keeps it apart.
+power symbol is not a part, nor is one the file keeps off the bill — which KiCad says the positive way round, as
+`(in_bom no)`; the board's files spell that idea as `exclude_from_bom`, a word the schematic format does not have.
+A part marked do-not-place is on a line of its own, as that column keeps it apart.
 
 A part that carries a second body — KiCad's De Morgan alternative — can be switched between its two ways of being
 drawn from the inspector, and is drawn, wired and counted from the bodies of the way it is in. A body written for

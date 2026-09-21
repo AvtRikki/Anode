@@ -13,8 +13,9 @@ public sealed record BomLine(IReadOnlyList<string> References, string Value, str
 /// line per value, its parts listed by designator, with the datasheet and footprint they carry and how many there
 /// are. Parts marked do-not-place are a line of their own, as KiCad keeps that column apart.
 ///
-/// A power symbol is not a part and is left out, and so is one the file marks as not for the bill. A part on a sheet
-/// placed twice is two parts, with the designator each place gives it.
+/// A power symbol is not a part and is left out, and so is one the file keeps off the bill — which KiCad writes the
+/// positive way round, as <c>(in_bom no)</c>. A part on a sheet placed twice is two parts, with the designator each
+/// place gives it.
 /// </summary>
 public static class SchBom
 {
@@ -34,7 +35,7 @@ public static class SchBom
             {
                 string reference = symbol.ReferenceAt(place.Path) ?? symbol.Reference ?? string.Empty;
                 if (reference.Length == 0 || reference.StartsWith('#')
-                    || symbol.Node.ChildBool("exclude_from_bom")
+                    || !symbol.InBom
                     || symbol.Definition is { IsPower: true })
                 {
                     continue;

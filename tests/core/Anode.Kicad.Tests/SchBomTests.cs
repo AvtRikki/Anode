@@ -32,6 +32,30 @@ public class SchBomTests
         Assert.All(lines, l => Assert.Equal(l.References, l.References.OrderBy(r => r.Length).ThenBy(r => r, StringComparer.Ordinal)));
     }
 
+    /// <summary>
+    /// KiCad keeps a part off the bill by saying it is not on it — <c>(in_bom no)</c>, the positive way round. The
+    /// board's files spell the same idea as <c>exclude_from_bom</c>, a word the schematic format does not have, so
+    /// reading for that one instead would quietly put every excluded part back on the bill.
+    /// </summary>
+    [Fact]
+    public void The_parts_a_design_keeps_off_the_bill_are_off_it()
+    {
+        Assert.SkipUnless(File.Exists(Root), TestData.SkipReason);
+
+        string sheet = Path.Combine(TestData.KiCadDir, "demos", "pic_programmer", "pic_programmer.kicad_sch");
+        Assert.SkipUnless(File.Exists(sheet), TestData.SkipReason);
+
+        var design = Anode.Kicad.Schematic.Load(sheet);
+        var excluded = design.Symbols.Where(s => !s.InBom && s.Reference is { Length: > 0 }).ToList();
+        Assert.NotEmpty(excluded);
+
+        var references = SchBom.Build(sheet).SelectMany(l => l.References).ToHashSet(StringComparer.Ordinal);
+        foreach (var part in excluded)
+        {
+            Assert.DoesNotContain(part.Reference!, references);
+        }
+    }
+
     [Fact]
     public void Parts_of_one_value_share_a_line()
     {
@@ -78,7 +102,7 @@ public class SchBomTests
                 	(symbol (lib_id "Device:R") (at 50.8 50.8 0) (unit 1) (uuid "0a1b2c3d-0000-4000-8000-000000000001")
                 		(property "Reference" "R1" (at 50.8 50.8 0))
                 		(property "Value" "10k" (at 50.8 50.8 0)))
-                	(symbol (lib_id "Device:R") (at 63.5 50.8 0) (unit 1) (exclude_from_bom yes) (uuid "0a1b2c3d-0000-4000-8000-000000000002")
+                	(symbol (lib_id "Device:R") (at 63.5 50.8 0) (unit 1) (in_bom no) (uuid "0a1b2c3d-0000-4000-8000-000000000002")
                 		(property "Reference" "R2" (at 63.5 50.8 0))
                 		(property "Value" "10k" (at 63.5 50.8 0)))
                 	(symbol (lib_id "Device:R") (at 76.2 50.8 0) (unit 1) (dnp yes) (uuid "0a1b2c3d-0000-4000-8000-000000000003")
@@ -90,7 +114,8 @@ public class SchBomTests
 
             var lines = SchBom.Build(path);
 
-            // R2 is kept off the bill; R3 is on it, but on a line of its own because it is not to be placed.
+            // R2 is kept off the bill — KiCad says so as "(in_bom no)" — and R3 is on it, but on a line of its own
+            // because it is not to be placed.
             Assert.Equal([["R1"], ["R3"]], lines.Select(l => l.References));
             Assert.Equal([false, true], lines.Select(l => l.Dnp));
             Assert.EndsWith("\"DNP\"\n", SchBom.Write(path), StringComparison.Ordinal);
