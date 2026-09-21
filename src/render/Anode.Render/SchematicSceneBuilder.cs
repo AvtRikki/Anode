@@ -468,7 +468,14 @@ public static class SchematicSceneBuilder
             {
                 if (outline.Kind is SchShapeKind.Polyline or SchShapeKind.Bezier)
                 {
-                    Outline(LayerStyle.Sch.RuleArea, Array.ConvertAll(outline.Points, p => p.ToDouble()), width, outline.IsFilled, Transform2D.Identity, owner);
+                    var shape = Array.ConvertAll(outline.Points, p => p.ToDouble());
+                    Outline(
+                        LayerStyle.Sch.RuleArea,
+                        outline.Kind == SchShapeKind.Bezier ? BezierMath.Tessellate(shape) : shape,
+                        width,
+                        outline.IsFilled,
+                        Transform2D.Identity,
+                        owner);
                     return;
                 }
 
@@ -490,7 +497,11 @@ public static class SchematicSceneBuilder
 
                 case SchShapeKind.Polyline:
                 case SchShapeKind.Bezier:
-                    var points = Array.ConvertAll(graphic.Points, p => p.ToDouble());
+                    // A curve is drawn as the curve: its four points are the frame it hangs in, and only the first
+                    // and last are on it, so joining them all with straight lines draws the wrong shape.
+                    var points = graphic.Kind == SchShapeKind.Bezier
+                        ? BezierMath.Tessellate(Array.ConvertAll(graphic.Points, p => p.ToDouble()))
+                        : Array.ConvertAll(graphic.Points, p => p.ToDouble());
                     if (graphic.IsFilled && points.Length >= 3)
                     {
                         Polygon(layer, points, toSheet, owner);

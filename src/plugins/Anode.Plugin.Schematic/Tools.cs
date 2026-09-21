@@ -562,6 +562,86 @@ internal sealed class SheetPinTool(
 }
 
 /// <summary>
+/// Collects a fixed number of points, one per click, and then makes something of them — an arc through three, a
+/// curve through four. Between clicks the shape follows the pointer, drawn from the points so far and the one it
+/// is over, so what will be made is what is shown.
+/// </summary>
+internal sealed class PointsTool(
+    SchematicEditor editor,
+    string id,
+    int wanted,
+    Func<IReadOnlyList<Vector2L>, SchItem> make,
+    Func<IReadOnlyList<Vector2L>, IReadOnlyList<Vector2D>> shape) : ISchTool
+{
+    private const double StrokeMm = 0.1524;
+
+    private readonly List<Vector2L> _points = [];
+    private Vector2L _cursor;
+
+    public string Id => id;
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        _cursor = editor.Snap(sheetPoint);
+        Rebuild();
+    }
+
+    public void Click(Vector2L sheetPoint)
+    {
+        _points.Add(editor.Snap(sheetPoint));
+        if (_points.Count < wanted)
+        {
+            Rebuild();
+            return;
+        }
+
+        var made = make(_points);
+        _points.Clear();
+        Preview = null;
+        editor.Apply(id, [made], []);
+    }
+
+    /// <summary>A shape needs all its points; there is nothing to finish early.</summary>
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        bool had = _points.Count > 0;
+        _points.Clear();
+        Preview = null;
+        Changed?.Invoke();
+        return had;
+    }
+
+    private void Rebuild()
+    {
+        Preview = null;
+        if (_points.Count > 0)
+        {
+            var so_far = _points.Append(_cursor).ToList();
+            var layer = new LayerGeometry(LayerStyle.Sch.Symbol);
+            var drawn = shape(so_far);
+            for (int i = 1; i < drawn.Count; i++)
+            {
+                layer.Lines.Add(new LinePrim(
+                    ToolDraw.Scene(editor, drawn[i - 1].Round()),
+                    ToolDraw.Scene(editor, drawn[i].Round()),
+                    (float)StrokeMm,
+                    -1));
+            }
+
+            Preview = layer;
+        }
+
+        Changed?.Invoke();
+    }
+}
+
+/// <summary>
 /// Cuts a wire in two where it is clicked. The point is snapped to the grid like any other, and a cut at an end of
 /// a wire does nothing: there would be nothing on one side of it.
 /// </summary>

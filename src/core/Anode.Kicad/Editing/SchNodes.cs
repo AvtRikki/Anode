@@ -149,6 +149,36 @@ public static class SchNodes
         return new SchGraphic(Fresh(text.ToString()));
     }
 
+    /// <summary>
+    /// An arc through three points: where it starts, a point it passes through, and where it ends. KiCad keeps an
+    /// arc this way rather than by angles, so an arc read back is the one that was drawn.
+    /// </summary>
+    public static SchGraphic Arc(Vector2L start, Vector2L mid, Vector2L end) =>
+        new(Fresh(
+            $"(arc (start {Mm(start.X)} {Mm(start.Y)}) (mid {Mm(mid.X)} {Mm(mid.Y)}) (end {Mm(end.X)} {Mm(end.Y)})"
+            + $"{Outline} (uuid \"{Guid.NewGuid()}\"))"));
+
+    /// <summary>
+    /// A curve: where it starts, two points that pull it, and where it ends. Only the first and last are on the
+    /// curve itself.
+    /// </summary>
+    public static SchGraphic Bezier(IReadOnlyList<Vector2L> points)
+    {
+        if (points.Count != 4)
+        {
+            throw new ArgumentException("A curve is four points: two on it and two that pull it.", nameof(points));
+        }
+
+        var text = new StringBuilder("(bezier (pts");
+        foreach (var point in points)
+        {
+            text.Append(" (xy ").Append(Mm(point.X)).Append(' ').Append(Mm(point.Y)).Append(')');
+        }
+
+        text.Append(')').Append(Outline).Append($" (uuid \"{Guid.NewGuid()}\"))");
+        return new SchGraphic(Fresh(text.ToString()));
+    }
+
     /// <summary>A rectangle by two opposite corners.</summary>
     public static SchGraphic Rectangle(Vector2L start, Vector2L end) =>
         new(Fresh(

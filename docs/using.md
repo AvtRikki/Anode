@@ -52,7 +52,9 @@ the command palette, which lists every command with its shortcut.
 
 - The same selection, move, rotate and delete; M, R, Shift+R, and Y and X mirror.
 - Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, text box, cut,
-  sheet, sheet pin, line, rectangle, circle. Esc returns to selecting.
+  sheet, sheet pin, line, arc, curve, rectangle, circle. Esc returns to selecting.
+- An arc takes three clicks — where it starts, where it ends, then a point it passes through — and a curve four.
+  Between clicks the shape follows the pointer, so what will be drawn is what is shown.
 - The cut tool divides a wire where it is clicked and puts a dot there; a click on an end of a wire does nothing.
 - A sheet is drawn as a rectangle in two clicks and then named; the schematic it reads is written beside this one
   under that name, unless a file of that name is already there, which it then reads instead. The sheet pin tool
@@ -94,9 +96,10 @@ file carries.
 
 The bottom dock lists what the checks found, each with a place and a button that shows it — including the
 electrical rules: pins that may not be wired together, and nets nothing drives. Those are worked out across the
-whole design, and each is shown on the sheet the pin stands on, where the button turns the tab to that place and
-selects the part. What the project's own settings say about a rule is followed: one softened to a warning is shown
-as one, and one the project silences is not shown at all. They are recomputed as the document changes; a project's
+whole design, and each is shown on the sheet the pin stands on, where the button turns the tab to that place,
+selects the part and brings it into view — centred, and moved closer only when it would otherwise be too small to
+find, since the zoom you set is yours. What the project's own settings say about a rule is followed: one softened
+to a warning is shown as one, and one the project silences is not shown at all. They are recomputed as the document changes; a project's
 missing drawing sheet or a font this machine lacks is reported there too.
 
 ## Files

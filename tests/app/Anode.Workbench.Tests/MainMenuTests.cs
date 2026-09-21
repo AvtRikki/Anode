@@ -79,7 +79,7 @@ public class MainMenuTests
                     "Draw a wire", "Draw a bus", "Place a label", "Place a global label",
                     "Place a hierarchical label", "Place a no-connect", "Place a junction",
                     "Place a bus entry", "Place text", "Place a text box", "Cut a wire", "Place a child sheet", "Place a sheet pin",
-                    "Draw a line", "Draw a rectangle", "Draw a circle",
+                    "Draw a line", "Draw a rectangle", "Draw a circle", "Draw an arc", "Draw a curve",
                 ],
                 Items(menu, "Place"));
 

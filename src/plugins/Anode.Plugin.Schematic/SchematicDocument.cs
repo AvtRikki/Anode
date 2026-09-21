@@ -409,16 +409,27 @@ public sealed class SchematicDocument : DocumentBase
                 Action: item is null ? null : () =>
                 {
                     ShowInstance(where.Path);
-                    _editor.SetSelection([item]);
+                    Focus(item);
                 });
         }
     }
 
-    /// <summary>Turns the tab to the place a pin stands in and selects the part it belongs to.</summary>
+    /// <summary>Turns the tab to the place a pin stands in and shows the part it belongs to.</summary>
     private void Reveal(DesignPin pin)
     {
         ShowInstance(pin.Place.Path);
-        _editor.SetSelection([pin.Pin.Symbol]);
+        Focus(pin.Pin.Symbol);
+    }
+
+    /// <summary>
+    /// Selects an item and brings it into view. Selecting alone was not enough to find anything: on a sheet the
+    /// size of a real one, what is selected is as likely as not to be off the screen, and a reader following a
+    /// check had to hunt for what they had just been shown.
+    /// </summary>
+    private void Focus(SchItem item)
+    {
+        _editor.SetSelection([item]);
+        _canvas?.ShowArea(_editor.Scene.BoundsOf(item));
     }
 
     internal IReadOnlyList<HierarchyDiagnostic> HierarchyDiagnostics { get; init; } = [];
@@ -529,7 +540,7 @@ public sealed class SchematicDocument : DocumentBase
     private void Reveal(DesignatorUse use)
     {
         ShowInstance(use.Place.Path);
-        _editor.SetSelection([use.Symbol]);
+        Focus(use.Symbol);
     }
 
     /// <summary>
@@ -594,6 +605,8 @@ public sealed class SchematicDocument : DocumentBase
                 new("sch.tool.line", "sch.tool.line", Icons.Line) { Activate = () => UseTool("sch.tool.line") },
                 new("sch.tool.rectangle", "sch.tool.rectangle", Icons.Rectangle) { Activate = () => UseTool("sch.tool.rectangle") },
                 new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
+                new("sch.tool.arc", "sch.tool.arc", Icons.Circle) { Activate = () => UseTool("sch.tool.arc") },
+                new("sch.tool.bezier", "sch.tool.bezier", Icons.Line) { Activate = () => UseTool("sch.tool.bezier") },
             ],
         },
 
@@ -1217,7 +1230,7 @@ public sealed class SchematicDocument : DocumentBase
             _labelTool = id;
         }
 
-        if (id is "sch.tool.line" or "sch.tool.rectangle" or "sch.tool.circle")
+        if (id is "sch.tool.line" or "sch.tool.rectangle" or "sch.tool.circle" or "sch.tool.arc" or "sch.tool.bezier")
         {
             _shapeTool = id;
         }
@@ -1239,6 +1252,14 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
                 "sch.tool.junction" => new PlaceTool(_editor, "sch.tool.junction", SchNodes.Junction, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
+                "sch.tool.arc" => new PointsTool(_editor, "sch.tool.arc", 3,
+                    p => SchNodes.Arc(p[0], p[2], p[1]),
+                    p => p.Count >= 3 && ArcMath.FromStartMidEnd(p[0].ToDouble(), p[2].ToDouble(), p[1].ToDouble()) is { } arc
+                        ? ArcMath.Tessellate(arc)
+                        : [.. p.Select(q => q.ToDouble())]),
+                "sch.tool.bezier" => new PointsTool(_editor, "sch.tool.bezier", 4,
+                    SchNodes.Bezier,
+                    p => BezierMath.Tessellate([.. p.Select(q => q.ToDouble())])),
                 "sch.tool.cut" => new CutTool(_editor, point => SchWires.At(Sheet.Wires, point), CutWire),
                 "sch.tool.textBox" => new SheetTool(_editor, PlaceTextBoxAsync, ex => _context?.Log.Error(ex.Message, ex)) { Id = "sch.tool.textBox" },
                 "sch.tool.sheet" => new SheetTool(_editor, PlaceSheetAsync, ex => _context?.Log.Error(ex.Message, ex)),
@@ -1439,6 +1460,16 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 80,
                 Execute = () => UseTool("sch.tool.line"),
+            },
+            new("sch.tool.arc", "sch.command.arc")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 110,
+                Execute = () => UseTool("sch.tool.arc"),
+            },
+            new("sch.tool.bezier", "sch.command.bezier")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 111,
+                Execute = () => UseTool("sch.tool.bezier"),
             },
             new("sch.tool.rectangle", "sch.command.rectangle")
             {

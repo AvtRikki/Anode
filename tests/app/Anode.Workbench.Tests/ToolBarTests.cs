@@ -69,7 +69,7 @@ public class ToolBarTests
 
             var shape = document.Tools.Single(t => t.Id == "sch.tool.line");
             Assert.Equal(
-                ["sch.tool.line", "sch.tool.rectangle", "sch.tool.circle"],
+                ["sch.tool.line", "sch.tool.rectangle", "sch.tool.circle", "sch.tool.arc", "sch.tool.bezier"],
                 shape.Variants.Select(v => v.Id));
 
             // The bar shows what the document offers, all of it and in its order.

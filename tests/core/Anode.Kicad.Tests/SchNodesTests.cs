@@ -164,4 +164,51 @@ public class SchNodesTests
         // And what was written reads back as the same tree.
         Assert.Equal(text, Encoding.UTF8.GetString(Schematic.Parse(text).Document.ToBytes()));
     }
+
+    /// <summary>
+    /// An arc is kept by three points it passes through, as KiCad keeps one, so an arc read back is the arc that
+    /// was drawn rather than one worked out from angles and rounded on the way.
+    /// </summary>
+    [Fact]
+    public void An_arc_is_written_through_the_three_points_it_was_given()
+    {
+        var start = new Vector2L(10_000_000, 50_000_000);
+        var mid = new Vector2L(30_000_000, 30_000_000);
+        var end = new Vector2L(50_000_000, 50_000_000);
+
+        var arc = SchNodes.Arc(start, mid, end);
+
+        Assert.Equal(SchShapeKind.Arc, arc.Kind);
+        Assert.Equal(start, arc.Start);
+        Assert.Equal(mid, arc.Mid);
+        Assert.Equal(end, arc.End);
+
+        // And it reads as an arc: a circle through those three points, curving up over them.
+        var geometry = Assert.NotNull(arc.ArcGeometry);
+        Assert.Equal(30_000_000, geometry.Center.X, 0);
+    }
+
+    [Fact]
+    public void A_curve_is_written_as_the_four_points_it_hangs_from()
+    {
+        Vector2L[] points =
+        [
+            new(0, 0), new(0, 10_000_000), new(10_000_000, 10_000_000), new(10_000_000, 0),
+        ];
+
+        var curve = SchNodes.Bezier(points);
+
+        Assert.Equal(SchShapeKind.Bezier, curve.Kind);
+        Assert.Equal(points, curve.Points);
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(5)]
+    public void A_curve_is_four_points_and_not_another_number(int count)
+    {
+        var points = Enumerable.Range(0, count).Select(i => new Vector2L(i * 1_000_000, 0)).ToArray();
+
+        Assert.Throws<ArgumentException>(() => SchNodes.Bezier(points));
+    }
 }

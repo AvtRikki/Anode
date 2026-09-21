@@ -23,6 +23,8 @@
       "sheetPin": "Sheet pin",
       "cut": "Cut a wire",
       "textBox": "Text box",
+      "arc": "Arc",
+      "bezier": "Curve",
       "circle": "Circle"
     },
     "command": {
@@ -43,6 +45,8 @@
       "cutWire": "Cut a wire",
       "textBox": "Place a text box",
       "cut": "Cut a wire",
+      "arc": "Draw an arc",
+      "bezier": "Draw a curve",
       "circle": "Draw a circle",
       "undo": "Undo",
       "redo": "Redo",

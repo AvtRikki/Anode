@@ -197,6 +197,35 @@ public sealed class SchematicCanvas : Panel
         return _lit;
     }
 
+    /// <summary>
+    /// Brings a place on the sheet into view: the view is centred on it, and moved closer only when it would
+    /// otherwise be hard to find — something taking up less than a quarter of the view is zoomed to, and anything
+    /// larger is left at the zoom the reader chose. Jumping to a chosen zoom every time would throw away the view
+    /// they had set up, which is worse than a small item being small.
+    /// </summary>
+    public void ShowArea(RectD area)
+    {
+        if (Scene is null || area.IsEmpty)
+        {
+            return;
+        }
+
+        if (Bounds.Width <= 0 || Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        SyncViewport();
+        _camera.Center = new Vector2D((area.MinX + area.MaxX) / 2, (area.MinY + area.MaxY) / 2);
+
+        if (CameraFocus.AreaFor(area, _camera.VisibleWorld) is { } closer)
+        {
+            _camera.Fit(closer);
+        }
+
+        Present();
+    }
+
     public void ZoomToFit()
     {
         if (Scene is not { } scene)
