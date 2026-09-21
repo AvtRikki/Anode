@@ -5,5 +5,5 @@
   "assembly": "Anode.Plugin.Schematic.dll",
   "entryType": "Anode.Plugin.Schematic.SchematicPlugin",
   "contractVersion": 15,
-  "description": "Viewing .kicad_sch sheets: symbols, wires, labels, hierarchy."
+  "description": "Viewing and editing .kicad_sch sheets: drawing tools, parts from symbol libraries, child sheets and hierarchy, nets, electrical checks, netlist and BOM export, and lossless saving."
 }

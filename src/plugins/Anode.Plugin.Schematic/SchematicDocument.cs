@@ -355,7 +355,10 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         string own = Path.GetFullPath(path);
-        foreach (var finding in SchErc.Check(DesignNets))
+
+        // The project decides how strictly its own rules are applied, and which of them it wants to hear about.
+        var rules = ErcRules.For(path);
+        foreach (var finding in SchErc.Check(DesignNets, rules))
         {
             var here = finding.Pins.FirstOrDefault(p => string.Equals(p.Place.File, own, StringComparison.Ordinal));
             if (here is null)
@@ -385,7 +388,7 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         string own = Path.GetFullPath(path);
-        foreach (var finding in SchErc.CheckSheets(_design, OpenSheet))
+        foreach (var finding in SchErc.CheckSheets(_design, OpenSheet, ErcRules.For(FilePath)))
         {
             var where = finding.Kind == ErcKind.SheetPinWithoutLabel
                 ? _design.FirstOrDefault(p => string.Equals(p.Path, finding.Place.Parent, StringComparison.Ordinal))

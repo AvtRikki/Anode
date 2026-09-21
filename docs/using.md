@@ -85,8 +85,9 @@ file carries.
 The bottom dock lists what the checks found, each with a place and a button that shows it — including the
 electrical rules: pins that may not be wired together, and nets nothing drives. Those are worked out across the
 whole design, and each is shown on the sheet the pin stands on, where the button turns the tab to that place and
-selects the part. They are recomputed as the
-document changes; a project's missing drawing sheet or a font this machine lacks is reported there too.
+selects the part. What the project's own settings say about a rule is followed: one softened to a warning is shown
+as one, and one the project silences is not shown at all. They are recomputed as the document changes; a project's
+missing drawing sheet or a font this machine lacks is reported there too.
 
 ## Files
 

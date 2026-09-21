@@ -42,58 +42,26 @@ public sealed record SheetFinding(ErcKind Kind, SheetInstance Place, string Name
 /// - a net carrying a pin that waits to be driven — an input, a power input — and nothing that drives it is
 ///   reported, unless somebody marked it no-connect. A net with a power input is a power net, and only a power
 ///   output drives one; that is the rule behind KiCad's "missing power flag".
+///
+/// How strictly each of these is applied — and which pins may meet — is <see cref="ErcRules"/>, which is KiCad's
+/// defaults until a project says otherwise.
 /// </summary>
 public static class SchErc
 {
-    private const string Input = "input";
-    private const string Output = "output";
-    private const string Bidirectional = "bidirectional";
-    private const string TriState = "tri_state";
-    private const string Passive = "passive";
-    private const string Free = "free";
-    private const string Unspecified = "unspecified";
-    private const string PowerIn = "power_in";
-    private const string PowerOut = "power_out";
-    private const string OpenCollector = "open_collector";
-    private const string OpenEmitter = "open_emitter";
-    private const string NoConnect = "no_connect";
-
-    /// <summary>The order of KiCad's matrix: the columns are the same types in the same order.</summary>
-    private static readonly string[] Types =
-        [Input, Output, Bidirectional, TriState, Passive, Free, Unspecified, PowerIn, PowerOut, OpenCollector, OpenEmitter, NoConnect];
-
     /// <summary>What drives an ordinary pin.</summary>
-    private static readonly HashSet<string> Driving = new(StringComparer.Ordinal) { Output, PowerOut, Passive, TriState, Bidirectional };
+    private static readonly HashSet<string> Driving = new(StringComparer.Ordinal)
+        { "output", "power_out", "passive", "tri_state", "bidirectional" };
 
     /// <summary>What drives a power input: only a power output.</summary>
-    private static readonly HashSet<string> DrivingPower = new(StringComparer.Ordinal) { PowerOut };
+    private static readonly HashSet<string> DrivingPower = new(StringComparer.Ordinal) { "power_out" };
 
     /// <summary>What waits to be driven.</summary>
-    private static readonly HashSet<string> Driven = new(StringComparer.Ordinal) { Input, PowerIn };
-
-    /// <summary>
-    /// KiCad's default pin matrix, row by row as it writes it: <c>.</c> the pins may meet, <c>w</c> doubtful,
-    /// <c>e</c> wrong. Rows and columns are <see cref="Types"/>, in that order.
-    /// </summary>
-    private static readonly string[] Matrix =
-    [
-        /* input          */ "......w....e",
-        /* output         */ ".e.w..w.eeee",
-        /* bidirectional  */ "......w.w.we",
-        /* tri_state      */ ".w....wwewwe",
-        /* passive        */ "......w....e",
-        /* free           */ "...........e",
-        /* unspecified    */ "wwwww.wwwwwe",
-        /* power_in       */ "...w..w....e",
-        /* power_out      */ ".ewe..w.eeee",
-        /* open_collector */ ".e.w..w.e..e",
-        /* open_emitter   */ ".eww..w.e..e",
-        /* no_connect     */ "eeeeeeeeeeee",
-    ];
+    private static readonly HashSet<string> Driven = new(StringComparer.Ordinal) { "input", "power_in" };
 
     /// <summary>Every rule broken in <paramref name="nets"/>, in the order the nets come.</summary>
-    public static IReadOnlyList<ErcFinding> Check(IEnumerable<DesignNet> nets)
+    public static IReadOnlyList<ErcFinding> Check(IEnumerable<DesignNet> nets, ErcRules? rules = null)
     {
+        var settings = rules ?? ErcRules.Default;
         var findings = new List<ErcFinding>();
 
         foreach (var net in nets)
@@ -111,7 +79,7 @@ public static class SchErc
                 continue;
             }
 
-            bool power = pins.Any(p => Type(p) == PowerIn);
+            bool power = pins.Any(p => Type(p) == "power_in");
             bool driven = pins.Any(p => (power ? DrivingPower : Driving).Contains(Type(p)));
             bool marked = net.Parts.Any(part => part.Net.IsNoConnect);
 
@@ -120,20 +88,18 @@ public static class SchErc
             {
                 for (int j = i + 1; j < pins.Count; j++)
                 {
-                    if (Conflict(Type(pins[i]), Type(pins[j])) is { } severity)
+                    if (settings.Conflict(Type(pins[i]), Type(pins[j])) is { } severity)
                     {
                         findings.Add(new ErcFinding(ErcKind.PinConflict, severity, net, [pins[i], pins[j]]));
                     }
                 }
             }
 
-            if (!driven && !marked && pins.FirstOrDefault(p => Driven.Contains(Type(p))) is { } waiting)
+            var kind = power ? ErcKind.PowerNotDriven : ErcKind.NotDriven;
+            if (!driven && !marked && settings.Severity(kind) is { } howBad
+                && pins.FirstOrDefault(p => Driven.Contains(Type(p))) is { } waiting)
             {
-                findings.Add(new ErcFinding(
-                    power ? ErcKind.PowerNotDriven : ErcKind.NotDriven,
-                    ErcSeverity.Error,
-                    net,
-                    [waiting]));
+                findings.Add(new ErcFinding(kind, howBad, net, [waiting]));
             }
         }
 
@@ -145,9 +111,20 @@ public static class SchErc
     /// the hierarchical label of the same name inside, and says so when either has no partner. A pin with nothing to
     /// answer it carries no signal in; a label with no pin carries one nowhere.
     /// </summary>
-    public static IReadOnlyList<SheetFinding> CheckSheets(IEnumerable<SheetInstance> places, Func<string, Schematic?> open)
+    public static IReadOnlyList<SheetFinding> CheckSheets(
+        IEnumerable<SheetInstance> places,
+        Func<string, Schematic?> open,
+        ErcRules? rules = null)
     {
+        var settings = rules ?? ErcRules.Default;
         var findings = new List<SheetFinding>();
+
+        // Both halves of the mismatch are one rule to KiCad, so a project that silences it silences both.
+        if (settings.Severity(ErcKind.SheetPinWithoutLabel) is null)
+        {
+            return findings;
+        }
+
 
         foreach (var place in places)
         {
@@ -185,22 +162,8 @@ public static class SchErc
         return findings;
     }
 
-    /// <summary>What the matrix says about two pin types meeting; null when they may.</summary>
-    public static ErcSeverity? Conflict(string first, string second)
-    {
-        int row = Array.IndexOf(Types, first), column = Array.IndexOf(Types, second);
-        if (row < 0 || column < 0)
-        {
-            return null;
-        }
-
-        return Matrix[row][column] switch
-        {
-            'e' => ErcSeverity.Error,
-            'w' => ErcSeverity.Warning,
-            _ => null,
-        };
-    }
+    /// <summary>What KiCad's own matrix says about two pin types meeting; null when they may.</summary>
+    public static ErcSeverity? Conflict(string first, string second) => ErcRules.Default.Conflict(first, second);
 
     private static string Type(DesignPin pin) => pin.Pin.Pin.ElectricalType;
 }

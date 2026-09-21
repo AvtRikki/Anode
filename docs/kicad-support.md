@@ -67,6 +67,12 @@ and what went wrong while the hierarchy was walked — a child sheet that will n
 A child sheet that fails to parse leaves the rest of the design open rather than stopping the load; opening that file
 itself still fails, as it must.
 
+How strictly each rule is applied is the project's to say: `erc.rule_severities` in the `.kicad_pro` softens a rule
+to a warning or silences it altogether, and `erc.pin_map` replaces the matrix of pin types with the project's own.
+The pin matrix is two settings at once, as KiCad reads it — `pin_to_pin` says only whether conflicts are reported,
+and the matrix cell says whether one is a warning or an error. A project that says nothing, or one that will not
+read, leaves KiCad's defaults standing.
+
 **Netlist.** The design is exported as KiCad's own `(export (version "E") …)`: the sheets of the design with their
 title blocks, the parts of every place with what they were drawn from and where they stand, the definitions with
 their pins, and the nets — named as KiCad names them (`/sheet/LABEL`, `Net-(R1-Pad2)`, `unconnected-(U2-NC-Pad3)`),
@@ -85,9 +91,9 @@ A part that carries a second body — KiCad's De Morgan alternative — can be s
 drawn from the inspector, and is drawn, wired and counted from the bodies of the way it is in. A body written for
 unit 0 is common to every section but still belongs to one way of drawing, which is the rule KiCad reads it by.
 
-Not done: renumbering a design that is already numbered (annotation only fills in what is missing). The rules are
-KiCad's defaults and cannot yet be turned off or changed, and a conflict is reported for each pair of pins rather
-than condensed as KiCad condenses it.
+Not done: renumbering a design that is already numbered (annotation only fills in what is missing), the exclusions
+a project lists for single findings, and condensing a conflict as KiCad condenses it rather than reporting each
+pair of pins.
 
 ## Drawing sheets (`.kicad_wks`)
 

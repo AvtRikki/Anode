@@ -25,6 +25,9 @@ public sealed partial class ProjectFile
     /// <summary>The board's drawing sheet as written in the file; empty or null for KiCad's default.</summary>
     public string? BoardDrawingSheet { get; init; }
 
+    /// <summary>How strictly the project asks for the electrical rules to be applied; KiCad's defaults otherwise.</summary>
+    public ErcRules Erc { get; init; } = ErcRules.Default;
+
     /// <summary>The project file next to or above <paramref name="file"/>, read; null when there is none.</summary>
     public static ProjectFile? For(string? file)
     {
@@ -55,11 +58,46 @@ public sealed partial class ProjectFile
                     : new Dictionary<string, string>(),
                 SchematicDrawingSheet = Setting(root, "schematic"),
                 BoardDrawingSheet = Setting(root, "pcbnew"),
+                Erc = Rules(root),
             };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
             return new ProjectFile { Path = path };
+        }
+
+        static ErcRules Rules(JsonElement root)
+        {
+            if (!root.TryGetProperty("erc", out var erc) || erc.ValueKind != JsonValueKind.Object)
+            {
+                return ErcRules.Default;
+            }
+
+            Dictionary<string, string>? severities = null;
+            if (erc.TryGetProperty("rule_severities", out var written) && written.ValueKind == JsonValueKind.Object)
+            {
+                severities = written.EnumerateObject()
+                    .Where(p => p.Value.ValueKind == JsonValueKind.String)
+                    .ToDictionary(p => p.Name, p => p.Value.GetString() ?? string.Empty, StringComparer.Ordinal);
+            }
+
+            List<IReadOnlyList<int>>? map = null;
+            if (erc.TryGetProperty("pin_map", out var pins) && pins.ValueKind == JsonValueKind.Array)
+            {
+                map = [];
+                foreach (var row in pins.EnumerateArray())
+                {
+                    if (row.ValueKind != JsonValueKind.Array)
+                    {
+                        map = null;
+                        break;
+                    }
+
+                    map.Add([.. row.EnumerateArray().Select(cell => cell.TryGetInt32(out int value) ? value : 0)]);
+                }
+            }
+
+            return ErcRules.From(severities, map);
         }
 
         static string? Setting(JsonElement root, string section) =>
