@@ -71,6 +71,7 @@ public static class Icons
     public const string Bus = "bus";
     public const string Sheet = "sheet";
     public const string SheetPin = "sheet-pin";
+    public const string Slice = "slice";
 
     // ——— Workbench ———
     public const string Search = "search";
@@ -218,6 +219,9 @@ public static class Icons
         [Sheet] = new(
             "M2.6 3.4 H13.4 V12.6 H2.6 Z",
             "M2.6 3.4 H13.4 V12.6 H2.6 Z M2.6 6.2 H13.4"),
+        [Slice] = new(
+            null,
+            "M1.8 8 H6.2 M9.8 8 H14.2 M8 4.4 V11.6"),
         [SheetPin] = new(
             "M1.8 5.8 H7.6 L9.4 7.6 L7.6 9.4 H1.8 Z",
             "M9.4 2.6 V13.4 M1.8 5.8 H7.6 L9.4 7.6 L7.6 9.4 H1.8 Z"),

@@ -165,6 +165,9 @@ public static class SchematicSceneBuilder
                 case SchLabel label:
                     AddLabel(label, scene.AddOwner(label));
                     break;
+                case SchText { IsBox: true } box:
+                    AddTextBox(box, scene.AddOwner(box));
+                    break;
                 case SchText text:
                     Text(LayerStyle.Sch.Text, text.Shown, text.Position.ToDouble(), text.TextHeight, text.Font, text.Angle,
                         text.Alignment, scene.AddOwner(text));
@@ -373,6 +376,66 @@ public static class SchematicSceneBuilder
         }
 
         /// <summary>
+        /// A note in a box of its own: the box is drawn round it, in its own stroke, and the words are laid inside
+        /// by the margins. Drawing only the words would leave the box off the sheet, which is most of what one is.
+        /// </summary>
+        private void AddTextBox(SchText box, int owner)
+        {
+            var corner = box.Position.ToDouble();
+            var size = box.Size.ToDouble();
+            if (size.X != 0 && size.Y != 0)
+            {
+                Vector2D[] corners =
+                [
+                    corner, new(corner.X + size.X, corner.Y),
+                    new(corner.X + size.X, corner.Y + size.Y), new(corner.X, corner.Y + size.Y),
+                ];
+
+                long width = box.StrokeWidth > 0 ? box.StrokeWidth : SymbolWidth;
+                Styled(box.StrokeStyle, () => Outline(LayerStyle.Sch.Text, corners, width, false, Transform2D.Identity, owner));
+            }
+
+            if (box.Shown.Length > 0)
+            {
+                InBox(LayerStyle.Sch.Text, box.Shown, box.Position, box.Size, box.Margins, box.Alignment,
+                    box.TextHeight, box.Font, box.Angle, owner);
+            }
+        }
+
+        /// <summary>
+        /// Words laid inside a box by its margins and its justification: at the left margin when they read from the
+        /// left, at the right margin when from the right, in the middle when centred — and the same down the box.
+        /// </summary>
+        private void InBox(
+            string layer,
+            string words,
+            Vector2L corner,
+            Vector2L size,
+            (long Left, long Top, long Right, long Bottom) margins,
+            (string Horizontal, string Vertical) alignment,
+            long height,
+            TextFont font,
+            double angle,
+            int owner)
+        {
+            double x = alignment.Horizontal switch
+            {
+                "right" => corner.X + size.X - margins.Right,
+                "center" => corner.X + (size.X / 2.0),
+                _ => corner.X + margins.Left,
+            };
+
+            double y = alignment.Vertical switch
+            {
+                "bottom" => corner.Y + size.Y - margins.Bottom,
+                "center" => corner.Y + (size.Y / 2.0),
+                _ => corner.Y + margins.Top,
+            };
+
+            Text(layer, words, new Vector2D(x, y), height, font, angle, alignment, owner);
+        }
+
+        /// <summary>
         /// The text of one cell, kept inside the box by its own margins and put where its justification asks: at the
         /// left margin when it reads from the left, at the right margin when from the right, in the middle when
         /// centred — and the same down the box.
@@ -384,26 +447,8 @@ public static class SchematicSceneBuilder
                 return;
             }
 
-            var (horizontal, vertical) = cell.Alignment;
-            var corner = cell.Position;
-            var margins = cell.Margins;
-
-            double x = horizontal switch
-            {
-                "right" => corner.X + cell.Size.X - margins.Right,
-                "center" => corner.X + (cell.Size.X / 2.0),
-                _ => corner.X + margins.Left,
-            };
-
-            double y = vertical switch
-            {
-                "bottom" => corner.Y + cell.Size.Y - margins.Bottom,
-                "center" => corner.Y + (cell.Size.Y / 2.0),
-                _ => corner.Y + margins.Top,
-            };
-
-            Text(LayerStyle.Sch.Text, cell.Shown, new Vector2D(x, y), cell.TextHeight, cell.Font, cell.Angle,
-                (horizontal, vertical), owner);
+            InBox(LayerStyle.Sch.Text, cell.Shown, cell.Position, cell.Size, cell.Margins, cell.Alignment,
+                cell.TextHeight, cell.Font, cell.Angle, owner);
         }
 
         /// <summary>

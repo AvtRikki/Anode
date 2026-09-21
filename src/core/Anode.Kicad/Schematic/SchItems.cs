@@ -590,12 +590,40 @@ public sealed class SchText(SList node) : SchItem(node)
 {
     public string Text => Node.Str(1) ?? string.Empty;
 
+    /// <summary>Whether the words are in a box of their own, which is drawn round them.</summary>
+    public bool IsBox => Node.Head == "text_box";
+
+    /// <summary>The box's size, for one that has a box; the point it carries is its top-left corner.</summary>
+    public Vector2L Size => Node.ChildPoint("size") ?? default;
+
+    /// <summary>How far the words are kept from each side of the box: left, top, right, bottom.</summary>
+    public (long Left, long Top, long Right, long Bottom) Margins => SchBoxMargins.Of(Node);
+
     /// <summary>The text as KiCad shows it, with its escapes put back — <c>{slash}</c> is a "/".</summary>
     public string Shown => KicadText.Unescape(Text);
 
     public long TextHeight => FontHeight(1_270_000);
 
     public (string Horizontal, string Vertical) Alignment => Justify();
+}
+
+/// <summary>The four margins of a box, as KiCad writes them: left, top, right, bottom, in millimetres.</summary>
+internal static class SchBoxMargins
+{
+    public static (long Left, long Top, long Right, long Bottom) Of(SList node)
+    {
+        if (node.Find("margins") is not { } margins)
+        {
+            return default;
+        }
+
+        long At(int index) => margins.AtomAt(index) is { } atom && double.TryParse(
+            atom.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double mm)
+            ? (long)Math.Round(mm * 1_000_000)
+            : 0;
+
+        return (At(1), At(2), At(3), At(4));
+    }
 }
 
 /// <summary>
@@ -615,23 +643,7 @@ public sealed class SchTableCell(SList node) : SchItem(node)
     public (string Horizontal, string Vertical) Alignment => Justify();
 
     /// <summary>How far the text is kept from each side: left, top, right, bottom, in nanometres.</summary>
-    public (long Left, long Top, long Right, long Bottom) Margins
-    {
-        get
-        {
-            if (Node.Find("margins") is not { } margins)
-            {
-                return default;
-            }
-
-            long At(int index) => margins.AtomAt(index) is { } atom && double.TryParse(
-                atom.Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double mm)
-                ? (long)Math.Round(mm * 1_000_000)
-                : 0;
-
-            return (At(1), At(2), At(3), At(4));
-        }
-    }
+    public (long Left, long Top, long Right, long Bottom) Margins => SchBoxMargins.Of(Node);
 }
 
 /// <summary>

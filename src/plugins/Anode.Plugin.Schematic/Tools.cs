@@ -391,7 +391,8 @@ internal sealed class SheetTool(SchematicEditor editor, Func<Vector2L, Vector2L,
     private bool _started;
     private bool _placing;
 
-    public string Id => "sch.tool.sheet";
+    /// <summary>What this tool is called: the same gesture draws a child sheet and a box of words.</summary>
+    public string Id { get; init; } = "sch.tool.sheet";
 
     public LayerGeometry? Preview { get; private set; }
 
@@ -557,6 +558,60 @@ internal sealed class SheetPinTool(
         {
             _placing = false;
         }
+    }
+}
+
+/// <summary>
+/// Cuts a wire in two where it is clicked. The point is snapped to the grid like any other, and a cut at an end of
+/// a wire does nothing: there would be nothing on one side of it.
+/// </summary>
+internal sealed class CutTool(SchematicEditor editor, Func<Vector2L, SchWire?> find, Action<SchWire, Vector2L> cut) : ISchTool
+{
+    private const double StrokeMm = 0.1524;
+    private const long ArmNm = 635_000;
+
+    public string Id => "sch.tool.cut";
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        Preview = null;
+        var at = editor.Snap(sheetPoint);
+
+        // The mark shows where the cut would fall, which is not always where the pointer is.
+        if (find(at) is not null)
+        {
+            var layer = new LayerGeometry(LayerStyle.Sch.NoConnect);
+            layer.Lines.Add(new LinePrim(
+                ToolDraw.Scene(editor, new Vector2L(at.X, at.Y - ArmNm)),
+                ToolDraw.Scene(editor, new Vector2L(at.X, at.Y + ArmNm)),
+                (float)StrokeMm,
+                -1));
+            Preview = layer;
+        }
+
+        Changed?.Invoke();
+    }
+
+    public void Click(Vector2L sheetPoint)
+    {
+        var at = editor.Snap(sheetPoint);
+        if (find(at) is { } wire)
+        {
+            cut(wire, at);
+        }
+    }
+
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        Preview = null;
+        Changed?.Invoke();
+        return false;
     }
 }
 

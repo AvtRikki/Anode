@@ -21,6 +21,8 @@
       "rectangle": "Rectangle",
       "sheet": "Sheet",
       "sheetPin": "Sheet pin",
+      "cut": "Cut a wire",
+      "textBox": "Text box",
       "circle": "Circle"
     },
     "command": {
@@ -38,6 +40,9 @@
       "rectangle": "Draw a rectangle",
       "sheet": "Place a child sheet",
       "sheetPin": "Place a sheet pin",
+      "cutWire": "Cut a wire",
+      "textBox": "Place a text box",
+      "cut": "Cut a wire",
       "circle": "Draw a circle",
       "undo": "Undo",
       "redo": "Redo",

@@ -57,6 +57,11 @@ written from there too — do-not-populate, and keeping it off the bill, off the
 word read and written the way KiCad writes it, which is not the same way round for all four. Words a file does not
 carry yet are put where KiCad would have put them, so a file we touch still reads like one of its own.
 
+A wire can be cut in two where it is clicked: the halves cover exactly what the one covered, meet at the cut, and
+are written as it was — a bus stays a bus and a dashed line stays dashed — with a dot on the cut, as KiCad's own
+Break leaves one. A note can be put in a box, and a box is drawn round the notes that are in one, with the words
+laid inside by its margins rather than hung off its corner.
+
 What a sheet hides — a field nobody wanted shown, a part's power pins — is drawn all the same, on layers of its own
 that are turned off, so showing it is a switch rather than a redrawing of the sheet.
 

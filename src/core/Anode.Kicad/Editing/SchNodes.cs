@@ -111,6 +111,26 @@ public static class SchNodes
             $"(text {Quote(text)} (at {KiCadNumber.FormatMm(at.X)} {KiCadNumber.FormatMm(at.Y)} {KiCadNumber.FormatAngle(angle)})"
             + $" (effects (font (size 1.27 1.27))) (uuid \"{Guid.NewGuid()}\"))"));
 
+    /// <summary>
+    /// A note in a box of its own. The point is the box's top-left corner and the size is how far it reaches; the
+    /// margins are KiCad's own, which is what keeps the words off the line.
+    /// </summary>
+    public static SchText TextBox(string text, Vector2L at, Vector2L size)
+    {
+        if (size.X <= 0 || size.Y <= 0)
+        {
+            throw new ArgumentException("A box needs a size.", nameof(size));
+        }
+
+        return new SchText(Fresh(
+            $"(text_box {Quote(text)} (exclude_from_sim no)"
+            + $" (at {KiCadNumber.FormatMm(at.X)} {KiCadNumber.FormatMm(at.Y)} 0)"
+            + $" (size {KiCadNumber.FormatMm(size.X)} {KiCadNumber.FormatMm(size.Y)})"
+            + " (margins 0.9525 0.9525 0.9525 0.9525) (stroke (width 0) (type solid)) (fill (type none))"
+            + " (effects (font (size 1.27 1.27)) (justify left top))"
+            + $" (uuid \"{Guid.NewGuid()}\"))"));
+    }
+
     /// <summary>A line or a run of them, drawn on the sheet rather than wired.</summary>
     public static SchGraphic Polyline(IReadOnlyList<Vector2L> points)
     {

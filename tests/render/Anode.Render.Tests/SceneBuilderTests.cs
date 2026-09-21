@@ -365,4 +365,47 @@ public class SceneBuilderTests(ITestOutputHelper output)
         // The pin that is not hidden stays where it always was, on the ordinary layer.
         Assert.NotEmpty(scene.Layers.Single(l => l.Name == LayerStyle.Sch.Pin).Lines);
     }
+
+    /// <summary>
+    /// A note in a box: the box is most of what one is, so it has to be drawn — and the words go inside it by its
+    /// margins rather than sitting on its corner.
+    /// </summary>
+    [Fact]
+    public void A_text_box_is_drawn_round_its_words()
+    {
+        var sheet = Anode.Kicad.Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(text_box \"note\" (at 100 50 0) (size 40 20) (margins 1 1 1 1)\n"
+            + "\t\t(stroke (width 0.1524) (type solid)) (fill (type none))\n"
+            + "\t\t(effects (font (size 1.27 1.27)) (justify left top)) (uuid \"0a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        var box = Assert.Single(sheet.Texts);
+        Assert.True(box.IsBox);
+
+        var scene = SchematicSceneBuilder.Build(sheet);
+        var lines = scene.Layers.Where(l => l.Name == LayerStyle.Sch.Text).SelectMany(l => l.Lines).ToList();
+
+        // The four sides are there.
+        var corner = scene.ToScene(new Vector2D(100_000_000, 50_000_000));
+        var far = scene.ToScene(new Vector2D(140_000_000, 70_000_000));
+        Assert.Contains(lines, l => Near(l.A, corner) && Near(l.B, new System.Numerics.Vector2(far.X, corner.Y)));
+        Assert.Contains(lines, l => Near(l.A, far) && Near(l.B, new System.Numerics.Vector2(corner.X, far.Y)));
+
+        // And the words are laid in by the box rather than hung off its corner: written the other way round, they
+        // land somewhere else while the four sides stay where they were.
+        var other = SchematicSceneBuilder.Build(Anode.Kicad.Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(text_box \"note\" (at 100 50 0) (size 40 20) (margins 1 1 1 1)\n"
+            + "\t\t(stroke (width 0.1524) (type solid)) (fill (type none))\n"
+            + "\t\t(effects (font (size 1.27 1.27)) (justify right bottom)) (uuid \"0a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n"));
+
+        var moved = other.Layers.Where(l => l.Name == LayerStyle.Sch.Text).SelectMany(l => l.Lines).ToList();
+        Assert.Equal(lines.Count, moved.Count);
+        Assert.NotEqual(lines.Select(l => (l.A.X, l.A.Y)), moved.Select(l => (l.A.X, l.A.Y)));
+
+        static bool Near(System.Numerics.Vector2 p, System.Numerics.Vector2 q) =>
+            Math.Abs(p.X - q.X) < 0.001f && Math.Abs(p.Y - q.Y) < 0.001f;
+    }
 }

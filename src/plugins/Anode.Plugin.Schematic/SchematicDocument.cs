@@ -582,6 +582,8 @@ public sealed class SchematicDocument : DocumentBase
         new("sch.tool.junction", "sch.tool.junction", Icons.Junction) { ShortcutText = "J", Activate = () => UseTool("sch.tool.junction") },
         new("sch.tool.busEntry", "sch.tool.busEntry", Icons.BusEntry) { Activate = () => UseTool("sch.tool.busEntry") },
         new("sch.tool.text", "sch.tool.text", Icons.Text) { ShortcutText = "T", Activate = () => UseTool("sch.tool.text") },
+        new("sch.tool.cut", "sch.tool.cut", Icons.Slice) { Activate = () => UseTool("sch.tool.cut") },
+        new("sch.tool.textBox", "sch.tool.textBox", Icons.Text) { Activate = () => UseTool("sch.tool.textBox") },
         new("sch.tool.sheet", "sch.tool.sheet", Icons.Sheet) { ShortcutText = "S", Activate = () => UseTool("sch.tool.sheet") },
         new("sch.tool.sheetPin", "sch.tool.sheetPin", Icons.SheetPin) { Activate = () => UseTool("sch.tool.sheetPin") },
         new(_shapeTool, _shapeTool, ShapeIcon(_shapeTool))
@@ -979,6 +981,35 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     /// <summary>
+    /// Puts a note in a box of its own: the box is drawn first, then the words are asked for. A box with nothing
+    /// written in it is still a box — KiCad keeps one — so an empty answer leaves it there rather than undoing it.
+    /// </summary>
+    private async Task PlaceTextBoxAsync(Vector2L at, Vector2L size)
+    {
+        if (_canvas is not { } canvas)
+        {
+            return;
+        }
+
+        string words = await canvas.AskForNameAsync(at, string.Empty) ?? string.Empty;
+        _editor.Apply(Tr.T("sch.tool.textBox"), [SchNodes.TextBox(words, at, size)], []);
+    }
+
+    /// <summary>
+    /// Cuts a wire in two where it was clicked, and puts a dot on the cut. The halves touch, so they are one net
+    /// either way; the dot is what says so to the eye, and KiCad's own Break leaves one there too.
+    /// </summary>
+    private void CutWire(SchWire wire, Vector2L at)
+    {
+        if (SchWires.Cut(wire, at) is not var (first, second))
+        {
+            return;
+        }
+
+        _editor.Apply(Tr.T("sch.command.cutWire"), [first, second, SchNodes.Junction(at)], [wire]);
+    }
+
+    /// <summary>
     /// Shows or hides what the sheet keeps out of sight — a field nobody wanted shown, a part's power pins. They
     /// are drawn already, on layers of their own that are off, so this is a switch and not a redrawing.
     /// </summary>
@@ -1208,6 +1239,8 @@ public sealed class SchematicDocument : DocumentBase
                 "sch.tool.noConnect" => new PlaceTool(_editor, "sch.tool.noConnect", SchNodes.NoConnect, _ => null),
                 "sch.tool.junction" => new PlaceTool(_editor, "sch.tool.junction", SchNodes.Junction, _ => null),
                 "sch.tool.busEntry" => new PlaceTool(_editor, "sch.tool.busEntry", at => SchNodes.BusEntry(at, BusStep), _ => null),
+                "sch.tool.cut" => new CutTool(_editor, point => SchWires.At(Sheet.Wires, point), CutWire),
+                "sch.tool.textBox" => new SheetTool(_editor, PlaceTextBoxAsync, ex => _context?.Log.Error(ex.Message, ex)) { Id = "sch.tool.textBox" },
                 "sch.tool.sheet" => new SheetTool(_editor, PlaceSheetAsync, ex => _context?.Log.Error(ex.Message, ex)),
                 "sch.tool.sheetPin" => new SheetPinTool(
                     _editor,
@@ -1380,6 +1413,16 @@ public sealed class SchematicDocument : DocumentBase
             {
                 ScopeKey = "scope.schematic", ShortcutText = "T", Gesture = new KeyGesture(Key.T), MenuKey = "menu.place", MenuOrder = 70,
                 Execute = () => UseTool("sch.tool.text"),
+            },
+            new("sch.tool.textBox", "sch.command.textBox")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 71,
+                Execute = () => UseTool("sch.tool.textBox"),
+            },
+            new("sch.tool.cut", "sch.command.cutWire")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.place", MenuOrder = 74,
+                Execute = () => UseTool("sch.tool.cut"),
             },
             new("sch.tool.sheet", "sch.command.sheet")
             {
