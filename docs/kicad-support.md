@@ -31,8 +31,9 @@ editing pads or footprints.
 
 Read and drawn: symbols with their libraries' definitions, units and body styles, wires and buses, junctions,
 no-connects, bus entries, labels of every kind (local, global, hierarchical, net-class flags), text and text boxes,
-graphics, sheets and their pins, the title block, and instance data — the designator and unit a part carries in each
-place of the hierarchy.
+graphics, sheets and their pins, pictures the sheet carries (PNG, drawn about their point at the size the picture
+itself gives), the title block, and instance data — the designator and unit a part carries in each place of the
+hierarchy.
 
 Edited: everything above can be moved, rotated, mirrored and deleted; wires, buses, labels, junctions, no-connects,
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries

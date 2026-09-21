@@ -65,6 +65,32 @@ public static class SchematicSceneBuilder
     {
         private const double Mm = Units.NmPerMm;
 
+        /// <summary>
+        /// A picture on the sheet, drawn about the point it stands at — KiCad centres one on its position, and how
+        /// big it is comes from the picture itself: its pixels at its own resolution, times the scale beside it.
+        /// A picture we cannot measure is not drawn at all, rather than drawn at a size we invented.
+        /// </summary>
+        public void AddImage(SchImage image, int owner)
+        {
+            if (image is not { Data: { } data, Size: { } size })
+            {
+                return;
+            }
+
+            var centre = image.Position.ToDouble();
+            var corner = scene.ToScene(new Vector2D(centre.X - (size.Width / 2.0), centre.Y - (size.Height / 2.0)));
+            var opposite = scene.ToScene(new Vector2D(centre.X + (size.Width / 2.0), centre.Y + (size.Height / 2.0)));
+
+            var bounds = new RectD(
+                Math.Min(corner.X, opposite.X),
+                Math.Min(corner.Y, opposite.Y),
+                Math.Max(corner.X, opposite.X),
+                Math.Max(corner.Y, opposite.Y));
+
+            scene.Layer(LayerStyle.Sch.Symbol).Images.Add(new ImagePrim(bounds, data, owner));
+            scene.GrowOwner(owner, bounds);
+        }
+
         /// <summary>The sheet itself: paper, plus the frame KiCad draws 10 mm inside it.</summary>
         public void AddSheetFrame(Vector2L paper)
         {
@@ -121,6 +147,9 @@ public static class SchematicSceneBuilder
                     break;
                 case SymbolInstance symbol:
                     AddSymbol(symbol, scene.AddOwner(symbol));
+                    break;
+                case SchImage image:
+                    AddImage(image, scene.AddOwner(image));
                     break;
                 case SchSheet sheet:
                     AddSheet(sheet, scene.AddOwner(sheet));

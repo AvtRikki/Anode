@@ -152,4 +152,29 @@ public class SceneBuilderTests(ITestOutputHelper output)
         Assert.False(scene.Bounds.IsEmpty);
         Assert.All(scene.Layers.SelectMany(l => l.Polygons), p => Assert.True(p.Points.All(v => float.IsFinite(v.X) && float.IsFinite(v.Y))));
     }
+
+    /// <summary>
+    /// A picture on a sheet is drawn where it stands and at the size it says: KiCad centres one on its point, so a
+    /// scene that hung it off a corner would put every logo in the wrong place.
+    /// </summary>
+    [Fact]
+    public void A_pictures_place_on_the_sheet_is_the_point_it_stands_at()
+    {
+        string file = Path.Combine(TestData.KiCadDir, "demos", "tiny_tapeout", "rp2040.kicad_sch");
+        Assert.SkipUnless(File.Exists(file), TestData.SkipReason);
+
+        var sheet = Anode.Kicad.Schematic.Load(file);
+        var image = sheet.Images.Single();
+        var scene = SchematicSceneBuilder.Build(sheet);
+
+        var drawn = Assert.Single(scene.Layers.SelectMany(l => l.Images));
+        Assert.Equal(image.Data, drawn.Encoded);
+
+        // Its middle is the point the file gives, and its size is the picture's own.
+        var centre = scene.ToScene(image.Position.ToDouble());
+        var size = image.Size!.Value;
+        Assert.Equal(centre.X, (drawn.Bounds.MinX + drawn.Bounds.MaxX) / 2, 3);
+        Assert.Equal(centre.Y, (drawn.Bounds.MinY + drawn.Bounds.MaxY) / 2, 3);
+        Assert.Equal(size.Width / 1_000_000.0, drawn.Bounds.MaxX - drawn.Bounds.MinX, 3);
+    }
 }

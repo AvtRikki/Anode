@@ -421,6 +421,69 @@ public sealed class SchJunction(SList node) : SchItem(node)
 /// <summary>The cross marking a pin that is deliberately left unconnected.</summary>
 public sealed class SchNoConnect(SList node) : SchItem(node);
 
+/// <summary>
+/// A picture on the sheet — a logo, a scan, a note drawn elsewhere. The file itself travels inside the sheet as
+/// base64, and how big it is drawn is what the picture says about itself: its pixels at its own resolution, taken
+/// times the scale written beside it.
+/// </summary>
+public sealed class SchImage(SList node) : SchItem(node)
+{
+    private byte[]? _data;
+    private bool _read;
+
+    /// <summary>How much larger or smaller than its natural size it is drawn; 1 when the file says nothing.</summary>
+    public double Scale => Node.ChildDouble("scale") is { } scale && scale > 0 ? scale : 1;
+
+    /// <summary>The picture as stored, or null when the sheet carries none that can be read.</summary>
+    public byte[]? Data
+    {
+        get
+        {
+            if (!_read)
+            {
+                _read = true;
+                _data = Decode();
+            }
+
+            return _data;
+        }
+    }
+
+    /// <summary>What the picture says about itself; null for anything but a PNG.</summary>
+    public DrawingSheets.PngInfo? Png => Data is { } bytes ? DrawingSheets.PngInfo.Read(bytes) : null;
+
+    /// <summary>Its size on the sheet in nanometres, or null when it is not a picture we can measure.</summary>
+    public (long Width, long Height)? Size => Png is { } png
+        ? ((long)Math.Round(png.Width * 25.4 * 1_000_000 * Scale / png.Ppi),
+           (long)Math.Round(png.Height * 25.4 * 1_000_000 * Scale / png.Ppi))
+        : null;
+
+    /// <summary>A picture whose own size is unknown is still somewhere; the reader must not be left with nothing.</summary>
+    public override void AfterRestore()
+    {
+        _read = false;
+        _data = null;
+    }
+
+    private byte[]? Decode()
+    {
+        if (Node.Find("data") is not { } data)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Convert.FromBase64String(string.Concat(
+                data.Skip(1).OfType<SAtom>().Select(a => a.Value)));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+}
+
 public enum SchLabelKind
 {
     Local,
