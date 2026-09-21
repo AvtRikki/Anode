@@ -66,6 +66,27 @@ public static class SchematicSceneBuilder
         private const double Mm = Units.NmPerMm;
 
         /// <summary>
+        /// How the lines being drawn just now are styled. It is a field rather than an argument because every line
+        /// of an item shares it, and threading it through every helper would put it in the way of everything else.
+        /// </summary>
+        private string _style = StrokeDashes.Solid;
+
+        /// <summary>Draws <paramref name="body"/> in an item's own stroke style, and puts the style back after.</summary>
+        private void Styled(string style, Action body)
+        {
+            string previous = _style;
+            _style = style;
+            try
+            {
+                body();
+            }
+            finally
+            {
+                _style = previous;
+            }
+        }
+
+        /// <summary>
         /// A picture on the sheet, drawn about the point it stands at — KiCad centres one on its position, and how
         /// big it is comes from the picture itself: its pixels at its own resolution, times the scale beside it.
         /// A picture we cannot measure is not drawn at all, rather than drawn at a size we invented.
@@ -124,7 +145,7 @@ public static class SchematicSceneBuilder
             switch (item)
             {
                 case SchWire wire:
-                    AddWire(wire, scene.AddOwner(wire));
+                    Styled(wire.StrokeStyle, () => AddWire(wire, scene.AddOwner(wire)));
                     break;
                 case SchBusEntry entry:
                     Line(LayerStyle.Sch.Bus, entry.Position.ToDouble(), entry.EndPoint.ToDouble(), BusWidth, scene.AddOwner(entry));
@@ -143,7 +164,8 @@ public static class SchematicSceneBuilder
                         text.Alignment, scene.AddOwner(text));
                     break;
                 case SchGraphic graphic:
-                    AddGraphic(graphic, Transform2D.Identity, LayerStyle.Sch.Symbol, scene.AddOwner(graphic));
+                    Styled(graphic.StrokeStyle, () =>
+                        AddGraphic(graphic, Transform2D.Identity, LayerStyle.Sch.Symbol, scene.AddOwner(graphic)));
                     break;
                 case SymbolInstance symbol:
                     AddSymbol(symbol, scene.AddOwner(symbol));
@@ -293,13 +315,16 @@ public static class SchematicSceneBuilder
             }
 
             long width = outline.StrokeWidth > 0 ? outline.StrokeWidth : SymbolWidth;
-            if (outline.Kind is SchShapeKind.Polyline or SchShapeKind.Bezier)
+            Styled(outline.StrokeStyle, () =>
             {
-                Outline(LayerStyle.Sch.RuleArea, Array.ConvertAll(outline.Points, p => p.ToDouble()), width, outline.IsFilled, Transform2D.Identity, owner);
-                return;
-            }
+                if (outline.Kind is SchShapeKind.Polyline or SchShapeKind.Bezier)
+                {
+                    Outline(LayerStyle.Sch.RuleArea, Array.ConvertAll(outline.Points, p => p.ToDouble()), width, outline.IsFilled, Transform2D.Identity, owner);
+                    return;
+                }
 
-            AddGraphic(outline, Transform2D.Identity, LayerStyle.Sch.RuleArea, owner);
+                AddGraphic(outline, Transform2D.Identity, LayerStyle.Sch.RuleArea, owner);
+            });
         }
 
         private void AddGraphic(SchGraphic graphic, Transform2D toSheet, string layer, int owner)
@@ -361,7 +386,21 @@ public static class SchematicSceneBuilder
             var p = scene.ToScene(a);
             var q = scene.ToScene(b);
             float width = (float)(widthNm / Mm);
-            geometry.Lines.Add(new LinePrim(p, q, width, owner));
+
+            // A dashed line is cut here rather than at every call site, so nothing that draws a line has to know.
+            if (StrokeDashes.Pattern(_style, width) is { } pattern)
+            {
+                foreach (var (from, to) in StrokeDashes.Cut(p, q, pattern))
+                {
+                    geometry.Lines.Add(new LinePrim(from, to, width, owner));
+                }
+            }
+            else
+            {
+                geometry.Lines.Add(new LinePrim(p, q, width, owner));
+            }
+
+            // The whole line is what the item covers, gaps and all; a selection must not end at the last dash.
             float h = width / 2;
             scene.GrowOwner(owner, new RectD(Math.Min(p.X, q.X) - h, Math.Min(p.Y, q.Y) - h, Math.Max(p.X, q.X) + h, Math.Max(p.Y, q.Y) + h));
         }

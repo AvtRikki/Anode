@@ -35,8 +35,12 @@ graphics, sheets and their pins, pictures the sheet carries (PNG, drawn about th
 itself gives), rule areas (drawn closed, as the boundary they are), the title block, and instance data — the
 designator and unit a part carries in each place of the hierarchy.
 
-Not drawn, though kept in the file untouched: tables, groups, and the ellipses KiCad 10 added. A stroke's style is
-not read either — a dashed or dotted line is drawn solid, which is a rule area's usual look.
+A stroke's style is read: a line written as dashed, dotted or a mixture of the two is drawn that way, with the
+lengths KiCad takes from ISO 128-2 — eleven widths of dash, a fifth of a width of dot, four widths of gap. The
+cutting is done in the world the drawing lives in, so a dash is a length on the sheet and looks the same at any
+zoom and through either backend.
+
+Not drawn, though kept in the file untouched: tables, groups, and the ellipses KiCad 10 added.
 
 Edited: everything above can be moved, rotated, mirrored and deleted; wires, buses, labels, junctions, no-connects,
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries

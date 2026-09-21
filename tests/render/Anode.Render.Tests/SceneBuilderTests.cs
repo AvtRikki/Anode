@@ -191,9 +191,33 @@ public class SceneBuilderTests(ITestOutputHelper output)
         var sheet = Anode.Kicad.Schematic.Load(file);
         var scene = SchematicSceneBuilder.Build(sheet);
 
-        int corners = sheet.RuleAreas.Sum(a => a.Outline!.Points.Length);
         var drawn = scene.Layers.Single(l => l.Name == LayerStyle.Sch.RuleArea);
+        Assert.NotEmpty(drawn.Lines);
 
-        Assert.Equal(corners, drawn.Lines.Count);
+        // The side that closes the shape is the one an open polyline would miss: something must be drawn along it.
+        foreach (var area in sheet.RuleAreas)
+        {
+            var corners = area.Outline!.Points;
+            var last = scene.ToScene(corners[^1].ToDouble());
+            var first = scene.ToScene(corners[0].ToDouble());
+
+            Assert.Contains(drawn.Lines, line => OnSegment(line.A, last, first) && OnSegment(line.B, last, first));
+        }
+
+        // A piece of a line lies on the segment from a to b — within a hair, since a dash is cut along it.
+        static bool OnSegment(System.Numerics.Vector2 point, System.Numerics.Vector2 a, System.Numerics.Vector2 b)
+        {
+            var along = b - a;
+            var offset = point - a;
+            float length = along.Length();
+            if (length <= 0)
+            {
+                return false;
+            }
+
+            float across = Math.Abs((along.X * offset.Y) - (along.Y * offset.X)) / length;
+            float at = System.Numerics.Vector2.Dot(offset, along) / length;
+            return across < 0.001f && at >= -0.001f && at <= length + 0.001f;
+        }
     }
 }

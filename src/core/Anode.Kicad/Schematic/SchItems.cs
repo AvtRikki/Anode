@@ -22,6 +22,12 @@ public abstract class SchItem(SList node) : INodeItem
     /// <summary>Stroke width in nanometres; zero means "the default width for this kind of item".</summary>
     public long StrokeWidth => Node.Find("stroke")?.ChildNm("width") ?? 0;
 
+    /// <summary>
+    /// How the line is drawn: "solid", "dash", "dot", "dash_dot", "dash_dot_dot", or "default" for whatever the
+    /// item would be drawn with anyway. KiCad writes this beside the width, on anything that has a stroke.
+    /// </summary>
+    public string StrokeStyle => Node.Find("stroke")?.ChildString("type") ?? "default";
+
     /// <summary>Text height of <c>(effects (font (size w h)))</c>, in nanometres.</summary>
     protected long FontHeight(long fallback)
     {
