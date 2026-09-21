@@ -360,4 +360,107 @@ public class SchematicEditorTests
         Assert.Equal(before, editor.Scene.OwnersOf(label).Count);
         Assert.Single(editor.Scene.TopLevelItems, item => ReferenceEquals(item, label));
     }
+
+    /// <summary>
+    /// Bringing a selection into line. Items slide and nothing else: a drawing that is already wired must not be
+    /// turned or resized by tidying it up.
+    /// </summary>
+    [Theory]
+    [InlineData(SchematicEditor.AlignTo.Left)]
+    [InlineData(SchematicEditor.AlignTo.Right)]
+    [InlineData(SchematicEditor.AlignTo.Top)]
+    [InlineData(SchematicEditor.AlignTo.Bottom)]
+    public void Aligning_brings_every_item_to_the_same_edge(SchematicEditor.AlignTo edge)
+    {
+        var editor = Scattered(out var sheet);
+        editor.SetSelection(sheet.Graphics);
+
+        editor.Align(edge);
+
+        var boxes = sheet.Graphics.Select(g => editor.Scene.BoundsOf(g)).ToList();
+        double Edge(RectD box) => edge switch
+        {
+            SchematicEditor.AlignTo.Left => box.MinX,
+            SchematicEditor.AlignTo.Right => box.MaxX,
+            SchematicEditor.AlignTo.Top => box.MinY,
+            _ => box.MaxY,
+        };
+
+        // Within a nanometre of each other: the move is whole nanometres on the sheet, not exact millimetres.
+        Assert.All(boxes, box => Assert.Equal(Edge(boxes[0]), Edge(box), 3));
+    }
+
+    [Fact]
+    public void Aligning_moves_things_without_turning_or_resizing_them()
+    {
+        var editor = Scattered(out var sheet);
+
+        // Measured on the sheet rather than on the screen: the scene's own numbers wobble in their last bits when
+        // anything moves, and a wobble is not what this is about.
+        var sizes = sheet.Graphics.Select(g => g.End - g.Start).ToList();
+
+        editor.SetSelection(sheet.Graphics);
+        editor.Align(SchematicEditor.AlignTo.Left);
+
+        Assert.Equal(sizes, sheet.Graphics.Select(g => g.End - g.Start));
+    }
+
+    [Fact]
+    public void Aligning_is_one_step_to_undo()
+    {
+        var editor = Scattered(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection(sheet.Graphics);
+        editor.Align(SchematicEditor.AlignTo.Right);
+        Assert.NotEqual(original, sheet.Document.ToBytes());
+
+        editor.Undo();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void One_item_has_nothing_to_come_into_line_with()
+    {
+        var editor = Scattered(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([sheet.Graphics[0]]);
+        editor.Align(SchematicEditor.AlignTo.Left);
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void Bringing_to_the_grid_needs_only_one_item()
+    {
+        var editor = Scattered(out var sheet);
+        editor.GridNm = 2_540_000;
+
+        editor.SetSelection([sheet.Graphics[0]]);
+        editor.Align(SchematicEditor.AlignTo.Grid);
+
+        // Its own point sits on the grid afterwards; it was written off it on purpose.
+        var at = SchEdits.Anchor(sheet.Graphics[0]);
+        Assert.Equal(0, at.X % 2_540_000);
+        Assert.Equal(0, at.Y % 2_540_000);
+    }
+
+    /// <summary>Three rectangles of different sizes, none of them lined up with another.</summary>
+    private static SchematicEditor Scattered(out Schematic sheet)
+    {
+        sheet = Schematic.Parse(
+            "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + Box(1, 20.1, 30.3, 40, 45)
+            + Box(2, 55.7, 60.9, 70, 80)
+            + Box(3, 90.2, 25.4, 120, 35)
+            + "\t(embedded_fonts no))\n");
+
+        return new SchematicEditor(SchematicSceneBuilder.Build(sheet));
+
+        static string Box(int n, double x1, double y1, double x2, double y2) =>
+            $"\t(rectangle (start {x1} {y1}) (end {x2} {y2}) (stroke (width 0.1524) (type solid)) (fill (type none))"
+            + $" (uuid \"0a1b2c3d-0000-4000-8000-00000000000{n}\"))\n";
+    }
 }

@@ -528,6 +528,90 @@ public sealed class SchematicEditor
 
     private long SnapValue(long value) => (long)Math.Round((double)value / GridNm, MidpointRounding.AwayFromZero) * GridNm;
 
+    /// <summary>Which edge of the selection the rest is brought to, or the middle of it.</summary>
+    public enum AlignTo
+    {
+        Left,
+        Right,
+        Top,
+        Bottom,
+        MiddleAcross,
+        MiddleDown,
+        Grid,
+    }
+
+    /// <summary>
+    /// Brings the selection into line: every item moves until the chosen edge of it meets the same edge of the
+    /// selection as a whole — or, for the grid, until each one sits on it. Nothing turns and nothing changes size;
+    /// items only slide, which is what makes this safe to do to a drawing that is already wired.
+    ///
+    /// Each item is measured by what it covers on the sheet, so a part is brought into line by its body rather than
+    /// by the point it happens to be drawn from.
+    /// </summary>
+    public void Align(AlignTo edge)
+    {
+        var items = _selection.ToList();
+        if (Move is not null || items.Count == 0 || (edge != AlignTo.Grid && items.Count < 2))
+        {
+            return;
+        }
+
+        var all = RectD.Empty;
+        foreach (var item in items)
+        {
+            all = all.Union(Scene.BoundsOf(item));
+        }
+
+        var moves = new List<(SchItem Item, Vector2L Delta)>();
+        foreach (var item in items)
+        {
+            var box = Scene.BoundsOf(item);
+            var delta = edge switch
+            {
+                AlignTo.Left => OnSheet(all.MinX - box.MinX, 0),
+                AlignTo.Right => OnSheet(all.MaxX - box.MaxX, 0),
+                AlignTo.Top => OnSheet(0, all.MinY - box.MinY),
+                AlignTo.Bottom => OnSheet(0, all.MaxY - box.MaxY),
+                AlignTo.MiddleAcross => OnSheet(((all.MinX + all.MaxX) - (box.MinX + box.MaxX)) / 2, 0),
+                AlignTo.MiddleDown => OnSheet(0, ((all.MinY + all.MaxY) - (box.MinY + box.MaxY)) / 2),
+                _ => ToGrid(item),
+            };
+
+            if (delta != default)
+            {
+                moves.Add((item, delta));
+            }
+        }
+
+        if (moves.Count == 0)
+        {
+            return;
+        }
+
+        Execute(new ModifyNodesCommand("Align", [.. moves.Select(m => m.Item)], () =>
+        {
+            foreach (var (item, delta) in moves)
+            {
+                SchEdits.Transform(item, default, 0, delta);
+            }
+        }));
+    }
+
+    /// <summary>A distance on the screen as a distance on the sheet; the scene's scale is the only thing between them.</summary>
+    private Vector2L OnSheet(double dx, double dy)
+    {
+        var origin = Scene.ToSheetNm(new Vector2D(0, 0));
+        var moved = Scene.ToSheetNm(new Vector2D(dx, dy));
+        return (moved - origin).Round();
+    }
+
+    /// <summary>What it would take to put an item's own point on the grid.</summary>
+    private Vector2L ToGrid(SchItem item)
+    {
+        var anchor = SchEdits.Anchor(item);
+        return Snap(anchor) - anchor;
+    }
+
     private Vector2L SelectionCenter(IEnumerable<SchItem> items)
     {
         var bounds = RectD.Empty;

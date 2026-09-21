@@ -52,7 +52,19 @@ members are ever on the page. What we lack is selecting them together, which bel
 Edited: everything above can be moved, rotated, mirrored and deleted; wires, buses, labels, junctions, no-connects,
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries
 (both library tables, an index with search and previews), a placement can be updated from its library or swapped for
-another part, and a sheet's fields and title block are written from the inspector. Annotation numbers what is
+another part, and a sheet's fields and title block are written from the inspector. What a part is left out of is
+written from there too — do-not-populate, and keeping it off the bill, off the board or out of simulation — each
+word read and written the way KiCad writes it, which is not the same way round for all four. Words a file does not
+carry yet are put where KiCad would have put them, so a file we touch still reads like one of its own.
+
+A selection can be brought into line — to its left, right, top or bottom edge, down or across its middle, or onto
+the grid — by sliding each item and nothing else: a drawing that is already wired must not be turned or resized by
+being tidied. A child sheet's page number is written for the place it stands in, since a sheet placed twice is two
+pages of the design.
+
+The same words can be written as another kind of thing: a local name made global or hierarchical, either made into
+a note, a note made into a name. Where it is, which way it faces and how it looks all travel with it, and a label
+that leaves the sheet keeps the direction of its signal. Annotation numbers what is
 unnumbered, per place, and takes the first number nobody in the design has — counting every place of every sheet,
 as KiCad does, so that no two parts of one design are called the same thing. A part placed from the panel is named
 the same way as it lands, and a number handed out is not offered again. A sheet can also be numbered again from

@@ -60,6 +60,10 @@ the command palette, which lists every command with its shortcut.
   can be laid down. A part drawn in sections asks which one to place.
 - The nets panel lists the nets of the sheet with what each reaches; a switch turns it to the whole design's nets.
   Choosing a row lights that net, choosing it again puts it out. The backquote does the same from a selection.
+- **Edit → Write as a label / global label / hierarchical label / text** changes what selected words mean without
+  moving them. What is already of that kind is left alone.
+- **Edit → Align** brings the selection to one edge, to its middle, or onto the grid. Things only slide.
+- A child sheet's page number is written in the inspector, for the place the sheet stands in.
 - Annotation numbers the parts that carry no number yet, per place in the hierarchy. The number is the first one
   free in the whole design, not on this sheet alone, so two sheets never hand out the same designator; parts that
   already carry a number are left alone.
@@ -76,7 +80,8 @@ the command palette, which lists every command with its shortcut.
 With something selected, the inspector describes it in blocks — what it is, what it connects to, how it is set, where
 it stands. A value on the field fill can be written; a bare one was computed. E puts the caret in the first value
 that can be written. A part drawn in sections is asked which one it is; a part that carries a second body is asked
-which way it is drawn — the De Morgan alternative is a switch there.
+which way it is drawn — the De Morgan alternative is a switch there. Switches also say what the part is left out of:
+do not populate, keep off the bill, keep off the board, keep out of simulation.
 
 With nothing selected it describes the document itself: a sheet its paper, title block, contents, nets and checks; a
 board its size, layers, what is placed and routed. The title block is written from there, and so is which fonts the
