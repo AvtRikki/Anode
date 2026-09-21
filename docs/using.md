@@ -73,7 +73,8 @@ the command palette, which lists every command with its shortcut.
 
 With something selected, the inspector describes it in blocks — what it is, what it connects to, how it is set, where
 it stands. A value on the field fill can be written; a bare one was computed. E puts the caret in the first value
-that can be written.
+that can be written. A part drawn in sections is asked which one it is; a part that carries a second body is asked
+which way it is drawn — the De Morgan alternative is a switch there.
 
 With nothing selected it describes the document itself: a sheet its paper, title block, contents, nets and checks; a
 board its size, layers, what is placed and routed. The title block is written from there, and so is which fonts the

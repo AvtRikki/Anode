@@ -205,6 +205,7 @@
       "library": "Library",
       "footprint": "Footprint",
       "unit": "Unit",
+      "bodyStyle": "Body style",
       "net": "Net",
       "position": "Position",
       "angle": "Angle",
@@ -219,7 +220,8 @@
       "length": "Length",
       "uuid": "UUID"
     },
-    "value": { "yes": "yes", "no": "no", "none": "—" },
+    "value": {
+      "alternateBody": "Alternate (De Morgan)", "yes": "yes", "no": "no", "none": "—" },
     "units": { "mm": "mm" },
     "log": {
       "exported": "Written to {0}",

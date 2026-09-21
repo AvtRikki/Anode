@@ -101,6 +101,38 @@ public static class SchWrites
         }
     }
 
+    /// <summary>
+    /// Which way a part is drawn: 1 for its ordinary body, 2 for KiCad's De Morgan alternative. Only the drawing
+    /// changes — the part, its designator and the net each pin is on are the same, which is why this is not kept
+    /// per place the way a designator is.
+    ///
+    /// The word is written the way the file already writes it: an older file says <c>convert</c>, a newer one
+    /// <c>body_style</c>, and a file must not end up saying both.
+    /// </summary>
+    public static void SetBodyStyle(SymbolInstance symbol, int style)
+    {
+        if (style is not (1 or 2))
+        {
+            throw new ArgumentOutOfRangeException(nameof(style), style, "A symbol is drawn one of two ways.");
+        }
+
+        if ((symbol.Node.Find("convert") ?? symbol.Node.Find("body_style")) is { } written)
+        {
+            (written.AtomAt(1) ?? throw new KiCadFormatException("A symbol has no body style.")).SetNumber(style);
+            return;
+        }
+
+        // Nothing said so far, so it is drawn the ordinary way; saying so again would only add noise to the file.
+        if (style == 1)
+        {
+            return;
+        }
+
+        // KiCad writes the style straight after the section, which is where a reader expects to find it.
+        var node = SchNodes.Adopt(Sexpr.SDocument.Parse($"(body_style {style})").Root);
+        symbol.Node.Insert(symbol.Node.Find("unit") is { } unit ? symbol.Node.IndexOf(unit) + 1 : 1, node);
+    }
+
     /// <summary>Moves the item to a point, keeping whatever angle it has.</summary>
     public static void SetPosition(SchItem item, Vector2L at)
     {

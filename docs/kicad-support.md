@@ -81,10 +81,13 @@ KiCad's natural order. A part on a sheet placed twice is two parts, under the de
 power symbol is not a part, nor is one the file marks `(exclude_from_bom yes)`; a part marked do-not-place is on a
 line of its own, as that column keeps it apart.
 
-Not done: the alternate (De Morgan) body style, and renumbering a design that is already numbered (annotation only
-fills in what is missing). The rules are KiCad's
-defaults and cannot yet be turned off or changed, and a conflict is reported for each pair of pins rather than
-condensed as KiCad condenses it.
+A part that carries a second body — KiCad's De Morgan alternative — can be switched between its two ways of being
+drawn from the inspector, and is drawn, wired and counted from the bodies of the way it is in. A body written for
+unit 0 is common to every section but still belongs to one way of drawing, which is the rule KiCad reads it by.
+
+Not done: renumbering a design that is already numbered (annotation only fills in what is missing). The rules are
+KiCad's defaults and cannot yet be turned off or changed, and a conflict is reported for each pair of pins rather
+than condensed as KiCad condenses it.
 
 ## Drawing sheets (`.kicad_wks`)
 

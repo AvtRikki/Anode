@@ -74,6 +74,17 @@ internal static class SchItemProperties
                             }),
                         }
                         : [],
+                    // De Morgan: only a part that carries a second body can be asked which way it is drawn.
+                    .. symbol.Definition is { HasAlternateBody: true }
+                        ? new[]
+                        {
+                            new InspectorRow(Name("bodyStyle"), Tr.T("sch.value.alternateBody"))
+                            {
+                                Switch = symbol.BodyStyle == 2,
+                                Commit = v => edit(Name("bodyStyle"), () => SchWrites.SetBodyStyle(symbol, v == "yes" ? 2 : 1)),
+                            },
+                        }
+                        : [],
                     .. symbol.Footprint is { Length: > 0 } footprint
                         ? new[] { Writable("footprint", footprint, v => edit(Name("footprint"), () => SchWrites.SetField(symbol, "Footprint", v))) }
                         : [],

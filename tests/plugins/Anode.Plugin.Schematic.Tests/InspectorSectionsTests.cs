@@ -67,6 +67,14 @@ public class InspectorSectionsTests
         				(number "4")
         			)
         		)
+        		(symbol "G_1_2"
+        			(pin input inverted
+        				(at -5.08 0 0)
+        				(length 1.27)
+        				(name "A")
+        				(number "1")
+        			)
+        		)
         	)
         	(symbol "R"
         		(property "Reference" "R"
@@ -91,6 +99,8 @@ public class InspectorSectionsTests
 
     /// <summary>The row's name as the panel shows it, whatever language is active.</summary>
     private static string UnitRow => Tr.T("sch.property.unit");
+
+    private static string BodyStyleRow => Tr.T("sch.property.bodyStyle");
 
     /// <summary>
     /// A sheet carrying one placed part. The definition is copied in first: the inspector asks the sheet what the
@@ -127,6 +137,35 @@ public class InspectorSectionsTests
     public void A_part_with_one_section_is_not_asked_at_all()
     {
         Assert.DoesNotContain(Rows(Place("R")), r => r.Name == UnitRow);
+    }
+
+    [Fact]
+    public void A_part_drawn_a_second_way_is_asked_which_way_it_is()
+    {
+        var row = Assert.Single(Rows(Place("G")), r => r.Name == BodyStyleRow);
+
+        // A switch, not a typed value: there are two ways and no more.
+        Assert.False(row.Switch);
+        Assert.NotNull(row.Commit);
+    }
+
+    [Fact]
+    public void A_part_drawn_one_way_is_not_asked_at_all()
+    {
+        Assert.DoesNotContain(Rows(Place("R")), r => r.Name == BodyStyleRow);
+    }
+
+    [Fact]
+    public void The_way_of_drawing_that_is_committed_reaches_the_file()
+    {
+        var symbol = Place("G");
+
+        Assert.Single(Rows(symbol), r => r.Name == BodyStyleRow).Commit!("yes");
+        Assert.Equal(2, symbol.BodyStyle);
+        Assert.True(Assert.Single(Rows(symbol), r => r.Name == BodyStyleRow).Switch);
+
+        Assert.Single(Rows(symbol), r => r.Name == BodyStyleRow).Commit!("no");
+        Assert.Equal(1, symbol.BodyStyle);
     }
 
     [Fact]

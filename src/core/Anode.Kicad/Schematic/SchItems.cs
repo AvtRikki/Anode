@@ -253,6 +253,13 @@ public sealed class LibSymbol : SchItem
     /// </summary>
     public int UnitCount => Units.Count == 0 ? 1 : Math.Max(1, Units.Max(u => u.Unit));
 
+    /// <summary>
+    /// Whether the part is drawn a second way — KiCad's De Morgan alternative, where a NAND may be shown as an OR
+    /// with inverted inputs. The bodies of the second way are the child symbols whose style is 2; a part that has
+    /// none can only be drawn the one way.
+    /// </summary>
+    public bool HasAlternateBody => Units.Any(u => u.Style > 1);
+
     /// <summary>Graphics of one placed unit: its own plus the ones common to all units.</summary>
     public IEnumerable<SchGraphic> GraphicsOf(int unit, int bodyStyle) =>
         Units.Where(u => u.IsGraphic && Matches(u, unit, bodyStyle)).Select(u => _graphics[u.Index]);

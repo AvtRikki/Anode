@@ -76,6 +76,7 @@ FILES=(
   qa/data/eeschema/netlists/bus_connection/bus_connection.kicad_pro
   qa/data/eeschema/netlists/bus_connection/bus_connection.net
   demos/pic_programmer/pic_programmer.kicad_sch
+  demos/pic_programmer/pic_sockets.kicad_sch
   demos/video/video.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod
   demos/cm5_minima/CM5IO.pretty/KiCad-Logo2_5mm_SilkScreen.kicad_mod
