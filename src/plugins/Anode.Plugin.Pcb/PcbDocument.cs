@@ -38,7 +38,7 @@ public sealed class PcbDocumentType(ILog log) : IDocumentType
                 SceneTriangulator.Triangulate(scene);
             }
 
-            log.Info(Tr.T("pcb.log.loaded", Path.GetFileName(path), board.Footprints.Count, scene.PrimitiveCount));
+            log.Info(Tr.English("pcb.log.loaded", Path.GetFileName(path), board.Footprints.Count, scene.PrimitiveCount));
             return (IDocument)new PcbDocument(board, scene, path)
             {
                 DrawingSheetMissing = missing,

@@ -77,11 +77,11 @@ public partial class App : Application
                 try
                 {
                     plugin.Instance.Activate(shell.CreatePluginContext(plugin.Manifest));
-                    log.Info(Tr.T("shell.log.pluginActivated", plugin.Manifest.Name, plugin.Manifest.Version));
+                    log.Info(Tr.English("shell.log.pluginActivated", plugin.Manifest.Name, plugin.Manifest.Version));
                 }
                 catch (Exception ex)
                 {
-                    log.Error(Tr.T("shell.log.pluginFailed", plugin.Manifest.Name, ex.Message), ex);
+                    log.Error(Tr.English("shell.log.pluginFailed", plugin.Manifest.Name, ex.Message), ex);
                 }
             }
 

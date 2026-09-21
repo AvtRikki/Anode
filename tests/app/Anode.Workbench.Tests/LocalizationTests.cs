@@ -59,6 +59,27 @@ public class LocalizationTests
     }
 
     [Fact]
+    public void Diagnostic_text_stays_english_when_interface_language_changes()
+    {
+        using var registration = Tr.Register(JsonTextCatalog.FromTexts(
+            ("en", new Dictionary<string, string> { ["test.diagnostic"] = "Loaded {0}: {1:F1}." }),
+            ("ru", new Dictionary<string, string> { ["test.diagnostic"] = "Translated {0}: {1:F1}." })));
+        var previous = Tr.Culture;
+        try
+        {
+            Tr.SetCulture(Russian);
+            Assert.Equal("Loaded board: 1.5.", Tr.English("test.diagnostic", "board", 1.5));
+            Assert.Equal("missing.diagnostic", Tr.English("missing.diagnostic"));
+            Assert.Equal(Russian, Tr.Culture);
+            Assert.StartsWith("Translated", Tr.T("test.diagnostic", "board", 1.5));
+        }
+        finally
+        {
+            Tr.SetCulture(previous);
+        }
+    }
+
+    [Fact]
     public void Plurals_follow_the_language()
     {
         var catalog = JsonTextCatalog.FromTexts(

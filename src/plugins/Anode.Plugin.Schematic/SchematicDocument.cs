@@ -59,7 +59,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
             {
                 writer.Write(text);
             }
-            log.Info(Tr.T("sch.log.created", Path.GetFileName(path)));
+            log.Info(Tr.English("sch.log.created", Path.GetFileName(path)));
         },
         cancellationToken);
 
@@ -81,7 +81,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
                 SceneTriangulator.Triangulate(scene);
             }
 
-            log.Info(Tr.T("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
+            log.Info(Tr.English("sch.log.loaded", Path.GetFileName(path), schematic.Symbols.Count, scene.PrimitiveCount));
             return (IDocument)new SchematicDocument(schematic, scene, path, remembered, appearances, design)
             {
                 DrawingSheetMissing = missing,
@@ -751,7 +751,7 @@ public sealed class SchematicDocument : DocumentBase
 
         if (Libraries.Find(libId) is not { } fresh)
         {
-            _context?.Log.Error(Tr.T("sch.log.updateMissing", libId));
+            _context?.Log.Error(Tr.English("sch.log.updateMissing", libId));
             return;
         }
 
@@ -1604,7 +1604,7 @@ public sealed class SchematicDocument : DocumentBase
             string temp = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target))!, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.tmp");
             await File.WriteAllTextAsync(temp, contents());
             File.Move(temp, target, overwrite: true);
-            context.Log.Info(Tr.T("sch.log.exported", Path.GetFileName(target)));
+            context.Log.Info(Tr.English("sch.log.exported", Path.GetFileName(target)));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or KiCadFormatException)
         {

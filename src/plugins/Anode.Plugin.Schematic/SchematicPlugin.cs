@@ -45,6 +45,6 @@ public sealed class SchematicPlugin : IPlugin
             Order = 20,
         });
 
-        context.Log.Info(Tr.T("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
+        context.Log.Info(Tr.English("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }

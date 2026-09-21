@@ -9,7 +9,7 @@ public interface IDocumentType
 {
     string Id { get; }
 
-    /// <summary>Short noun used next to tabs and in palette scopes: "плата", "схема".</summary>
+    /// <summary>Short noun used next to tabs and in palette scopes: "board", "schematic".</summary>
     string Label { get; }
 
     /// <summary>Lower-case extensions including the dot, e.g. ".kicad_pcb".</summary>
@@ -52,7 +52,7 @@ public interface IDocument : INotifyPropertyChanged, IDisposable
     /// <summary>Unsaved changes; the tab shows the alert dot.</summary>
     bool IsDirty { get; }
 
-    /// <summary>Right side of the tab strip: "плата · 4 слоя", "схема · 140%".</summary>
+    /// <summary>Right side of the tab strip: "board · 4 layers", "schematic · 140%".</summary>
     string Summary { get; }
 
     /// <summary>The editor, including its own toolbar. Created on first access, on the UI thread.</summary>
@@ -124,8 +124,8 @@ public sealed record ToolDescriptor(string Id, string TitleKey, string IconKey)
 public sealed record StatusField(string Text, bool AlignEnd = false, bool IsAlert = false);
 
 /// <param name="Title">Large heading, e.g. the reference "U3".</param>
-/// <param name="Subtitle">Where the object lives, e.g. "Power.sch · лист 2 из 4".</param>
-/// <param name="Tag">The kind, shown as a chip beside the title: "Символ", "Дорожка".</param>
+/// <param name="Subtitle">Where the object lives, e.g. "Power.sch · sheet 2 of 4".</param>
+/// <param name="Tag">The kind, shown as a chip beside the title: "Symbol", "Track".</param>
 public sealed record SelectionInfo(string Title, string? Subtitle, IReadOnlyList<PropertyItem> Properties, string? Tag = null)
 {
     /// <summary>
@@ -138,7 +138,7 @@ public sealed record SelectionInfo(string Title, string? Subtitle, IReadOnlyList
     public IReadOnlyList<InspectorAction> Actions { get; init; } = [];
 }
 
-/// <param name="IsSection">A section overline ("ВЫВОДЫ") instead of a name/value row.</param>
+/// <param name="IsSection">A section overline ("PINS") instead of a name/value row.</param>
 public sealed record PropertyItem(string Name, string Value, bool IsSection = false);
 
 /// <summary>
@@ -152,7 +152,7 @@ public sealed record InspectorBlock(string Title, IReadOnlyList<InspectorRow> Ro
 
     /// <summary>
     /// Rows are connections rather than values: a number, a name, and what it reaches pushed to the right. The
-    /// block's own title carries the count ("Связи · 3 вывода").
+    /// block's own title carries the count ("Connections · 3 pins").
     /// </summary>
     public bool IsConnections { get; init; }
 }

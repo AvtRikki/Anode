@@ -1,9 +1,9 @@
 {
   "id": "anode.pcb",
-  "name": "Плата KiCad",
+  "name": "KiCad board",
   "version": "0.1.0",
   "assembly": "Anode.Plugin.Pcb.dll",
   "entryType": "Anode.Plugin.Pcb.PcbPlugin",
   "contractVersion": 15,
-  "description": "Просмотр и правка плат .kicad_pcb: слои, выделение, перемещение, поворот, отмена, сохранение без потерь."
+  "description": "Viewing and editing .kicad_pcb boards: layers, selection, moving, rotation, undo, and lossless saving."
 }

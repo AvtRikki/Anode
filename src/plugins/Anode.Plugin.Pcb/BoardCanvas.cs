@@ -372,7 +372,7 @@ public sealed class BoardCanvas : Panel
         }
     }
 
-    /// <summary>Picks the selection up on the cursor, as the "Переместить" command does.</summary>
+    /// <summary>Picks the selection up on the cursor, as the "Move" command does.</summary>
     public void BeginMoveWithCursor()
     {
         if (Editor is { } editor && _gesture == Gesture.None && editor.Selection.Count > 0 && editor.BeginMove(null, World(_lastPoint)))

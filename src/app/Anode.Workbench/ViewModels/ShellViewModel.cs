@@ -304,7 +304,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     {
         if (CreatableType is not { } type)
         {
-            Log.Warn(Tr.T("shell.project.noCreator"));
+            Log.Warn(Tr.English("shell.project.noCreator"));
             return null;
         }
 
@@ -335,12 +335,12 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             await CreateFilesAsync(type, document, project, ProjectFile(name));
 
             OpenProject(directory);
-            Log.Info(Tr.T("shell.project.created", name));
+            Log.Info(Tr.English("shell.project.created", name));
             return await OpenAsync(document);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            Log.Error(Tr.T("shell.project.createFailed", ex.Message), ex);
+            Log.Error(Tr.English("shell.project.createFailed", ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.project.createFailed", ex.Message)));
             return null;
         }
@@ -351,7 +351,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
     {
         if (CreatableType is not { } type)
         {
-            Log.Warn(Tr.T("shell.project.noCreator"));
+            Log.Warn(Tr.English("shell.project.noCreator"));
             return null;
         }
 
@@ -372,7 +372,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
-            Log.Error(Tr.T("shell.project.createFailed", ex.Message), ex);
+            Log.Error(Tr.English("shell.project.createFailed", ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.project.createFailed", ex.Message)));
             return null;
         }
@@ -386,7 +386,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         {
             if (File.Exists(target) || Directory.Exists(target))
             {
-                throw new IOException(Tr.T("shell.project.exists", target));
+                throw new IOException(Tr.English("shell.project.exists", target));
             }
         }
 
@@ -468,7 +468,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         string name = Path.GetFileName(full);
         if (DocumentTypes.FindFor(full) is not { } type)
         {
-            Log.Warn(Tr.T("shell.log.noPlugin", Path.GetExtension(full), name));
+            Log.Warn(Tr.English("shell.log.noPlugin", Path.GetExtension(full), name));
             ShowBanner(new Banner(Tr.T("shell.banner.noPlugin", Path.GetExtension(full)), IsAlert: false));
             return null;
         }
@@ -483,13 +483,13 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             AddDocument(document);
             SetProject(full);
             Replace(RecentProjects, _recents.Touch(full, DateTime.Now));
-            Log.Info(Tr.T("shell.log.opened", name, type.Label));
+            Log.Info(Tr.English("shell.log.opened", name, type.Id));
             opened = document;
             return document;
         }
         catch (Exception ex)
         {
-            Log.Error(Tr.T("shell.log.openFailed", name, ex.Message), ex);
+            Log.Error(Tr.English("shell.log.openFailed", name, ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.log.openFailed", name, ex.Message)));
             return null;
         }
@@ -638,14 +638,14 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
             bool saved = await document.SaveAsync(path);
             if (saved)
             {
-                Log.Info(Tr.T("shell.log.saved", document.Title));
+                Log.Info(Tr.English("shell.log.saved", document.Title));
             }
 
             return saved;
         }
         catch (Exception ex)
         {
-            Log.Error(Tr.T("shell.log.saveFailed", document.Title, ex.Message), ex);
+            Log.Error(Tr.English("shell.log.saveFailed", document.Title, ex.Message), ex);
             ShowBanner(new Banner(Tr.T("shell.log.saveFailed", document.Title, ex.Message)));
             return false;
         }
@@ -713,7 +713,7 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
 
         if (ActivePane.ActiveTab is not { } moving || ActivePane.Tabs.Count < 2)
         {
-            Log.Info(Tr.T("shell.log.splitHint"));
+            Log.Info(Tr.English("shell.log.splitHint"));
             return;
         }
 

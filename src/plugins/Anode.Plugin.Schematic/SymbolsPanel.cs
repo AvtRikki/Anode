@@ -430,7 +430,7 @@ internal sealed class SymbolsPanel : ContentControl
         if (ProjectLibraries.ProjectFolder(sheet) is { } project)
         {
             string? nickname = ProjectLibraries.AddToProjectTable(project, path);
-            _workbench.Log.Info(Tr.T(nickname is null ? "sch.symbols.known" : "sch.symbols.added", nickname ?? path));
+            _workbench.Log.Info(Tr.English(nickname is null ? "sch.symbols.known" : "sch.symbols.added", nickname ?? path));
         }
 
         _shownFor = null;

@@ -122,6 +122,25 @@ public static class Tr
     /// <summary>A text with <c>{0}</c>-style placeholders filled in, formatted in the active language.</summary>
     public static string T(string key, params object?[] args) => string.Format(_culture, T(key), args);
 
+    /// <summary>Resolves diagnostic text in English, independently of the interface language.</summary>
+    public static string English(string key, params object?[] args)
+    {
+        string text = key;
+        lock (Catalogs)
+        {
+            foreach (var catalog in Catalogs)
+            {
+                if (catalog.Find(key, Neutral) is { } found)
+                {
+                    text = found;
+                    break;
+                }
+            }
+        }
+
+        return args.Length == 0 ? text : string.Format(Neutral, text, args);
+    }
+
     /// <summary>
     /// The plural form of <paramref name="keyPrefix"/> for <paramref name="count"/>: the catalog holds
     /// <c>&lt;prefix&gt;.one</c>, <c>.few</c>, <c>.many</c> and <c>.other</c> as the language needs them.
@@ -216,7 +235,7 @@ public sealed class JsonTextCatalog : ITextCatalog
         {
             string culture = Path.GetFileNameWithoutExtension(name)[(name.LastIndexOf(".i18n.", StringComparison.Ordinal) + ".i18n.".Length)..];
             using var stream = assembly.GetManifestResourceStream(name)
-                               ?? throw new InvalidOperationException($"Ресурс {name} не читается.");
+                               ?? throw new InvalidOperationException($"Cannot read resource {name}.");
             using var document = JsonDocument.Parse(stream);
 
             var texts = byCulture.TryGetValue(culture, out var existing) ? existing : byCulture[culture] = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -251,7 +270,7 @@ public sealed class JsonTextCatalog : ITextCatalog
                     texts[key] = property.Value.GetString()!;
                     break;
                 default:
-                    throw new FormatException($"Ключ {key}: ожидались строка или объект.");
+                    throw new FormatException($"Key {key}: expected a string or an object.");
             }
         }
     }

@@ -26,7 +26,7 @@ public sealed record CommandDescriptor(string Id, string TitleKey)
 
     public KeyGesture? Gesture { get; init; }
 
-    /// <summary>Shown with the "бета" tag.</summary>
+    /// <summary>Shown with the "beta" tag.</summary>
     public bool IsBeta { get; init; }
 
     /// <summary>

@@ -168,7 +168,7 @@ public static class ShellContributions
         shell.AddDocument(new StartPageDocument(shell));
     }
 
-    /// <summary>A language is named in itself: "English", "Русский".</summary>
+    /// <summary>A language is named in itself: "English", "Deutsch".</summary>
     private static string Native(CultureInfo culture) =>
         culture.NativeName.Length > 0 ? char.ToUpper(culture.NativeName[0], culture) + culture.NativeName[1..] : culture.Name;
 

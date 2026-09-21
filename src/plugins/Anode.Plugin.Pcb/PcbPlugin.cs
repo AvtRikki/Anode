@@ -23,6 +23,6 @@ public sealed class PcbPlugin : IPlugin
             DocumentTypes = [PcbDocumentType.TypeId],
         });
 
-        context.Log.Info(Tr.T("pcb.log.activated", context.Manifest.Name, context.Manifest.Version));
+        context.Log.Info(Tr.English("pcb.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }

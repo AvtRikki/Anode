@@ -43,7 +43,7 @@ public sealed record PanelDescriptor(string Id, string TitleKey, DockArea Area, 
     /// <summary>Icon rail label in the active language.</summary>
     public string RailLabel => RailLabelKey.Length == 0 ? string.Empty : Tr.T(RailLabelKey);
 
-    /// <summary>Lower orders come first among the tabs of the place ("Инспектор | Цепь").</summary>
+    /// <summary>Lower orders come first among the tabs of the place ("Inspector | Net").</summary>
     public int Order { get; init; }
 
     /// <summary>
