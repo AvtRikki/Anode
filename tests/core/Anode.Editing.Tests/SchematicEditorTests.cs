@@ -596,8 +596,116 @@ public class SchematicEditorTests
         Assert.Equal(was[1] + new Vector2L(0, 2_540_000), wire.Points[1]);
     }
 
+    /// <summary>
+    /// While the pointer is moving, the stretched wire is drawn where it stands: the end in hand follows, the far
+    /// end does not. It cannot be drawn by carrying the wire along, which is what the rest of the preview does.
+    /// </summary>
+    [Fact]
+    public void The_stretched_wire_is_drawn_as_it_is_being_stretched()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+        var far = editor.Scene.ToSceneMm(wire.Points[0].ToDouble());
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+
+        var rubber = editor.Move!.Rubber;
+        Assert.NotNull(rubber);
+        Assert.Single(rubber.Layer.Lines);
+
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(0, 5_080_000)).ToDouble()));
+
+        var line = Assert.Single(rubber.Layer.Lines);
+        var ends = new[] { line.A, line.B };
+
+        // The far end is where it always was; the other end has moved five millimetres down the sheet.
+        Assert.Contains(ends, p => Math.Abs(p.X - far.X) < 0.001 && Math.Abs(p.Y - far.Y) < 0.001);
+        Assert.Contains(ends, p => Math.Abs(p.Y - (far.Y - 8.89 + 5.08)) < 0.01);
+    }
+
+    [Fact]
+    public void The_wire_being_stretched_is_not_left_on_the_sheet_underneath()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+
+        // Drawn twice — once where it was and once where it is going — would look like two wires.
+        Assert.True(editor.Scene.BoundsOf(wire).IsEmpty, "the wire is still drawn where it was");
+    }
+
+    [Fact]
+    public void A_drag_that_is_called_off_changes_nothing_and_puts_the_wire_back()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(0, 5_080_000)).ToDouble()));
+        editor.CancelMove();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.False(editor.Scene.BoundsOf(wire).IsEmpty, "the wire was not put back on the sheet");
+    }
+
+    [Fact]
+    public void A_drag_committed_without_moving_puts_the_wire_back()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+        var wire = sheet.Wires.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+        editor.CommitMove();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.False(editor.Scene.BoundsOf(wire).IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(false, 0.4)]
+    [InlineData(true, 0)]
+    public void Stretched_lines_keep_their_layer_and_width(bool bus, double strokeWidthMm)
+    {
+        var editor = Wired(out var sheet, bus, strokeWidthMm);
+        var part = sheet.Symbols.Single();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+
+        var rubber = Assert.IsType<RubberBand>(editor.Move!.Rubber);
+        var layer = bus ? rubber.BusLayer : rubber.Layer;
+        var line = Assert.Single(layer.Lines);
+        Assert.Equal(bus ? LayerStyle.Sch.Bus : LayerStyle.Sch.Wire, layer.Name);
+        Assert.Equal(bus ? 0.3048f : 0.4f, line.Width, 4);
+        Assert.Empty((bus ? rubber.Layer : rubber.BusLayer).Lines);
+    }
+
+    [Fact]
+    public void An_ordinary_move_has_nothing_to_stretch()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()));
+
+        Assert.Null(editor.Move!.Rubber);
+        Assert.Empty(editor.Move.Stretching);
+    }
+
     /// <summary>A resistor with a wire running from its lower pin.</summary>
-    private static SchematicEditor Wired(out Schematic sheet)
+    private static SchematicEditor Wired(out Schematic sheet, bool bus = false, double strokeWidthMm = 0)
     {
         sheet = Schematic.Parse(
             "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
@@ -610,7 +718,7 @@ public class SchematicEditorTests
             + "\t\t(property \"Reference\" \"R1\" (at 50.8 45 0)))\n"
 
             // From the lower pin, straight down: its end sits exactly on the pin, which is what joins them.
-            + "\t(wire (pts (xy 50.8 63.5) (xy 50.8 54.61)) (stroke (width 0) (type default))\n"
+            + $"\t({(bus ? "bus" : "wire")} (pts (xy 50.8 63.5) (xy 50.8 54.61)) (stroke (width {strokeWidthMm.ToString(System.Globalization.CultureInfo.InvariantCulture)}) (type default))\n"
             + "\t\t(uuid \"1a1b2c3d-0000-4000-8000-000000000001\"))\n"
             + "\t(embedded_fonts no))\n");
 

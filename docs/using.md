@@ -51,8 +51,7 @@ the command palette, which lists every command with its shortcut.
 ## Schematics
 
 - The same selection, move, rotate and delete; M, R, Shift+R, and Y and X mirror. G drags instead of moving: the
-  wires that meet what is dragged keep hold of it and stretch. The stretching is shown when the drag is finished,
-  not while the pointer is still moving.
+  wires that meet what is dragged keep hold of it and stretch, and are drawn stretching as the pointer moves.
 - Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, text box, cut,
   sheet, sheet pin, line, arc, curve, rectangle, circle. Esc returns to selecting.
 - An arc takes three clicks — where it starts, where it ends, then a point it passes through — and a curve four.

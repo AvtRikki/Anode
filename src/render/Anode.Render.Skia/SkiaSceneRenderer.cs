@@ -15,6 +15,7 @@ public sealed class SkiaSceneRenderer : IDisposable
     private readonly IRenderScene _scene;
     private readonly Dictionary<LayerGeometry, LayerCache> _cache = [];
     private readonly Dictionary<LayerGeometry, LayerCache> _previewCache = [];
+    private readonly Dictionary<LayerGeometry, LayerCache> _inPlaceCache = [];
     private readonly SKPaint _stroke = new() { IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeCap = SKStrokeCap.Round, StrokeJoin = SKStrokeJoin.Round };
     private readonly SKPaint _fill = new() { IsAntialias = true, Style = SKPaintStyle.Fill };
     private readonly SKPaint _layerPaint = new();
@@ -98,6 +99,15 @@ public sealed class SkiaSceneRenderer : IDisposable
             }
 
             canvas.Restore();
+        }
+
+        // Drawn where it stands: what is being stretched, rather than carried along with the pointer.
+        if (view.PreviewInPlace is { } inPlace)
+        {
+            foreach (var layer in inPlace)
+            {
+                DrawLayer(canvas, GetCache(_inPlaceCache, layer), Brighten(layer.Color), minWorldWidth);
+            }
         }
 
         canvas.Restore();
@@ -358,8 +368,10 @@ public sealed class SkiaSceneRenderer : IDisposable
             DisposeCaches(_cache);
             DisposeCaches(_highlight);
             DisposeCaches(_previewCache);
+            DisposeCaches(_inPlaceCache);
             _cache.Clear();
             _previewCache.Clear();
+            _inPlaceCache.Clear();
             _highlight = null;
             _stroke.Dispose();
             _fill.Dispose();

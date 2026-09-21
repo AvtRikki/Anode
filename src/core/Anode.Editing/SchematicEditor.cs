@@ -1,3 +1,4 @@
+using System.Numerics;
 using Anode.Geometry;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
@@ -33,6 +34,12 @@ public sealed class SchMoveOperation
 
     /// <summary>The wire ends that are following what is being moved; empty for an ordinary move.</summary>
     public IReadOnlyList<WireEnd> Stretching { get; init; } = [];
+
+    /// <summary>
+    /// The stretched wires as they are just now, drawn where they stand rather than carried with the pointer. One
+    /// end of each is held still, which no transform of the wire can express.
+    /// </summary>
+    public RubberBand? Rubber { get; init; }
 
     /// <summary>Scene-space (mm) transform for <see cref="Preview"/>.</summary>
     public Transform2D PreviewTransform { get; internal set; } = Transform2D.Identity;
@@ -190,10 +197,21 @@ public sealed class SchematicEditor
 
         var anchorItem = grabbed is not null && items.Contains(grabbed) ? grabbed : items[0];
         var preview = Scene.Remove(items, collect: true);
+        var following = stretching ? SchDrag.Following(Sheet, items) : [];
         Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene))
         {
-            Stretching = stretching ? SchDrag.Following(Sheet, items) : [],
+            Stretching = following,
+            Rubber = following.Count > 0 ? new RubberBand(LayerStyle.Sch.Wire) : null,
         };
+
+        // The wires that are being stretched come off the scene for the duration: what is drawn for them is the
+        // rubber band, which changes with every step of the pointer.
+        if (following.Count > 0)
+        {
+            Scene.Remove([.. following.Select(end => (SchItem)end.Wire).Distinct()]);
+        }
+
+        StretchRubber(Move);
         SceneChanged?.Invoke();
         return true;
     }
@@ -209,6 +227,7 @@ public sealed class SchematicEditor
         var raw = new Vector2L((long)Math.Round(cursor.X - move.StartCursorNm.X), (long)Math.Round(cursor.Y - move.StartCursorNm.Y));
         move.Delta = Snap(move.AnchorNm + raw) - move.AnchorNm;
         UpdatePreviewTransform(move);
+        StretchRubber(move);
     }
 
     public void CommitMove()
@@ -221,7 +240,7 @@ public sealed class SchematicEditor
         Move = null;
         if (move.Delta == Vector2L.Zero && move.Rotation == 0)
         {
-            AddToScene(move.Items);
+            AddToScene(move.Items.Concat(move.Stretching.Select(end => (SchItem)end.Wire)).Distinct());
             return;
         }
 
@@ -245,11 +264,6 @@ public sealed class SchematicEditor
             }
         });
 
-        if (stretching.Count > 0)
-        {
-            Scene.Remove([.. stretching.Select(end => (SchItem)end.Wire).Distinct()]);
-        }
-
         Execute(command, removedFromScene: true);
     }
 
@@ -266,7 +280,51 @@ public sealed class SchematicEditor
 
         Move = null;
         AddToScene(move.Items);
+
+        // The wires that were being stretched go back untouched: a drag that was called off changes nothing.
+        if (move.Stretching.Count > 0)
+        {
+            AddToScene([.. move.Stretching.Select(end => (SchItem)end.Wire).Distinct()]);
+        }
     }
+
+    /// <summary>
+    /// Redraws the wires that are keeping hold of what is moving: every point of each stays where it is except the
+    /// end that is following, which is wherever the pointer has taken it.
+    /// </summary>
+    private void StretchRubber(SchMoveOperation move)
+    {
+        if (move.Rubber is not { } rubber)
+        {
+            return;
+        }
+
+        var lines = new List<(Vector2 From, Vector2 To, float Width, bool IsBus)>();
+        foreach (var group in move.Stretching.GroupBy(end => end.Wire))
+        {
+            var moved = group.Select(end => end.Index).ToHashSet();
+            var points = group.Key.Points;
+            var width = group.Key.StrokeWidth > 0 ? group.Key.StrokeWidth : group.Key.IsBus ? BusWidthNm : WireWidthNm;
+
+            for (int i = 1; i < points.Length; i++)
+            {
+                lines.Add((At(points[i - 1], moved.Contains(i - 1), move.Delta), At(points[i], moved.Contains(i), move.Delta),
+                    (float)(width / Units.NmPerMm), group.Key.IsBus));
+            }
+        }
+
+        rubber.Set(lines);
+
+        Vector2 At(Vector2L point, bool follows, Vector2L delta)
+        {
+            var mm = Scene.ToSceneMm((follows ? point + delta : point).ToDouble());
+            return new Vector2((float)mm.X, (float)mm.Y);
+        }
+    }
+
+    /// <summary>KiCad's default wire width, which is what a stretched wire is drawn with.</summary>
+    private const long WireWidthNm = 152_400;
+    private const long BusWidthNm = 304_800;
 
     /// <summary>Rotates the selection (or the move in progress) counter-clockwise by <paramref name="degrees"/>.</summary>
     public void Rotate(double degrees)

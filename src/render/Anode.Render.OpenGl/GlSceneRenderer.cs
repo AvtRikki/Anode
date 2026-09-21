@@ -34,6 +34,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
     private readonly Dictionary<byte[], uint> _textures = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<LayerGeometry, GpuBatch> _batches = [];
     private readonly List<(LayerGeometry Layer, GpuBatch Batch)> _preview = [];
+    private readonly List<(LayerGeometry Layer, GpuBatch Batch)> _inPlace = [];
     private readonly List<float> _dynamic = [];
     private readonly GpuBatch _grid = new(0);
     private readonly GpuBatch _box = new(0);
@@ -165,6 +166,13 @@ public sealed unsafe class GlSceneRenderer : IDisposable
             {
                 Draw(batch, Brighten(layer.Color), view, view.PreviewTransform);
             }
+        }
+
+        // Drawn where it stands: what is being stretched, rather than carried along with the pointer.
+        uploaded |= UpdateInPlace(view);
+        foreach (var (layer, batch) in _inPlace)
+        {
+            Draw(batch, Brighten(layer.Color), view, Transform2D.Identity);
         }
 
         if (view.SelectionBox is { } box)
@@ -440,6 +448,45 @@ public sealed unsafe class GlSceneRenderer : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// What is being stretched changes with every step of the pointer, so its batch is thrown away and uploaded
+    /// again whenever the layer says it has changed — there are only a few lines in it.
+    /// </summary>
+    private bool UpdateInPlace(ViewState view)
+    {
+        bool same = view.PreviewInPlace is { } wanted
+            && wanted.Count == _inPlace.Count
+            && !wanted.Where((layer, i) => !ReferenceEquals(layer, _inPlace[i].Layer) || layer.Version != _inPlace[i].Batch.Version).Any();
+
+        if (same)
+        {
+            return false;
+        }
+
+        ReleaseInPlace();
+        if (view.PreviewInPlace is null)
+        {
+            return false;
+        }
+
+        foreach (var layer in view.PreviewInPlace)
+        {
+            _inPlace.Add((layer, Upload(layer, null)));
+        }
+
+        return true;
+    }
+
+    private void ReleaseInPlace()
+    {
+        foreach (var (_, batch) in _inPlace)
+        {
+            batch.Release(_gl);
+        }
+
+        _inPlace.Clear();
+    }
+
     private GpuBatch Upload(LayerGeometry layer, Func<int, bool>? filter)
     {
         var batch = new GpuBatch(layer.Version);
@@ -570,6 +617,7 @@ public sealed unsafe class GlSceneRenderer : IDisposable
 
         _preview.Clear();
         _previewSource = null;
+        ReleaseInPlace();
     }
 
     private void ReleaseBatches(Dictionary<LayerGeometry, GpuBatch> batches)

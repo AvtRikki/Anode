@@ -71,7 +71,7 @@ What a sheet hides — a field nobody wanted shown, a part's power pins — is d
 that are turned off, so showing it is a switch rather than a redrawing of the sheet.
 
 A part can be dragged rather than moved: the ends of the wires that meet its pins travel with it and the wires
-stretch, so nudging a part does not quietly take the drawing apart. A wire that is itself being dragged travels
+stretch, drawn as they stretch while the pointer moves, so nudging a part does not quietly take the drawing apart. A wire that is itself being dragged travels
 whole rather than being pulled by one end, and the wires that follow change in the same step, so one undo puts
 everything back.
 

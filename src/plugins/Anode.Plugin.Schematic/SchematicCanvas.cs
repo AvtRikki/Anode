@@ -742,6 +742,7 @@ public sealed class SchematicCanvas : Panel
         {
             Preview = move?.Preview is { } moved ? moved : _tool?.Preview is { } drawn ? [drawn] : null,
             PreviewTransform = move?.PreviewTransform ?? Transform2D.Identity,
+            PreviewInPlace = move?.Rubber?.Layers,
             SelectionBox = _gesture == Gesture.BoxSelecting ? SelectionBox(_lastPoint) : null,
             SelectionBoxCrossing = _gesture == Gesture.BoxSelecting && IsCrossing(_lastPoint),
         };

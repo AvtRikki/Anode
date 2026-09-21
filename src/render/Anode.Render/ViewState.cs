@@ -28,6 +28,13 @@ public sealed record ViewState(
     /// <summary>Scene-space transform applied to <see cref="Preview"/>.</summary>
     public Transform2D PreviewTransform { get; init; } = Transform2D.Identity;
 
+    /// <summary>
+    /// Primitives drawn above the drawing but where they stand, without <see cref="PreviewTransform"/>: what is
+    /// being stretched rather than carried. A wire with one end held still cannot be expressed as a transform of
+    /// itself, so it is redrawn as it changes.
+    /// </summary>
+    public IReadOnlyList<LayerGeometry>? PreviewInPlace { get; init; }
+
     /// <summary>Rubber-band selection rectangle in scene millimetres.</summary>
     public RectD? SelectionBox { get; init; }
 
