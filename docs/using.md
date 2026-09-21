@@ -99,8 +99,8 @@ electrical rules: pins that may not be wired together, and nets nothing drives. 
 whole design, and each is shown on the sheet the pin stands on, where the button turns the tab to that place,
 selects the part and brings it into view — centred, and moved closer only when it would otherwise be too small to
 find, since the zoom you set is yours. What the project's own settings say about a rule is followed: one softened
-to a warning is shown as one, and one the project silences is not shown at all. They are recomputed as the document changes; a project's
-missing drawing sheet or a font this machine lacks is reported there too.
+to a warning is shown as one, and one the project silences is not shown at all. They are recomputed as the document
+changes; a project's missing drawing sheet or a font this machine lacks is reported there too.
 
 ## Files
 
