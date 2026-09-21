@@ -34,6 +34,12 @@ public static class SchematicSceneBuilder
             builder.Add(item);
         }
 
+        // What the sheet hides is drawn, but on layers that are off: showing it is then a switch, not a redrawing.
+        foreach (string hidden in (string[])[LayerStyle.Sch.HiddenField, LayerStyle.Sch.HiddenPin])
+        {
+            scene.Layer(hidden).IsVisible = false;
+        }
+
         scene.Commit();
         return scene;
     }
@@ -237,23 +243,25 @@ public static class SchematicSceneBuilder
                     ? symbol.ReferenceAt(path) ?? field.Value
                     : field.Value;
 
-                if (!field.IsHidden && value.Length > 0)
+                // A field the file hides is drawn on the hidden layer, which is off until somebody asks for it.
+                if (value.Length > 0)
                 {
-                    Text(LayerStyle.Sch.Field, value, field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
+                    Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, value,
+                        field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
                 }
             }
         }
 
         private void AddPin(SchPin pin, LibSymbol definition, Transform2D toSheet, int owner)
         {
-            if (pin.IsHidden)
-            {
-                return;
-            }
+            // A hidden pin is drawn on its own layer rather than left out, so that showing it is a switch and not a
+            // redrawing of the sheet. The layer is off until somebody asks for it.
+            string wire = pin.IsHidden ? LayerStyle.Sch.HiddenPin : LayerStyle.Sch.Pin;
+            string words = pin.IsHidden ? LayerStyle.Sch.HiddenPin : LayerStyle.Sch.PinText;
 
             var root = toSheet.Apply(pin.Position.ToDouble());
             var tip = toSheet.Apply(pin.EndPoint.ToDouble());
-            LineScene(LayerStyle.Sch.Pin, root, tip, SymbolWidth, owner);
+            LineScene(wire, root, tip, SymbolWidth, owner);
 
             // Text reads left to right whatever the pin direction: horizontal pins keep 0°, vertical ones turn 90°.
             bool vertical = Math.Abs(tip.Y - root.Y) > Math.Abs(tip.X - root.X);
@@ -263,7 +271,7 @@ public static class SchematicSceneBuilder
             {
                 var middle = new Vector2D((root.X + tip.X) / 2, (root.Y + tip.Y) / 2);
                 var offset = vertical ? new Vector2D(-pin.NumberHeight * 0.7, 0) : new Vector2D(0, -pin.NumberHeight * 0.7);
-                TextScene(LayerStyle.Sch.PinText, pin.Number, middle + offset, pin.NumberHeight, pin.NumberFont, angle, ("center", "center"), owner);
+                TextScene(words, pin.Number, middle + offset, pin.NumberHeight, pin.NumberFont, angle, ("center", "center"), owner);
             }
 
             if (definition.ShowPinNames && pin.Name is { Length: > 0 } name && name != "~")
@@ -274,7 +282,7 @@ public static class SchematicSceneBuilder
                 var alignment = vertical
                     ? (dy > 0 ? ("left", "center") : ("right", "center"))
                     : (dx > 0 ? ("left", "center") : ("right", "center"));
-                TextScene(LayerStyle.Sch.PinText, name, anchor, pin.NameHeight, pin.NameFont, angle, alignment, owner);
+                TextScene(words, name, anchor, pin.NameHeight, pin.NameFont, angle, alignment, owner);
             }
         }
 
@@ -295,9 +303,10 @@ public static class SchematicSceneBuilder
 
             foreach (var field in sheet.Fields)
             {
-                if (!field.IsHidden && field.Value.Length > 0)
+                if (field.Value.Length > 0)
                 {
-                    Text(LayerStyle.Sch.Field, field.Value, field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
+                    Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, field.Value,
+                        field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
                 }
             }
 

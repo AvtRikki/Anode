@@ -28,6 +28,12 @@ public abstract class SchItem(SList node) : INodeItem
     /// </summary>
     public string StrokeStyle => Node.Find("stroke")?.ChildString("type") ?? "default";
 
+    /// <summary>
+    /// Whether the item is held where it is. KiCad writes <c>(locked yes)</c> only when it is, so an item that says
+    /// nothing is free to move.
+    /// </summary>
+    public bool IsLocked => Node.ChildBool("locked");
+
     /// <summary>Text height of <c>(effects (font (size w h)))</c>, in nanometres.</summary>
     protected long FontHeight(long fallback)
     {

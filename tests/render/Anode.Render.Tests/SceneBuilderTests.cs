@@ -332,4 +332,37 @@ public class SceneBuilderTests(ITestOutputHelper output)
         Assert.Equal(centre.Y + 10, lines[^1].B.Y, 2);
         Assert.All(lines, line => Assert.True(line.A.X >= centre.X - 0.01f, "the arc ran past its start"));
     }
+
+    /// <summary>
+    /// What a sheet hides is drawn all the same, on layers that are off. Leaving it out of the scene would mean
+    /// rebuilding the whole drawing to show it; this way showing it is a switch.
+    /// </summary>
+    [Fact]
+    public void What_the_sheet_hides_is_drawn_on_a_layer_that_is_off()
+    {
+        var sheet = Anode.Kicad.Schematic.Parse(
+            "(kicad_sch (version 20250114) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(lib_symbols\n"
+            + "\t\t(symbol \"Device:R\" (property \"Reference\" \"R\" (at 0 0 0))\n"
+            + "\t\t\t(symbol \"R_1_1\"\n"
+            + "\t\t\t\t(pin passive line (at 0 3.81 270) (length 1.27) (name \"~\") (number \"1\"))\n"
+            + "\t\t\t\t(pin power_in line (at 0 -3.81 90) (length 1.27) (hide yes) (name \"VCC\") (number \"2\")))))\n"
+            + "\t(symbol (lib_id \"Device:R\") (at 50.8 44.45 0) (unit 1) (uuid \"0a1b2c3d-0000-4000-8000-000000000001\")\n"
+            + "\t\t(property \"Reference\" \"R1\" (at 50.8 40 0))\n"
+            + "\t\t(property \"Datasheet\" \"~\" (at 50.8 44.45 0) (effects (font (size 1.27 1.27)) (hide yes))))\n"
+            + "\t(embedded_fonts no))\n");
+
+        var scene = SchematicSceneBuilder.Build(sheet);
+
+        var hiddenPins = scene.Layers.Single(l => l.Name == LayerStyle.Sch.HiddenPin);
+        var hiddenFields = scene.Layers.Single(l => l.Name == LayerStyle.Sch.HiddenField);
+
+        Assert.False(hiddenPins.IsVisible);
+        Assert.False(hiddenFields.IsVisible);
+        Assert.NotEmpty(hiddenPins.Lines);
+        Assert.NotEmpty(hiddenFields.Lines);
+
+        // The pin that is not hidden stays where it always was, on the ordinary layer.
+        Assert.NotEmpty(scene.Layers.Single(l => l.Name == LayerStyle.Sch.Pin).Lines);
+    }
 }

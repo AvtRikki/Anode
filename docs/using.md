@@ -63,6 +63,8 @@ the command palette, which lists every command with its shortcut.
 - **Edit → Write as a label / global label / hierarchical label / text** changes what selected words mean without
   moving them. What is already of that kind is left alone.
 - **Edit → Align** brings the selection to one edge, to its middle, or onto the grid. Things only slide.
+- **Edit → Hold in place / Let go** locks what is selected. A held item does not move, turn or delete with the rest.
+- **View → Show hidden fields / hidden pins** brings out what the sheet keeps out of sight, and puts it back.
 - A child sheet's page number is written in the inspector, for the place the sheet stands in.
 - Annotation numbers the parts that carry no number yet, per place in the hierarchy. The number is the first one
   free in the whole design, not on this sheet alone, so two sheets never hand out the same designator; parts that

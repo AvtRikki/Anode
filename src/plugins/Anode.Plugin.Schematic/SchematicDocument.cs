@@ -978,6 +978,43 @@ public sealed class SchematicDocument : DocumentBase
         _context?.Log.Info(Tr.English("sch.log.renumbered", changed.Count));
     }
 
+    /// <summary>
+    /// Shows or hides what the sheet keeps out of sight — a field nobody wanted shown, a part's power pins. They
+    /// are drawn already, on layers of their own that are off, so this is a switch and not a redrawing.
+    /// </summary>
+    private void Reveal(string layer)
+    {
+        if (_editor.Scene.Find(layer) is not { } hidden)
+        {
+            return;
+        }
+
+        hidden.IsVisible = !hidden.IsVisible;
+        _canvas?.Redraw();
+        OnPropertiesChanged(nameof(StatusFields));
+    }
+
+    /// <summary>
+    /// Holds the selection where it is, or lets it go again. A locked item stays put through moving, turning,
+    /// tidying and deleting — the lock is answered where things are changed, not where the buttons are drawn.
+    /// </summary>
+    private void Lock(bool locked)
+    {
+        var change = _editor.Selection.Where(item => item.IsLocked != locked).ToList();
+        if (change.Count == 0)
+        {
+            return;
+        }
+
+        _editor.Modify(Tr.T(locked ? "sch.command.lock" : "sch.command.unlock"), change, () =>
+        {
+            foreach (var item in change)
+            {
+                SchWrites.SetFlag(item, "locked", locked);
+            }
+        });
+    }
+
     /// <summary>What in the selection has words on it that could be written as another kind of thing.</summary>
     private IReadOnlyList<SchItem> Relabelable() =>
         [.. _editor.Selection.Where(item => item switch
@@ -1405,6 +1442,28 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _editor.Selection.Count >= (a.Item2 == SchematicEditor.AlignTo.Grid ? 1 : 2),
                 Execute = () => Guard(() => _editor.Align(a.Item2), context),
             }),
+            new("sch.showHiddenFields", "sch.command.showHiddenFields")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.view", MenuOrder = 60,
+                Execute = () => Guard(() => Reveal(LayerStyle.Sch.HiddenField), context),
+            },
+            new("sch.showHiddenPins", "sch.command.showHiddenPins")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.view", MenuOrder = 61,
+                Execute = () => Guard(() => Reveal(LayerStyle.Sch.HiddenPin), context),
+            },
+            new("sch.lock", "sch.command.lock")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 97,
+                CanExecute = () => _editor.Selection.Any(i => !i.IsLocked),
+                Execute = () => Guard(() => Lock(true), context),
+            },
+            new("sch.unlock", "sch.command.unlock")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 98,
+                CanExecute = () => _editor.Selection.Any(i => i.IsLocked),
+                Execute = () => Guard(() => Lock(false), context),
+            },
             new("sch.toLabel", "sch.command.toLabel")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 80,

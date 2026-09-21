@@ -447,6 +447,80 @@ public class SchematicEditorTests
         Assert.Equal(0, at.Y % 2_540_000);
     }
 
+    /// <summary>
+    /// A lock has to hold. Greying out a button would not be a lock: what is held must stay put through moving,
+    /// turning, tidying and deleting, since each of those is a different road to the same item.
+    /// </summary>
+    [Fact]
+    public void What_is_held_in_place_does_not_move_or_turn()
+    {
+        var editor = Scattered(out var sheet);
+        var held = sheet.Graphics[0];
+        SchWrites.SetFlag(held, "locked", true);
+
+        var was = held.Start;
+        editor.SetSelection(sheet.Graphics);
+
+        editor.Align(SchematicEditor.AlignTo.Right);
+        Assert.Equal(was, held.Start);
+
+        editor.Rotate(90);
+        Assert.Equal(was, held.Start);
+
+        editor.Mirror(horizontal: true);
+        Assert.Equal(was, held.Start);
+
+        // The others were free to move, so the tidying did happen — the lock held one thing, not everything.
+        Assert.NotEqual(was, sheet.Graphics[1].Start);
+    }
+
+    [Fact]
+    public void What_is_held_in_place_is_not_deleted_with_the_rest()
+    {
+        var editor = Scattered(out var sheet);
+        var held = sheet.Graphics[0];
+        SchWrites.SetFlag(held, "locked", true);
+
+        editor.SetSelection(sheet.Graphics);
+        editor.DeleteSelection();
+
+        // It is still there, and still selected, so it is plain which one stayed and why.
+        Assert.Single(sheet.Graphics);
+        Assert.Same(held, sheet.Graphics[0]);
+        Assert.Same(held, Assert.Single(editor.Selection));
+    }
+
+    [Fact]
+    public void A_selection_of_nothing_but_held_items_deletes_nothing()
+    {
+        var editor = Scattered(out var sheet);
+        foreach (var graphic in sheet.Graphics)
+        {
+            SchWrites.SetFlag(graphic, "locked", true);
+        }
+
+        byte[] original = sheet.Document.ToBytes();
+        editor.SetSelection(sheet.Graphics);
+        editor.DeleteSelection();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.Equal(3, editor.Selection.Count);
+    }
+
+    [Fact]
+    public void Letting_go_gives_the_item_back_its_freedom()
+    {
+        var editor = Scattered(out var sheet);
+        var held = sheet.Graphics[0];
+        SchWrites.SetFlag(held, "locked", true);
+        Assert.False(SchEdits.CanTransform(held));
+
+        SchWrites.SetFlag(held, "locked", false);
+
+        Assert.True(SchEdits.CanTransform(held));
+        Assert.False(held.IsLocked);
+    }
+
     /// <summary>Three rectangles of different sizes, none of them lined up with another.</summary>
     private static SchematicEditor Scattered(out Schematic sheet)
     {

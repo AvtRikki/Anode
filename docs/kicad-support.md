@@ -57,6 +57,13 @@ written from there too — do-not-populate, and keeping it off the bill, off the
 word read and written the way KiCad writes it, which is not the same way round for all four. Words a file does not
 carry yet are put where KiCad would have put them, so a file we touch still reads like one of its own.
 
+What a sheet hides — a field nobody wanted shown, a part's power pins — is drawn all the same, on layers of its own
+that are turned off, so showing it is a switch rather than a redrawing of the sheet.
+
+An item can be held where it is, as KiCad's `(locked yes)` says it is: what is held stays put through moving,
+turning, tidying and deleting, and stays selected when the rest of a selection goes, so it is plain which one
+stayed. The lock is answered where things are changed rather than where the buttons are drawn.
+
 A selection can be brought into line — to its left, right, top or bottom edge, down or across its middle, or onto
 the grid — by sliding each item and nothing else: a drawing that is already wired must not be turned or resized by
 being tidied. A child sheet's page number is written for the place it stands in, since a sheet placed twice is two

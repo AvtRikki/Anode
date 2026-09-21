@@ -54,6 +54,14 @@ public static class LayerStyle
 
         /// <summary>An area the design rules are told about — KiCad's rule area, drawn as a marked-out region.</summary>
         public const string RuleArea = "#SchRuleArea";
+
+        /// <summary>
+        /// What the sheet says is hidden: a field nobody wanted shown, a part's power pins. These are drawn on
+        /// layers of their own, turned off, so that showing them is a switch rather than a redrawing.
+        /// </summary>
+        public const string HiddenField = "#SchHiddenField";
+
+        public const string HiddenPin = "#SchHiddenPin";
     }
 
     /// <summary>
@@ -109,6 +117,8 @@ public static class LayerStyle
         [Sch.Junction] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
         [Sch.NoConnect] = ColorRgba.Rgb(0xd6, 0x00, 0x6c),
         [Sch.RuleArea] = new(0x7c, 0x4d, 0xa8, 180),
+        [Sch.HiddenField] = new(0x20, 0x1e, 0x1d, 90),
+        [Sch.HiddenPin] = new(0x20, 0x1e, 0x1d, 90),
     };
 
     /// <summary>Inner copper is one grey; the drawing stays readable when a board has more than four layers.</summary>
@@ -148,6 +158,8 @@ public static class LayerStyle
         [NonPlatedHoles] = ColorRgba.Rgb(26, 196, 210),
 
         [Sch.RuleArea] = ColorRgba.Rgb(0xc0, 0x9c, 0xe0),
+        [Sch.HiddenField] = new(132, 132, 132, 160),
+        [Sch.HiddenPin] = new(132, 132, 132, 160),
 
         // KiCad's own drawing-sheet colour.
         [Sch.Frame] = ColorRgba.Rgb(132, 0, 0),
@@ -228,6 +240,8 @@ public static class LayerStyle
             Sch.Field => 30,
             Sch.Text => 31,
             Sch.Label => 32,
+            Sch.HiddenPin => 23,
+            Sch.HiddenField => 33,
             Sch.Junction => 40,
             Sch.NoConnect => 41,
             PlatedHoles => 9_000,

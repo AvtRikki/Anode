@@ -12,7 +12,11 @@ namespace Anode.Kicad.Editing;
 public static class SchEdits
 {
     /// <summary>Items that can be moved as a whole. Sheets move but do not turn, as in KiCad.</summary>
-    public static bool CanTransform(SchItem item) => item switch
+    /// <summary>
+    /// Whether the item may be moved at all. An item the designer has locked may not: locking that only greyed a
+    /// button would be no lock, so it is answered here, where everything that moves things asks.
+    /// </summary>
+    public static bool CanTransform(SchItem item) => !item.IsLocked && item switch
     {
         SymbolInstance or SchWire or SchJunction or SchNoConnect or SchLabel or SchText or SchBusEntry or SchSheet => true,
         SchGraphic { Kind: not SchShapeKind.Unsupported } => true,

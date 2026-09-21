@@ -388,8 +388,18 @@ public sealed class SchematicEditor
             return;
         }
 
-        var items = _selection.ToList();
-        _selection.Clear();
+        // A locked item is not deleted with the rest: it stays, and stays selected, so it is plain that it did.
+        var items = _selection.Where(item => !item.IsLocked).ToList();
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var item in items)
+        {
+            _selection.Remove(item);
+        }
+
 
         // A dot is only a dot while the branch under it is there. Taking the branch away takes the dot with it, in
         // the same step, so one undo gives both back.
@@ -550,7 +560,7 @@ public sealed class SchematicEditor
     /// </summary>
     public void Align(AlignTo edge)
     {
-        var items = _selection.ToList();
+        var items = _selection.Where(SchEdits.CanTransform).ToList();
         if (Move is not null || items.Count == 0 || (edge != AlignTo.Grid && items.Count < 2))
         {
             return;
