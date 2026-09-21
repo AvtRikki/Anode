@@ -177,4 +177,23 @@ public class SceneBuilderTests(ITestOutputHelper output)
         Assert.Equal(centre.Y, (drawn.Bounds.MinY + drawn.Bounds.MaxY) / 2, 3);
         Assert.Equal(size.Width / 1_000_000.0, drawn.Bounds.MaxX - drawn.Bounds.MinX, 3);
     }
+
+    /// <summary>
+    /// A rule area is a boundary, and a boundary comes back round: the file lists its corners once, so an area of
+    /// four corners must be drawn as four sides and not three.
+    /// </summary>
+    [Fact]
+    public void A_rule_area_is_drawn_closed()
+    {
+        string file = Path.Combine(TestData.KiCadDir, "demos", "royalblue54L_feather", "sch", "Debugger.kicad_sch");
+        Assert.SkipUnless(File.Exists(file), TestData.SkipReason);
+
+        var sheet = Anode.Kicad.Schematic.Load(file);
+        var scene = SchematicSceneBuilder.Build(sheet);
+
+        int corners = sheet.RuleAreas.Sum(a => a.Outline!.Points.Length);
+        var drawn = scene.Layers.Single(l => l.Name == LayerStyle.Sch.RuleArea);
+
+        Assert.Equal(corners, drawn.Lines.Count);
+    }
 }

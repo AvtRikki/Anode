@@ -80,6 +80,7 @@ FILES=(
   demos/pic_programmer/pic_programmer.kicad_pro
   demos/video/video.kicad_sch
   demos/tiny_tapeout/rp2040.kicad_sch
+  demos/royalblue54L_feather/sch/Debugger.kicad_sch
   demos/cm5_minima/CM5IO.pretty/C_0402_1005Metric.kicad_mod
   demos/cm5_minima/CM5IO.pretty/KiCad-Logo2_5mm_SilkScreen.kicad_mod
   demos/cm5_minima/CM5IO.pretty/L_Bourns_SRP5030CC.kicad_mod

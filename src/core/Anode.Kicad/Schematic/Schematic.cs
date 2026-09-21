@@ -44,6 +44,7 @@ public sealed class Schematic : INodeHost
     private readonly List<SchGraphic> _graphics = [];
     private readonly List<SchSheet> _sheets = [];
     private readonly List<SchImage> _images = [];
+    private readonly List<SchRuleArea> _ruleAreas = [];
     private readonly List<SList> _other = [];
 
     private Schematic(SDocument document)
@@ -98,6 +99,9 @@ public sealed class Schematic : INodeHost
                     break;
                 case "image":
                     _images.Add(new SchImage(child));
+                    break;
+                case "rule_area":
+                    _ruleAreas.Add(new SchRuleArea(child));
                     break;
                 case var head when SchGraphic.IsGraphicHead(head):
                     _graphics.Add(new SchGraphic(child));
@@ -163,6 +167,9 @@ public sealed class Schematic : INodeHost
     /// <summary>Pictures the sheet carries — a logo, a scan, a note drawn elsewhere.</summary>
     public IReadOnlyList<SchImage> Images => _images;
 
+    /// <summary>Areas the design rules are told about.</summary>
+    public IReadOnlyList<SchRuleArea> RuleAreas => _ruleAreas;
+
     /// <summary>Top-level lists this model does not interpret. Kept in the file untouched.</summary>
     public IReadOnlyList<SList> OtherItems => _other;
 
@@ -197,7 +204,7 @@ public sealed class Schematic : INodeHost
     /// <summary>Everything drawn on the sheet, in a stable order.</summary>
     public IEnumerable<SchItem> Items =>
         // Pictures come first: KiCad draws them behind everything, and a logo over the wiring would hide it.
-        _images.Cast<SchItem>().Concat(_graphics).Concat(_wires).Concat(_busEntries).Concat(_sheets).Concat(_symbols)
+        _images.Cast<SchItem>().Concat(_ruleAreas).Concat(_graphics).Concat(_wires).Concat(_busEntries).Concat(_sheets).Concat(_symbols)
             .Concat(_junctions).Concat(_noConnects).Concat(_labels).Concat(_texts);
 
     /// <summary>
@@ -216,6 +223,7 @@ public sealed class Schematic : INodeHost
         "text" or "text_box" => new SchText(node),
         "sheet" => new SchSheet(node),
         "image" => new SchImage(node),
+        "rule_area" => new SchRuleArea(node),
         var head when SchGraphic.IsGraphicHead(head) => new SchGraphic(node),
         _ => null,
     };
@@ -245,6 +253,7 @@ public sealed class Schematic : INodeHost
             SchGraphic g => _graphics.Remove(g),
             SchSheet sh => _sheets.Remove(sh),
             SchImage im => _images.Remove(im),
+            SchRuleArea ra => _ruleAreas.Remove(ra),
             _ => false,
         };
 
@@ -267,6 +276,7 @@ public sealed class Schematic : INodeHost
             case SchGraphic g: _graphics.Add(g); break;
             case SchSheet sh: _sheets.Add(sh); break;
             case SchImage im: _images.Add(im); break;
+            case SchRuleArea ra: _ruleAreas.Add(ra); break;
         }
     }
 

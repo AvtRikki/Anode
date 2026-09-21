@@ -32,8 +32,11 @@ editing pads or footprints.
 Read and drawn: symbols with their libraries' definitions, units and body styles, wires and buses, junctions,
 no-connects, bus entries, labels of every kind (local, global, hierarchical, net-class flags), text and text boxes,
 graphics, sheets and their pins, pictures the sheet carries (PNG, drawn about their point at the size the picture
-itself gives), the title block, and instance data — the designator and unit a part carries in each place of the
-hierarchy.
+itself gives), rule areas (drawn closed, as the boundary they are), the title block, and instance data — the
+designator and unit a part carries in each place of the hierarchy.
+
+Not drawn, though kept in the file untouched: tables, groups, and the ellipses KiCad 10 added. A stroke's style is
+not read either — a dashed or dotted line is drawn solid, which is a rule area's usual look.
 
 Edited: everything above can be moved, rotated, mirrored and deleted; wires, buses, labels, junctions, no-connects,
 bus entries, text, lines, rectangles and circles are drawn with tools; parts are placed from `.kicad_sym` libraries

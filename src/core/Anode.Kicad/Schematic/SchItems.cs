@@ -422,6 +422,32 @@ public sealed class SchJunction(SList node) : SchItem(node)
 public sealed class SchNoConnect(SList node) : SchItem(node);
 
 /// <summary>
+/// An area of the sheet the design rules are told about: everything inside its outline is meant to be treated
+/// together — a differential pair, a part of the board to keep apart. The outline is a closed polyline of its own,
+/// which is where the shape and the stroke live; the area itself is the wrapper that carries it.
+/// </summary>
+public sealed class SchRuleArea : SchItem
+{
+    private SchGraphic? _outline;
+
+    internal SchRuleArea(SList node)
+        : base(node)
+    {
+        Rebuild();
+    }
+
+    /// <summary>The closed outline, or null for an area with nothing drawn in it.</summary>
+    public SchGraphic? Outline => _outline;
+
+    public override void AfterRestore() => Rebuild();
+
+    private void Rebuild() =>
+        _outline = Node.Lists().FirstOrDefault(l => SchGraphic.IsGraphicHead(l.Head)) is { } shape
+            ? new SchGraphic(shape)
+            : null;
+}
+
+/// <summary>
 /// A picture on the sheet — a logo, a scan, a note drawn elsewhere. The file itself travels inside the sheet as
 /// base64, and how big it is drawn is what the picture says about itself: its pixels at its own resolution, taken
 /// times the scale written beside it.

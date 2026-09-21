@@ -51,6 +51,9 @@ public static class LayerStyle
         public const string Text = "#SchText";
         public const string Junction = "#SchJunction";
         public const string NoConnect = "#SchNoConnect";
+
+        /// <summary>An area the design rules are told about — KiCad's rule area, drawn as a marked-out region.</summary>
+        public const string RuleArea = "#SchRuleArea";
     }
 
     /// <summary>
@@ -105,6 +108,7 @@ public static class LayerStyle
         [Sch.Text] = new(0x20, 0x1e, 0x1d, 200),
         [Sch.Junction] = ColorRgba.Rgb(0x20, 0x1e, 0x1d),
         [Sch.NoConnect] = ColorRgba.Rgb(0xd6, 0x00, 0x6c),
+        [Sch.RuleArea] = new(0x7c, 0x4d, 0xa8, 180),
     };
 
     /// <summary>Inner copper is one grey; the drawing stays readable when a board has more than four layers.</summary>
@@ -142,6 +146,8 @@ public static class LayerStyle
         ["B.Fab"] = ColorRgba.Rgb(88, 93, 132),
         [PlatedHoles] = ColorRgba.Rgb(227, 183, 46),
         [NonPlatedHoles] = ColorRgba.Rgb(26, 196, 210),
+
+        [Sch.RuleArea] = ColorRgba.Rgb(0xc0, 0x9c, 0xe0),
 
         // KiCad's own drawing-sheet colour.
         [Sch.Frame] = ColorRgba.Rgb(132, 0, 0),
@@ -210,6 +216,9 @@ public static class LayerStyle
             BoardBody or Sch.Sheet => -1_000,
             PageFrame => -900,
             Sch.SymbolFill => -500,
+
+            // Behind the drawing: an area marks out what is inside it and must not cover it.
+            Sch.RuleArea => -400,
             Sch.Frame => 5,
             Sch.Wire => 10,
             Sch.Bus => 11,

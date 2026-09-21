@@ -151,6 +151,9 @@ public static class SchematicSceneBuilder
                 case SchImage image:
                     AddImage(image, scene.AddOwner(image));
                     break;
+                case SchRuleArea area:
+                    AddRuleArea(area, scene.AddOwner(area));
+                    break;
                 case SchSheet sheet:
                     AddSheet(sheet, scene.AddOwner(sheet));
                     break;
@@ -275,6 +278,28 @@ public static class SchematicSceneBuilder
             {
                 Text(LayerStyle.Sch.Label, pin.Name, pin.Position.ToDouble(), pin.TextHeight, pin.Font, pin.Angle, ("left", "center"), owner);
             }
+        }
+
+        /// <summary>
+        /// An area the design rules are told about. Its outline is a closed shape — the file lists its corners once
+        /// and means the boundary to come back round, so drawing it as an open polyline would leave a gap along the
+        /// side that matters most.
+        /// </summary>
+        private void AddRuleArea(SchRuleArea area, int owner)
+        {
+            if (area.Outline is not { } outline)
+            {
+                return;
+            }
+
+            long width = outline.StrokeWidth > 0 ? outline.StrokeWidth : SymbolWidth;
+            if (outline.Kind is SchShapeKind.Polyline or SchShapeKind.Bezier)
+            {
+                Outline(LayerStyle.Sch.RuleArea, Array.ConvertAll(outline.Points, p => p.ToDouble()), width, outline.IsFilled, Transform2D.Identity, owner);
+                return;
+            }
+
+            AddGraphic(outline, Transform2D.Identity, LayerStyle.Sch.RuleArea, owner);
         }
 
         private void AddGraphic(SchGraphic graphic, Transform2D toSheet, string layer, int owner)
