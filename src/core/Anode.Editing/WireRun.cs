@@ -23,7 +23,7 @@ public sealed class WireRun
     /// A click: the first one starts the run, each later one returns the legs to write and carries the run on from
     /// the point clicked. Clicking where the run already stands ends it and writes nothing.
     /// </summary>
-    public IReadOnlyList<(Vector2L From, Vector2L To)> Click(Vector2L point)
+    public IReadOnlyList<(Vector2L From, Vector2L To)> Click(Vector2L point, bool? horizontalFirst = null)
     {
         if (_points.Count == 0)
         {
@@ -37,7 +37,7 @@ public sealed class WireRun
             return [];
         }
 
-        var legs = Legs(_points[^1], point);
+        var legs = Legs(_points[^1], point, horizontalFirst);
         _points.Clear();
         _points.Add(point);
         return legs;
@@ -55,14 +55,14 @@ public sealed class WireRun
     public bool Cancel() => Finish();
 
     /// <summary>The legs that a click at <paramref name="cursor"/> would write: what the preview draws.</summary>
-    public IReadOnlyList<(Vector2L From, Vector2L To)> Preview(Vector2L cursor) =>
-        _points.Count == 0 ? [] : Legs(_points[^1], cursor);
+    public IReadOnlyList<(Vector2L From, Vector2L To)> Preview(Vector2L cursor, bool? horizontalFirst = null) =>
+        _points.Count == 0 ? [] : Legs(_points[^1], cursor, horizontalFirst);
 
     /// <summary>
     /// An orthogonal run from one point to the other: the longer axis is travelled first, which is the corner KiCad
     /// picks. Points on one line give a single leg, and a leg of no length is never returned.
     /// </summary>
-    public static IReadOnlyList<(Vector2L From, Vector2L To)> Legs(Vector2L from, Vector2L to)
+    public static IReadOnlyList<(Vector2L From, Vector2L To)> Legs(Vector2L from, Vector2L to, bool? horizontalFirst = null)
     {
         if (from == to)
         {
@@ -74,7 +74,7 @@ public sealed class WireRun
             return [(from, to)];
         }
 
-        var corner = Math.Abs(to.X - from.X) >= Math.Abs(to.Y - from.Y)
+        var corner = (horizontalFirst ?? Math.Abs(to.X - from.X) >= Math.Abs(to.Y - from.Y))
             ? new Vector2L(to.X, from.Y)
             : new Vector2L(from.X, to.Y);
 

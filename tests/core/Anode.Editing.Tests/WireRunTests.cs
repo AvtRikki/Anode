@@ -97,4 +97,17 @@ public class WireRunTests
         run.Finish();
         Assert.Empty(run.Preview(Corner));
     }
+
+    [Fact]
+    public void Chosen_corner_is_shared_by_preview_and_click()
+    {
+        var run = new WireRun();
+        run.Click(Origin);
+
+        var preview = run.Preview(Corner, horizontalFirst: false);
+        var committed = run.Click(Corner, horizontalFirst: false);
+
+        Assert.Equal(preview, committed);
+        Assert.Equal(new Vector2L(Origin.X, Corner.Y), preview[0].To);
+    }
 }

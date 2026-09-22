@@ -54,6 +54,9 @@ the command palette, which lists every command with its shortcut.
   wires that meet what is dragged keep hold of it and stretch, and are drawn stretching as the pointer moves.
 - Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, text box, cut,
   sheet, sheet pin, line, arc, curve, rectangle, circle. Esc returns to selecting.
+- While drawing a wire, the crosshair snaps to a nearby visible symbol pin; a small cross marks the connection point.
+  The route keeps its corner while the pointer moves, favors the side that crosses fewer symbols, and Tab switches
+  the corner until the next click.
 - An arc takes three clicks — where it starts, where it ends, then a point it passes through — and a curve four.
   Between clicks the shape follows the pointer, so what will be drawn is what is shown.
 - The cut tool divides a wire where it is clicked and puts a dot there; a click on an end of a wire does nothing.

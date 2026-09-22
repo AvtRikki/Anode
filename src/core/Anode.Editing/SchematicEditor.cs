@@ -308,8 +308,10 @@ public sealed class SchematicEditor
 
             for (int i = 1; i < points.Length; i++)
             {
+                // Nanometres to millimetres through the helper: both are whole numbers, and dividing them as they
+                // stand gave every stretched line a width of zero.
                 lines.Add((At(points[i - 1], moved.Contains(i - 1), move.Delta), At(points[i], moved.Contains(i), move.Delta),
-                    (float)(width / Units.NmPerMm), group.Key.IsBus));
+                    (float)Units.NmToMm(width), group.Key.IsBus));
             }
         }
 

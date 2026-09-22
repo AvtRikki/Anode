@@ -300,6 +300,12 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
     private readonly WireRun _run = new();
     private Vector2L _cursor;
     private bool _hasCursor;
+    private Vector2L? _snapTarget;
+    private bool? _horizontalFirst;
+    private bool _manualRoute;
+
+    /// <summary>Screen-space snap radius converted by the canvas to sheet nanometres.</summary>
+    public double SnapRadiusNm { get; set; }
 
     public string Id { get; } = bus ? "sch.tool.bus" : "sch.tool.wire";
 
@@ -309,15 +315,19 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
 
     public void Move(Vector2L sheetPoint)
     {
-        _cursor = editor.Snap(sheetPoint);
+        _cursor = Resolve(sheetPoint);
         _hasCursor = true;
+        ChooseRoute(_cursor);
         Rebuild();
     }
 
     public void Click(Vector2L sheetPoint)
     {
-        var point = editor.Snap(sheetPoint);
-        var legs = _run.Click(point);
+        var point = Resolve(sheetPoint);
+        ChooseRoute(point);
+        var legs = _run.Click(point, _horizontalFirst);
+        _horizontalFirst = null;
+        _manualRoute = false;
 
         _cursor = point;
         _hasCursor = true;
@@ -333,6 +343,8 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
     public bool Finish()
     {
         bool ended = _run.Finish();
+        _horizontalFirst = null;
+        _manualRoute = false;
         Rebuild();
         return ended;
     }
@@ -343,6 +355,9 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
 
         // Nothing is left on the sheet and nothing is left under the cursor: the next move starts from scratch.
         _hasCursor = false;
+        _snapTarget = null;
+        _horizontalFirst = null;
+        _manualRoute = false;
         Preview = null;
         Changed?.Invoke();
         return ended;
@@ -351,8 +366,8 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
     /// <summary>The leg that follows the cursor, in scene millimetres.</summary>
     private void Rebuild()
     {
-        var legs = _hasCursor ? _run.Preview(_cursor) : [];
-        if (legs.Count == 0)
+        var legs = _hasCursor ? _run.Preview(_cursor, _horizontalFirst) : [];
+        if (legs.Count == 0 && _snapTarget is null)
         {
             Preview = null;
             Changed?.Invoke();
@@ -367,6 +382,14 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
             layer.Lines.Add(new LinePrim(Scene(from), Scene(to), width, -1));
         }
 
+        if (_snapTarget is { } target)
+        {
+            var center = Scene(target);
+            float arm = (float)(Math.Min(SnapRadiusNm * 0.45, 1_500_000) / Units.NmPerMm);
+            layer.Lines.Add(new LinePrim(center + new Vector2(-arm, 0), center + new Vector2(arm, 0), width, -1));
+            layer.Lines.Add(new LinePrim(center + new Vector2(0, -arm), center + new Vector2(0, arm), width, -1));
+        }
+
         Preview = layer;
         Changed?.Invoke();
 
@@ -375,6 +398,134 @@ internal sealed class WireTool(SchematicEditor editor, bool bus = false) : ISchT
             var mm = editor.Scene.ToSceneMm(point.ToDouble());
             return new Vector2((float)mm.X, (float)mm.Y);
         }
+    }
+
+    private Vector2L Resolve(Vector2L point)
+    {
+        _snapTarget = !bus ? WirePinSnap.Nearest(editor.Scene, point, SnapRadiusNm) : null;
+        return _snapTarget ?? editor.Snap(point);
+    }
+
+    /// <summary>Switches which side of the rectangle the route follows until the next click.</summary>
+    public void FlipCorner()
+    {
+        if (!_run.IsRunning)
+        {
+            return;
+        }
+
+        _horizontalFirst = !(_horizontalFirst ?? PreferHorizontal(_run.Start, _cursor));
+        _manualRoute = true;
+        Rebuild();
+    }
+
+    private void ChooseRoute(Vector2L to)
+    {
+        if (!_run.IsRunning || _run.Start == to || _run.Start.X == to.X || _run.Start.Y == to.Y)
+        {
+            return;
+        }
+
+        bool current = _horizontalFirst ?? PreferHorizontal(_run.Start, to);
+        if (!_manualRoute)
+        {
+            int currentHits = ObstacleHits(_run.Start, to, current);
+            int otherHits = ObstacleHits(_run.Start, to, !current);
+            if (otherHits < currentHits)
+            {
+                current = !current;
+            }
+        }
+
+        _horizontalFirst = current;
+    }
+
+    /// <summary>
+    /// Which way the corner falls when nothing is in the way: the longer axis first, which is what
+    /// <see cref="WireRun.Legs"/> does on its own and what KiCad does. Disagreeing with it would bend every wire
+    /// the other way as soon as the tool had an opinion.
+    /// </summary>
+    private static bool PreferHorizontal(Vector2L from, Vector2L to) =>
+        Math.Abs(to.X - from.X) >= Math.Abs(to.Y - from.Y);
+
+    private int ObstacleHits(Vector2L from, Vector2L to, bool horizontalFirst)
+    {
+        var legs = WireRun.Legs(from, to, horizontalFirst);
+        int hits = 0;
+        foreach (var symbol in editor.Sheet.Symbols)
+        {
+            var bounds = editor.Scene.BoundsOf(symbol);
+            if (bounds.IsEmpty)
+            {
+                continue;
+            }
+
+            // The source and destination symbols must be approachable through their own pin lines.
+            var a = editor.Scene.ToSceneMm(from.ToDouble());
+            var b = editor.Scene.ToSceneMm(to.ToDouble());
+            if (bounds.Contains(a.X, a.Y) || bounds.Contains(b.X, b.Y))
+            {
+                continue;
+            }
+
+            bounds = bounds.Inflate(0.4);
+            foreach (var leg in legs)
+            {
+                var start = editor.Scene.ToSceneMm(leg.From.ToDouble());
+                var end = editor.Scene.ToSceneMm(leg.To.ToDouble());
+                if (Math.Max(start.X, end.X) >= bounds.MinX && Math.Min(start.X, end.X) <= bounds.MaxX
+                    && Math.Max(start.Y, end.Y) >= bounds.MinY && Math.Min(start.Y, end.Y) <= bounds.MaxY)
+                {
+                    hits++;
+                }
+            }
+        }
+
+        return hits;
+    }
+}
+
+/// <summary>Visible symbol pin connection points near the pointer; the pin's body end is never a wire target.</summary>
+internal static class WirePinSnap
+{
+    public static Vector2L? Nearest(SchematicScene scene, Vector2L point, double radiusNm)
+    {
+        if (radiusNm <= 0)
+        {
+            return null;
+        }
+
+        double best = radiusNm * radiusNm;
+        Vector2L? nearest = null;
+        bool hiddenVisible = scene.Find(LayerStyle.Sch.HiddenPin)?.IsVisible == true;
+        foreach (var symbol in scene.Schematic.Symbols)
+        {
+            if (symbol.Definition is not { } definition)
+            {
+                continue;
+            }
+
+            var toSheet = symbol.ToSheet;
+            foreach (var pin in definition.PinsOf(symbol.UnitAt(scene.SheetPath), symbol.BodyStyle))
+            {
+                if (pin.IsHidden && !hiddenVisible)
+                {
+                    continue;
+                }
+
+                var at = toSheet.ApplyRounded(pin.Position);
+                double dx = (double)at.X - point.X;
+                double dy = (double)at.Y - point.Y;
+                double distance = dx * dx + dy * dy;
+                if (distance <= best)
+                {
+                    best = distance;
+                    nearest = at;
+                }
+            }
+        }
+
+        return nearest;
     }
 }
 

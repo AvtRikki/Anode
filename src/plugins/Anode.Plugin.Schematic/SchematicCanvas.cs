@@ -24,6 +24,7 @@ public sealed class SchematicCanvas : Panel
         AvaloniaProperty.Register<SchematicCanvas, SchematicEditor?>(nameof(Editor));
 
     private const double DragSlopPixels = 4;
+    private const double PinSnapPixels = 10;
 
     private readonly Camera2D _camera = new();
     private readonly ISceneSurface _surface;
@@ -126,6 +127,7 @@ public sealed class SchematicCanvas : Panel
             }
 
             _tool = value;
+            Cursor = _tool is WireTool ? new Cursor(StandardCursorType.Cross) : null;
             if (_tool is { } tool)
             {
                 tool.Changed += Present;
@@ -454,6 +456,7 @@ public sealed class SchematicCanvas : Panel
         }
         else if (props.IsLeftButtonPressed && _tool is { } tool && Scene is { } toolScene)
         {
+            UpdateWireSnapRadius();
             tool.Click(toolScene.ToSheetNm(World(point.Position)).Round());
             Present();
         }
@@ -473,6 +476,7 @@ public sealed class SchematicCanvas : Panel
 
         if (_tool is { } tool && Scene is { } toolScene && _gesture != Gesture.Panning)
         {
+            UpdateWireSnapRadius();
             tool.Move(toolScene.ToSheetNm(World(p)).Round());
         }
 
@@ -588,6 +592,10 @@ public sealed class SchematicCanvas : Panel
                 break;
             case Key.OemTilde:
                 HighlightNetRequested?.Invoke();
+                break;
+            case Key.Tab when _tool is WireTool wire:
+                wire.FlipCorner();
+                Present();
                 break;
             case Key.Delete or Key.Back:
                 editor?.DeleteSelection();
@@ -711,6 +719,14 @@ public sealed class SchematicCanvas : Panel
     {
         SyncViewport();
         return _camera.ScreenToWorld(new Vector2D(screen.X, screen.Y));
+    }
+
+    private void UpdateWireSnapRadius()
+    {
+        if (_tool is WireTool wire)
+        {
+            wire.SnapRadiusNm = PinSnapPixels * Units.NmPerMm / _camera.PixelsPerMm;
+        }
     }
 
     private static double Distance(Point a, Point b) => Math.Sqrt(((a.X - b.X) * (a.X - b.X)) + ((a.Y - b.Y) * (a.Y - b.Y)));
