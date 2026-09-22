@@ -60,7 +60,7 @@ public static class SchWires
     }
 
     /// <summary>A wire through the given points, written as <paramref name="like"/> was.</summary>
-    private static SchWire Like(SchWire like, IReadOnlyList<Vector2L> points)
+    internal static SchWire Like(SchWire like, IReadOnlyList<Vector2L> points)
     {
         var wire = SchNodes.Wire(points, like.IsBus);
 

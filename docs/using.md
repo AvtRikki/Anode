@@ -53,8 +53,8 @@ the command palette, which lists every command with its shortcut.
 - The same selection, move, rotate and delete; M, R, Shift+R, and Y and X mirror. Pulling a selection with the
   mouse keeps its wiring, as KiCad does by default: the wires that meet it keep hold and stretch, and are drawn
   stretching as the pointer moves. G does the same from the keyboard; M is the one that tears a part away from its
-  wires, for putting it somewhere else entirely. A wire that was square before a drag can come out slanted: only
-  the end that meets the part moves, where KiCad also slides the next leg to keep the corner square.
+  wires, for putting it somewhere else entirely. Wires keep their right angles: a corner slides along the next
+  wire, and where the far end is held by something a step is put in near the pin.
 - Tools: wire, bus, bus entry, junction, no-connect, labels (local, global, hierarchical), text, text box, cut,
   sheet, sheet pin, line, arc, curve, rectangle, circle. Esc returns to selecting.
 - While drawing a wire, the crosshair snaps to a nearby visible symbol pin; a small cross marks the connection point.

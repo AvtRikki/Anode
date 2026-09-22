@@ -73,8 +73,12 @@ that are turned off, so showing it is a switch rather than a redrawing of the sh
 A part can be dragged rather than moved — which is what pulling it with the mouse does, as in KiCad, whose
 `input.drag_is_move` is off by default: the ends of the wires that meet its pins travel with it and the wires
 stretch, drawn as they stretch while the pointer moves, so nudging a part does not quietly take the drawing apart.
-Only the end that meets the part moves, so a wire that ran square can come out slanted; KiCad also slides the
-next leg of the run, or puts in a new corner, to keep it square, and that is not done here yet. A wire that is itself being dragged travels
+Wires stay square, as KiCad's `orthoLineDrag` keeps them: along a wire its end just follows; across it the wire
+goes sideways whole, sliding the corner along the next wire when that one runs the way of the move, and where its
+far end is held — a pin, a dot, a label, a branch — a step is put in near the pin instead, one grid further back
+for each neighbouring wire so the steps do not land on each other. A wire shrunk to nothing is removed. The shape
+is worked out from the drawing as it was for each position of the pointer, not grown step by step as KiCad does,
+so it does not depend on the path the pointer took. A wire that is itself being dragged travels
 whole rather than being pulled by one end, and the wires that follow change in the same step, so one undo puts
 everything back.
 

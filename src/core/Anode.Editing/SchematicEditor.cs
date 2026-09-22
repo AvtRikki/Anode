@@ -33,7 +33,13 @@ public sealed class SchMoveOperation
     public double Rotation { get; internal set; }
 
     /// <summary>The wire ends that are following what is being moved; empty for an ordinary move.</summary>
-    public IReadOnlyList<WireEnd> Stretching { get; init; } = [];
+    public IReadOnlyList<WireEnd> Stretching => Wiring?.Following ?? [];
+
+    /// <summary>
+    /// What gives when the wiring is kept: the wires that follow and the neighbours they may slide to stay square.
+    /// Null for an ordinary move.
+    /// </summary>
+    public WireDrag? Wiring { get; init; }
 
     /// <summary>
     /// The stretched wires as they are just now, drawn where they stand rather than carried with the pointer. One
@@ -197,18 +203,19 @@ public sealed class SchematicEditor
 
         var anchorItem = grabbed is not null && items.Contains(grabbed) ? grabbed : items[0];
         var preview = Scene.Remove(items, collect: true);
-        var following = stretching ? SchDrag.Following(Sheet, items) : [];
+        var wiring = stretching ? WireDrag.For(Sheet, items) : null;
+        bool stretches = wiring is { Wires.Count: > 0 };
         Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene))
         {
-            Stretching = following,
-            Rubber = following.Count > 0 ? new RubberBand(LayerStyle.Sch.Wire) : null,
+            Wiring = stretches ? wiring : null,
+            Rubber = stretches ? new RubberBand(LayerStyle.Sch.Wire) : null,
         };
 
         // The wires that are being stretched come off the scene for the duration: what is drawn for them is the
         // rubber band, which changes with every step of the pointer.
-        if (following.Count > 0)
+        if (stretches)
         {
-            Scene.Remove([.. following.Select(end => (SchItem)end.Wire).Distinct()]);
+            Scene.Remove([.. wiring!.Wires]);
         }
 
         StretchRubber(Move);
@@ -240,7 +247,7 @@ public sealed class SchematicEditor
         Move = null;
         if (move.Delta == Vector2L.Zero && move.Rotation == 0)
         {
-            AddToScene(move.Items.Concat(move.Stretching.Select(end => (SchItem)end.Wire)).Distinct());
+            AddToScene(move.Items.Concat(Wires(move)).Distinct());
             return;
         }
 
@@ -248,24 +255,49 @@ public sealed class SchematicEditor
 
         // The wires that are keeping hold of it change too, so they are part of the same step: one undo has to put
         // the drawing back as it was, wires and all.
-        var stretching = move.Stretching;
-        var touched = items.Concat(stretching.Select(end => (SchItem)end.Wire)).Distinct().ToList();
+        var shape = move.Wiring?.Shape(delta, DragStep);
+        var touched = items.Concat(Wires(move)).Distinct().ToList();
+        var name = Named(rotation, move.Stretching.Count);
 
-        var command = new ModifyNodesCommand(Named(rotation, stretching.Count), touched, () =>
+        var command = new ModifyNodesCommand(name, touched, () =>
         {
             foreach (var item in items)
             {
                 SchEdits.Transform(item, anchor, SchEdits.CanRotate(item) ? rotation : 0, delta);
             }
 
-            foreach (var end in stretching)
-            {
-                SchDrag.Stretch(end, delta);
-            }
+            shape?.Write();
         });
 
-        Execute(command, removedFromScene: true);
+        // A wire the drag has shrunk to nothing goes, and the steps that keep the others square come in — all in
+        // the same step, so that one undo puts the drawing back.
+        var collapsed = shape?.Collapsed.Cast<SchItem>().ToList() ?? [];
+        var added = shape?.NewWires().Cast<SchItem>().ToList() ?? [];
+        if (collapsed.Count == 0 && added.Count == 0)
+        {
+            Execute(command, removedFromScene: true);
+            return;
+        }
+
+        var steps = new List<IEditCommand> { command };
+        if (collapsed.Count > 0)
+        {
+            steps.Add(new DeleteNodesCommand(Sheet, collapsed));
+        }
+
+        if (added.Count > 0)
+        {
+            steps.Add(new AddNodesCommand(Sheet, added));
+        }
+
+        Execute(new CompositeCommand(name, steps), removedFromScene: true);
     }
+
+    /// <summary>The wires a drag has taken off the scene to draw as a rubber band.</summary>
+    private static IEnumerable<SchItem> Wires(SchMoveOperation move) => move.Wiring?.Wires ?? [];
+
+    /// <summary>How far apart the steps put into neighbouring wires are set: one grid, as KiCad does.</summary>
+    private long DragStep => GridNm > 0 ? GridNm : 1_270_000;
 
     /// <summary>What the step is called, which is what the reader is offered to undo.</summary>
     private static string Named(double rotation, int stretched) =>
@@ -282,9 +314,9 @@ public sealed class SchematicEditor
         AddToScene(move.Items);
 
         // The wires that were being stretched go back untouched: a drag that was called off changes nothing.
-        if (move.Stretching.Count > 0)
+        if (move.Wiring is { } wiring)
         {
-            AddToScene([.. move.Stretching.Select(end => (SchItem)end.Wire).Distinct()]);
+            AddToScene(wiring.Wires);
         }
     }
 
@@ -299,27 +331,39 @@ public sealed class SchematicEditor
             return;
         }
 
+        var shape = move.Wiring!.Shape(move.Delta, DragStep);
         var lines = new List<(Vector2 From, Vector2 To, float Width, bool IsBus)>();
-        foreach (var group in move.Stretching.GroupBy(end => end.Wire))
+        foreach (var (wire, points) in shape.Points)
         {
-            var moved = group.Select(end => end.Index).ToHashSet();
-            var points = group.Key.Points;
-            var width = group.Key.StrokeWidth > 0 ? group.Key.StrokeWidth : group.Key.IsBus ? BusWidthNm : WireWidthNm;
-
             for (int i = 1; i < points.Length; i++)
             {
-                // Nanometres to millimetres through the helper: both are whole numbers, and dividing them as they
-                // stand gave every stretched line a width of zero.
-                lines.Add((At(points[i - 1], moved.Contains(i - 1), move.Delta), At(points[i], moved.Contains(i), move.Delta),
-                    (float)Units.NmToMm(width), group.Key.IsBus));
+                Add(wire, points[i - 1], points[i]);
             }
+        }
+
+        foreach (var (like, from, to) in shape.Added)
+        {
+            Add(like, from, to);
         }
 
         rubber.Set(lines);
 
-        Vector2 At(Vector2L point, bool follows, Vector2L delta)
+        void Add(SchWire wire, Vector2L from, Vector2L to)
         {
-            var mm = Scene.ToSceneMm((follows ? point + delta : point).ToDouble());
+            if (from == to)
+            {
+                return;
+            }
+
+            // Nanometres to millimetres through the helper: both are whole numbers, and dividing them as they stand
+            // gave every stretched line a width of zero.
+            var width = wire.StrokeWidth > 0 ? wire.StrokeWidth : wire.IsBus ? BusWidthNm : WireWidthNm;
+            lines.Add((At(from), At(to), (float)Units.NmToMm(width), wire.IsBus));
+        }
+
+        Vector2 At(Vector2L point)
+        {
+            var mm = Scene.ToSceneMm(point.ToDouble());
             return new Vector2((float)mm.X, (float)mm.Y);
         }
     }

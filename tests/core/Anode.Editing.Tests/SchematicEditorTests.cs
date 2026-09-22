@@ -704,8 +704,107 @@ public class SchematicEditorTests
         Assert.Empty(editor.Move.Stretching);
     }
 
+    /// <summary>
+    /// A drag keeps the wiring square. The wire from the pin runs down to a corner and the wire beyond it runs
+    /// across; pulling the part sideways slides the corner along the second wire, as KiCad does, rather than
+    /// leaving the first one slanted.
+    /// </summary>
+    [Fact]
+    public void Dragging_across_a_wire_slides_its_corner_along_the_next_one()
+    {
+        var editor = Wired(out var sheet, beyond: Wire(2, 50.8, 63.5, 76.2, 63.5));
+        var part = sheet.Symbols.Single();
+
+        Drag(editor, part, new Vector2L(2_540_000, 0));
+
+        Assert.Equal(2, sheet.Wires.Count);
+        Assert.Equal([Mm(53.34, 63.5), Mm(53.34, 54.61)], sheet.Wires[0].Points);
+        Assert.Equal([Mm(53.34, 63.5), Mm(76.2, 63.5)], sheet.Wires[1].Points);
+    }
+
+    /// <summary>
+    /// Where the far end cannot give — here it is a branch, two other wires meeting it — the wire stays put and a
+    /// step is put in at the pin to reach where the part has gone. Nothing is left slanted, nothing torn off.
+    /// </summary>
+    [Fact]
+    public void Where_the_far_end_is_held_a_step_is_put_in_at_the_pin()
+    {
+        var editor = Wired(out var sheet, beyond: Wire(2, 25.4, 63.5, 50.8, 63.5) + Wire(3, 50.8, 63.5, 76.2, 63.5));
+        var part = sheet.Symbols.Single();
+
+        Drag(editor, part, new Vector2L(2_540_000, 0));
+
+        Assert.Equal(4, sheet.Wires.Count);
+        Assert.Equal([Mm(50.8, 63.5), Mm(50.8, 54.61)], sheet.Wires[0].Points);
+        var step = sheet.Wires[^1].Points;
+        Assert.Equal([Mm(50.8, 54.61), Mm(53.34, 54.61)], step);
+        Assert.All(sheet.Wires, wire => Assert.True(
+            wire.Points[0].X == wire.Points[1].X || wire.Points[0].Y == wire.Points[1].Y, "a wire came out slanted"));
+    }
+
+    /// <summary>
+    /// A wire whose far end meets nothing goes sideways whole; along its own length it just stretches, the far end
+    /// staying where the drawing put it.
+    /// </summary>
+    [Fact]
+    public void A_loose_wire_goes_sideways_whole_and_stretches_along()
+    {
+        var editor = Wired(out var sheet);
+        var part = sheet.Symbols.Single();
+
+        Drag(editor, part, new Vector2L(2_540_000, 2_540_000));
+
+        Assert.Equal([Mm(53.34, 63.5), Mm(53.34, 57.15)], Assert.Single(sheet.Wires).Points);
+    }
+
+    [Fact]
+    public void A_drag_that_put_a_step_in_is_one_step_to_undo()
+    {
+        var editor = Wired(out var sheet, beyond: Wire(2, 25.4, 63.5, 50.8, 63.5) + Wire(3, 50.8, 63.5, 76.2, 63.5));
+        var part = sheet.Symbols.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        Drag(editor, part, new Vector2L(2_540_000, 0));
+        Assert.Equal(4, sheet.Wires.Count);
+
+        editor.Undo();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.Equal(3, sheet.Wires.Count);
+    }
+
+    /// <summary>The preview shows the square shape too, step included, not just the finished drawing.</summary>
+    [Fact]
+    public void The_step_is_drawn_while_dragging()
+    {
+        var editor = Wired(out var sheet, beyond: Wire(2, 25.4, 63.5, 50.8, 63.5) + Wire(3, 50.8, 63.5, 76.2, 63.5));
+        var part = sheet.Symbols.Single();
+
+        editor.SetSelection([part]);
+        editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true);
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + new Vector2L(2_540_000, 0)).ToDouble()));
+
+        // The wire to the pin and the step from it; the branch at the far end is not part of the drag.
+        Assert.Equal(2, editor.Move!.Rubber!.Layer.Lines.Count);
+        editor.CancelMove();
+    }
+
+    private static void Drag(SchematicEditor editor, SchItem part, Vector2L by)
+    {
+        editor.SetSelection([part]);
+        Assert.True(editor.BeginMove(part, editor.Scene.ToSceneMm(part.Position.ToDouble()), stretching: true));
+        editor.UpdateMove(editor.Scene.ToSceneMm((part.Position + by).ToDouble()));
+        editor.CommitMove();
+    }
+
+    private static Vector2L Mm(double x, double y) => new((long)Math.Round(x * 1_000_000), (long)Math.Round(y * 1_000_000));
+
+    private static string Wire(int n, double x1, double y1, double x2, double y2) =>
+        FormattableString.Invariant($"\t(wire (pts (xy {x1} {y1}) (xy {x2} {y2})) (stroke (width 0) (type default))")
+        + $" (uuid \"1a1b2c3d-0000-4000-8000-00000000000{n}\"))\n";
+
     /// <summary>A resistor with a wire running from its lower pin.</summary>
-    private static SchematicEditor Wired(out Schematic sheet, bool bus = false, double strokeWidthMm = 0)
+    private static SchematicEditor Wired(out Schematic sheet, bool bus = false, double strokeWidthMm = 0, string beyond = "")
     {
         sheet = Schematic.Parse(
             "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
@@ -720,6 +819,7 @@ public class SchematicEditorTests
             // From the lower pin, straight down: its end sits exactly on the pin, which is what joins them.
             + $"\t({(bus ? "bus" : "wire")} (pts (xy 50.8 63.5) (xy 50.8 54.61)) (stroke (width {strokeWidthMm.ToString(System.Globalization.CultureInfo.InvariantCulture)}) (type default))\n"
             + "\t\t(uuid \"1a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + beyond
             + "\t(embedded_fonts no))\n");
 
         return new SchematicEditor(SchematicSceneBuilder.Build(sheet));

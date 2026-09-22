@@ -55,30 +55,6 @@ public static class SchDrag
     }
 
     /// <summary>
-    /// Moves one end of a wire and leaves the rest of it where it is. This is what stretching is: the wire keeps
-    /// its shape everywhere except at the end that is following something.
-    /// </summary>
-    public static void Stretch(WireEnd end, Vector2L delta)
-    {
-        if (end.Wire.Node.Find("pts") is not { } points)
-        {
-            throw new KiCadFormatException("A wire has no points to move.");
-        }
-
-        int at = 0;
-        foreach (var point in points.Lists().Where(l => l.Head == "xy"))
-        {
-            if (at++ == end.Index)
-            {
-                point.MapPoint(p => p + delta);
-                return;
-            }
-        }
-
-        throw new ArgumentOutOfRangeException(nameof(end), end.Index, "The wire does not have that many points.");
-    }
-
-    /// <summary>
     /// Every point of the moving things that a wire could be joined to: the pins of a part, the ends of a wire, and
     /// the point anything else stands at.
     /// </summary>
