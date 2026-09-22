@@ -643,7 +643,10 @@ public sealed class SchematicCanvas : Panel
         bool onSelection = _pressOwner >= 0 && editor.Scene.IsLive(_pressOwner)
             && editor.IsSelected(editor.Scene.Owner(_pressOwner));
 
-        if (onSelection && editor.BeginMove(editor.Scene.Owner(_pressOwner), World(_pressPoint)))
+        // Pulling a selection with the mouse keeps its wiring, as KiCad does unless told otherwise (its
+        // input.drag_is_move is false): a part pulled across the sheet takes the ends of its wires with it. Tearing
+        // it away from them is what M is for.
+        if (onSelection && editor.BeginMove(editor.Scene.Owner(_pressOwner), World(_pressPoint), stretching: true))
         {
             _gesture = Gesture.Moving;
             editor.UpdateMove(World(current));

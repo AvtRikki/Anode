@@ -70,8 +70,11 @@ laid inside by its margins rather than hung off its corner.
 What a sheet hides — a field nobody wanted shown, a part's power pins — is drawn all the same, on layers of its own
 that are turned off, so showing it is a switch rather than a redrawing of the sheet.
 
-A part can be dragged rather than moved: the ends of the wires that meet its pins travel with it and the wires
-stretch, drawn as they stretch while the pointer moves, so nudging a part does not quietly take the drawing apart. A wire that is itself being dragged travels
+A part can be dragged rather than moved — which is what pulling it with the mouse does, as in KiCad, whose
+`input.drag_is_move` is off by default: the ends of the wires that meet its pins travel with it and the wires
+stretch, drawn as they stretch while the pointer moves, so nudging a part does not quietly take the drawing apart.
+Only the end that meets the part moves, so a wire that ran square can come out slanted; KiCad also slides the
+next leg of the run, or puts in a new corner, to keep it square, and that is not done here yet. A wire that is itself being dragged travels
 whole rather than being pulled by one end, and the wires that follow change in the same step, so one undo puts
 everything back.
 
