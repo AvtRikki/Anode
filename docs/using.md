@@ -83,6 +83,12 @@ the command palette, which lists every command with its shortcut.
   sides, a circle its centre and a point on its rim. Esc while pulling puts it back. A double click on the outline
   of a selected line or polyline puts a corner in there; a double click on a corner takes it out. Each is one step
   to undo. A held item has no handles.
+- **Groups.** A click on anything in a group selects the whole group — the outermost one, when groups sit inside
+  groups — and a box takes a group only when it encloses all of it (crossing: when it touches any of it). A double
+  click goes into the group, where a click takes one item; Esc with nothing selected, a click outside it, or
+  **Edit → Leave group** comes back out. **Edit → Group** groups the selection (two whole groups nest rather than
+  come apart), **Ungroup** takes apart the outermost group of what is selected. Deleting members takes them out of
+  their group, and a group left empty goes too — each of these one step to undo.
 - **Edit → Symbol fields table** opens the fields panel at the foot of the window: every part of the sheet as a
   line, every field any part carries as a column. Parts of one value are one line, as KiCad groups them by default;
   the switch turns grouping off (the units of one part stay one line either way). A value typed into a cell is

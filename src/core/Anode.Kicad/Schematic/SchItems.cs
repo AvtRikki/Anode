@@ -775,3 +775,18 @@ public sealed class SchSheet : SchItem
         return null;
     }
 }
+
+/// <summary>
+/// A group: items that are selected and moved as one. It names its members by id — parts, wires, text, other groups
+/// — and is not drawn itself. KiCad writes it as <c>(group "name" (uuid …) (members "id" …))</c>, the members
+/// sorted, and never writes a group with no members.
+/// </summary>
+public sealed class SchGroup(SList node) : SchItem(node)
+{
+    /// <summary>The group's name; most groups have none.</summary>
+    public string Name => Node.Str(1) ?? string.Empty;
+
+    /// <summary>The ids of its members, as written.</summary>
+    public IReadOnlyList<string> Members =>
+        Node.Find("members") is { } members ? [.. members.Skip(1).OfType<SAtom>().Select(a => a.Value)] : [];
+}

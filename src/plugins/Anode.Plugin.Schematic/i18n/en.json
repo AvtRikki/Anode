@@ -28,6 +28,9 @@
       "circle": "Circle"
     },
     "command": {
+      "group": "Group",
+      "ungroup": "Ungroup",
+      "leaveGroup": "Leave group",
       "fieldsTable": "Symbol fields table",
       "find": "Find",
       "findReplace": "Find and replace",
@@ -159,7 +162,7 @@
     },
     "summary": { "sheet": "schematic · {0}" },
     "symbol": { "one": "symbol", "other": "symbols" },
-    "status": {
+    "status": { "inGroup": "in group: {0}", "unnamedGroup": "unnamed",
       "cursor": "X {0} Y {1} {2}",
       "symbols": "{0} {1}",
       "selected": "selected: {0}",

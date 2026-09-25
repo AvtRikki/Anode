@@ -110,17 +110,157 @@ public sealed class SchematicEditor
 
         var item = Scene.Owner(owner);
         FocusOwner = owner;
+
+        // A click outside the group that was gone into comes back out of it first, as KiCad does.
+        if (EnteredGroup is { } entered && !IsInside(item, entered))
+        {
+            EnteredGroup = null;
+        }
+
+        // A click on a member of a group takes the whole group.
+        var taken = SchGroups.Selecting(Sheet, item, EnteredGroup);
         if (!toggle)
         {
             _selection.Clear();
-            _selection.Add(item);
+            _selection.AddRange(taken);
         }
-        else if (!_selection.Remove(item))
+        else if (taken.All(_selection.Contains))
         {
-            _selection.Add(item);
+            _selection.RemoveAll(taken.Contains);
+        }
+        else
+        {
+            _selection.AddRange(taken.Where(t => !_selection.Contains(t)));
         }
 
         PublishSelection();
+    }
+
+    /// <summary>
+    /// The group gone into, where a click takes one item rather than the whole group — KiCad's Enter Group. Null
+    /// when none is.
+    /// </summary>
+    public SchGroup? EnteredGroup { get; private set; }
+
+    /// <summary>Goes into the outermost group <paramref name="item"/> is in, and selects what is in it.</summary>
+    public bool EnterGroup(SchItem item)
+    {
+        if (Move is not null || SchGroups.Top(Sheet, item, EnteredGroup) is not { } group)
+        {
+            return false;
+        }
+
+        EnteredGroup = group;
+        SetSelection(SchGroups.Leaves(Sheet, group));
+        return true;
+    }
+
+    /// <summary>Comes back out of the group gone into; a click takes the whole group again.</summary>
+    public bool LeaveGroup()
+    {
+        if (EnteredGroup is null)
+        {
+            return false;
+        }
+
+        EnteredGroup = null;
+        SetSelection([]);
+        return true;
+    }
+
+    /// <summary>
+    /// Groups what is selected, as one step to undo: KiCad's Group Items. A member that was already in a group comes
+    /// out of it — an item is in one group at most — unless the whole of that group was selected, when the group
+    /// itself becomes a member and the two nest. Inside a group gone into, the new group stays inside it.
+    /// </summary>
+    public bool Group()
+    {
+        var members = SchGroups.Grouping(Sheet, _selection, EnteredGroup);
+        if (Move is not null || members.Count < 2)
+        {
+            return false;
+        }
+
+        var group = SchGroups.New(members);
+        var ids = members.Select(m => m.Uuid!).ToHashSet(StringComparer.Ordinal);
+        var parents = members.Select(m => SchGroups.Parent(Sheet, m)).OfType<SchGroup>().Distinct().ToList();
+        var inside = EnteredGroup;
+        if (inside is not null && !parents.Contains(inside))
+        {
+            parents.Add(inside);
+        }
+
+        var steps = new List<IEditCommand>();
+        if (parents.Count > 0)
+        {
+            steps.Add(new ModifyNodesCommand("Group", parents, () =>
+            {
+                foreach (var parent in parents)
+                {
+                    SchGroups.Remove(parent, ids);
+                }
+
+                if (inside is not null)
+                {
+                    SchGroups.Add(inside, [group.Uuid!]);
+                }
+            }));
+        }
+
+        steps.Add(new AddNodesCommand(Sheet, [group]));
+        Execute(new CompositeCommand("Group", steps));
+        return true;
+    }
+
+    /// <summary>
+    /// Takes apart the outermost groups the selection is in, as one step to undo: KiCad's Ungroup Items. Their
+    /// members stay where they are and stay selected; a group that was itself in a group hands its members to it.
+    /// </summary>
+    public bool Ungroup()
+    {
+        var groups = _selection.Select(i => SchGroups.Top(Sheet, i, EnteredGroup)).OfType<SchGroup>().Distinct().ToList();
+        if (Move is not null || groups.Count == 0)
+        {
+            return false;
+        }
+
+        var parents = groups.Select(g => SchGroups.Parent(Sheet, g)).OfType<SchGroup>().Distinct().ToList();
+        var steps = new List<IEditCommand>();
+        if (parents.Count > 0)
+        {
+            steps.Add(new ModifyNodesCommand("Ungroup", parents, () =>
+            {
+                foreach (var group in groups)
+                {
+                    if (SchGroups.Parent(Sheet, group) is { } parent)
+                    {
+                        SchGroups.Remove(parent, [group.Uuid!]);
+                        SchGroups.Add(parent, group.Members);
+                    }
+                }
+            }));
+        }
+
+        steps.Add(new DeleteNodesCommand(Sheet, groups));
+        var kept = _selection.ToList();
+        Execute(new CompositeCommand("Ungroup", steps));
+        SetSelection(kept.Where(i => i.IsAttached));
+        return true;
+    }
+
+    /// <summary>The item is in <paramref name="group"/>, directly or through a group inside it.</summary>
+    private bool IsInside(SchItem item, SchGroup group)
+    {
+        var seen = new HashSet<SchGroup>();
+        for (var at = SchGroups.Parent(Sheet, item); at is not null && seen.Add(at); at = SchGroups.Parent(Sheet, at))
+        {
+            if (ReferenceEquals(at.Node, group.Node))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void SetSelection(IEnumerable<SchItem> items)
@@ -167,14 +307,35 @@ public sealed class SchematicEditor
             ? candidates.Where(SelectionGeometry.Touching(Scene.Layers, box, candidates, Scene.OwnersOf).Contains)
             : candidates;
 
+        // A group comes whole or not at all: enclosing it all, or touching any of it when crossing — KiCad's rule.
+        var caught = hits.ToHashSet();
+        var taken = new List<SchItem>();
         foreach (var item in hits)
+        {
+            if (SchGroups.Top(Sheet, item, EnteredGroup) is not { } group)
+            {
+                taken.Add(item);
+                continue;
+            }
+
+            var leaves = SchGroups.Leaves(Sheet, group);
+            if (crossing || leaves.All(caught.Contains))
+            {
+                taken.AddRange(leaves.Where(l => !taken.Contains(l)));
+            }
+        }
+
+        foreach (var item in taken)
         {
             if (toggle && _selection.Remove(item))
             {
                 continue;
             }
 
-            _selection.Add(item);
+            if (!_selection.Contains(item))
+            {
+                _selection.Add(item);
+            }
         }
 
         FocusOwner = -1;
@@ -653,7 +814,31 @@ public sealed class SchematicEditor
         // A dot is only a dot while the branch under it is there. Taking the branch away takes the dot with it, in
         // the same step, so one undo gives both back.
         var stale = SchJunctions.Stale(Sheet, items);
-        Execute(new DeleteNodesCommand(Sheet, stale.Count == 0 ? items : [.. items, .. stale]));
+        List<SchItem> going = [.. items, .. stale];
+
+        // A group keeps the members that stay; one left with none goes too, as KiCad never writes an empty group.
+        var (shrinking, emptied) = SchGroups.Losing(Sheet, going);
+        if (shrinking.Count == 0 && emptied.Count == 0)
+        {
+            Execute(new DeleteNodesCommand(Sheet, going));
+            return;
+        }
+
+        var ids = going.Concat(emptied).Select(i => i.Uuid).OfType<string>().ToHashSet(StringComparer.Ordinal);
+        var steps = new List<IEditCommand>();
+        if (shrinking.Count > 0)
+        {
+            steps.Add(new ModifyNodesCommand("Delete", shrinking, () =>
+            {
+                foreach (var group in shrinking)
+                {
+                    SchGroups.Remove(group, ids);
+                }
+            }));
+        }
+
+        steps.Add(new DeleteNodesCommand(Sheet, [.. going, .. emptied]));
+        Execute(new CompositeCommand(going.Count == 1 ? "Delete item" : $"Delete {going.Count} items", steps));
     }
 
     /// <summary>
@@ -941,6 +1126,13 @@ public sealed class SchematicEditor
     private void PublishSelection()
     {
         _selection.RemoveAll(item => !item.IsAttached);
+
+        // An undo can take away the group that was gone into.
+        if (EnteredGroup is { IsAttached: false })
+        {
+            EnteredGroup = null;
+        }
+
         var owners = new HashSet<int>();
         foreach (var item in _selection)
         {

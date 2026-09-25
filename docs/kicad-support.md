@@ -158,6 +158,15 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+Groups (`(group "name" (uuid …) (members …))`) are read and written as KiCad does, member ids sorted, and selected
+by its rules (`sch_selection_tool.cpp`, `sch_group_tool.cpp`): a click takes the outermost group an item is in, or
+the outermost one inside the group gone into; grouping a whole group nests it; ungrouping hands a nested group's
+members to the group above; a group never outlives its last member. One difference: a group made inside a group
+gone into stays inside it, where KiCad's schematic tool lets it fall out to the top.
+
+Not done for groups: naming one, adding to or taking from one (KiCad's Add Items / Remove Items), drawing a group's
+outline when it is selected, and copying groups with what is copied, pasted or duplicated.
+
 Points of drawn shapes are edited as KiCad's point editor edits them (`sch_point_editor.cpp`): a handle per point of
 a line, polyline, curve or rule area — one for the first and last point of an outline that closes on itself, which
 stays closed; four corners and four side middles for a rectangle; centre and rim for a circle. A handle lands on the

@@ -38,6 +38,12 @@ public sealed class SchematicCanvas : Panel
     private Point _pressPoint;
     private int _pressOwner = -1;
     private bool _spaceDown;
+
+    /// <summary>
+    /// The press was a double click that has already done its work — gone into a group, put a corner in or taken
+    /// one out. Its release is not a click as well: that would select whatever is under it, or nothing.
+    /// </summary>
+    private bool _pressDone;
     private bool _fitPending;
 
     static SchematicCanvas()
@@ -472,6 +478,7 @@ public sealed class SchematicCanvas : Panel
             if (e.ClickCount == 2)
             {
                 editor.RemoveCorner(shape, handle);
+                _pressDone = true;
             }
             else if (editor.BeginPointEdit(shape, handle))
             {
@@ -486,6 +493,14 @@ public sealed class SchematicCanvas : Panel
         {
             // A double click on the outline of the selected shape puts a corner in there.
             outlined.AddCorner(line, World(point.Position));
+            _pressDone = true;
+            Present();
+        }
+        else if (props.IsLeftButtonPressed && e.ClickCount == 2 && Editor is { } grouping && _tool is null
+            && Pick(point.Position) is var under and >= 0 && grouping.EnterGroup(grouping.Scene.Owner(under)))
+        {
+            // A double click on a member of a group goes into it, as KiCad's does.
+            _pressDone = true;
             Present();
         }
         else if (props.IsLeftButtonPressed)
@@ -571,7 +586,7 @@ public sealed class SchematicCanvas : Panel
                 break;
 
             default:
-                if (e.InitialPressMouseButton == MouseButton.Left && Distance(p, _pressPoint) <= DragSlopPixels)
+                if (e.InitialPressMouseButton == MouseButton.Left && Distance(p, _pressPoint) <= DragSlopPixels && !_pressDone)
                 {
                     Editor?.Click(_pressOwner, shift);
                 }
@@ -580,6 +595,7 @@ public sealed class SchematicCanvas : Panel
         }
 
         _pressOwner = -1;
+        _pressDone = false;
         e.Pointer.Capture(null);
         Present();
     }
@@ -624,6 +640,11 @@ public sealed class SchematicCanvas : Panel
                 {
                     editor?.CancelPointEdit();
                     _gesture = Gesture.None;
+                }
+                else if (editor is { EnteredGroup: not null, Selection.Count: 0 })
+                {
+                    // With nothing selected, Esc comes back out of the group gone into — KiCad's second Esc.
+                    editor.LeaveGroup();
                 }
                 else
                 {

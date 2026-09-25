@@ -877,6 +877,127 @@ public class SchematicEditorTests
         return new SchematicEditor(SchematicSceneBuilder.Build(sheet));
     }
 
+    /// <summary>A click on a member of a group takes the whole of the outermost group it is in.</summary>
+    [Fact]
+    public void A_click_on_a_member_takes_the_whole_group()
+    {
+        var editor = Grouped(out var sheet);
+        var first = sheet.Graphics[0];
+
+        editor.Click(editor.Scene.OwnersOf(first).First(), toggle: false);
+
+        // A and B are grouped, and that group sits in an outer one with C: all three come.
+        Assert.Equal(3, editor.Selection.Count);
+        Assert.DoesNotContain(sheet.Graphics[3], editor.Selection);
+    }
+
+    /// <summary>Gone into a group, a click takes one item; a click outside it comes back out.</summary>
+    [Fact]
+    public void Inside_a_group_a_click_takes_one_item_and_outside_it_comes_back_out()
+    {
+        var editor = Grouped(out var sheet);
+        var first = sheet.Graphics[0];
+
+        Assert.True(editor.EnterGroup(first));
+        Assert.Equal(3, editor.Selection.Count);
+
+        // Inside the outer group the inner one is still a group: A takes B with it, but not C.
+        editor.Click(editor.Scene.OwnersOf(first).First(), toggle: false);
+        Assert.Equal(2, editor.Selection.Count);
+
+        editor.Click(editor.Scene.OwnersOf(sheet.Graphics[3]).First(), toggle: false);
+        Assert.Null(editor.EnteredGroup);
+        Assert.Same(sheet.Graphics[3], Assert.Single(editor.Selection));
+    }
+
+    [Fact]
+    public void A_box_takes_a_group_only_when_it_encloses_all_of_it_unless_crossing()
+    {
+        var editor = Grouped(out var sheet);
+        var around = editor.Scene.BoundsOf(sheet.Graphics[0]).Union(editor.Scene.BoundsOf(sheet.Graphics[1])).Inflate(0.5);
+
+        editor.SelectInBox(around, crossing: false, toggle: false);
+        Assert.Empty(editor.Selection);
+
+        editor.SelectInBox(around, crossing: true, toggle: false);
+        Assert.Equal(3, editor.Selection.Count);
+    }
+
+    /// <summary>Grouping two groups nests them; ungrouping hands the members up to the group it was in. Each one undo.</summary>
+    [Fact]
+    public void Grouping_nests_and_ungrouping_hands_members_up_each_one_step()
+    {
+        var editor = Grouped(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        // The outer group and the loose D, grouped: a new group of the outer group and D.
+        editor.SetSelection(sheet.Graphics);
+        Assert.True(editor.Group());
+        var made = sheet.Groups.Single(g => g.Members.Count == 2 && g.Members.Contains("2a1b2c3d-0000-4000-8000-000000000004"));
+        Assert.Contains("5a1b2c3d-0000-4000-8000-000000000002", made.Members);
+
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+
+        // Ungrouping the outer group: it goes, and nothing is lost.
+        editor.Click(editor.Scene.OwnersOf(sheet.Graphics[2]).First(), toggle: false);
+        Assert.True(editor.Ungroup());
+        Assert.Single(sheet.Groups);
+        Assert.Equal(3, editor.Selection.Count);
+
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    /// <summary>What is left of a group when its members go: a group left with none goes too, in the same step.</summary>
+    [Fact]
+    public void Deleting_a_whole_group_takes_the_group_with_it_and_undo_brings_all_back()
+    {
+        var editor = Grouped(out var sheet);
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.Click(editor.Scene.OwnersOf(sheet.Graphics[0]).First(), toggle: false);
+        editor.DeleteSelection();
+
+        Assert.Single(sheet.Graphics);
+        Assert.Empty(sheet.Groups);
+
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void Deleting_part_of_a_group_leaves_the_rest_grouped()
+    {
+        var editor = Grouped(out var sheet);
+        var c = sheet.Graphics[2];
+
+        Assert.True(editor.EnterGroup(c));
+        editor.Click(editor.Scene.OwnersOf(c).First(), toggle: false);
+        editor.DeleteSelection();
+
+        var outer = sheet.Groups.Single(g => g.Uuid == "5a1b2c3d-0000-4000-8000-000000000002");
+        Assert.Equal(["5a1b2c3d-0000-4000-8000-000000000001"], outer.Members);
+    }
+
+    /// <summary>
+    /// Four lines A, B, C, D. A and B are one group; that group and C are an outer group; D is loose.
+    /// </summary>
+    private static SchematicEditor Grouped(out Schematic sheet)
+    {
+        sheet = Schematic.Parse(
+            "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + Line(1, 10) + Line(2, 20) + Line(3, 30) + Line(4, 60)
+            + "\t(group \"\" (uuid \"5a1b2c3d-0000-4000-8000-000000000001\") (members \"2a1b2c3d-0000-4000-8000-000000000001\" \"2a1b2c3d-0000-4000-8000-000000000002\"))\n"
+            + "\t(group \"\" (uuid \"5a1b2c3d-0000-4000-8000-000000000002\") (members \"2a1b2c3d-0000-4000-8000-000000000003\" \"5a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        return new SchematicEditor(SchematicSceneBuilder.Build(sheet));
+
+        static string Line(int n, int y) =>
+            $"\t(polyline (pts (xy 10 {y}) (xy 40 {y})) (stroke (width 0) (type default)) (uuid \"2a1b2c3d-0000-4000-8000-00000000000{n}\"))\n";
+    }
+
     /// <summary>A resistor with a wire running from its lower pin.</summary>
     private static SchematicEditor Wired(out Schematic sheet, bool bus = false, double strokeWidthMm = 0, string beyond = "")
     {

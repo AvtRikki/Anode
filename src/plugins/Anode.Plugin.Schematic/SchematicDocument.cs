@@ -293,6 +293,11 @@ public sealed class SchematicDocument : DocumentBase
             }
 
             fields.Add(new StatusField(Count()));
+            if (_editor.EnteredGroup is { } entered)
+            {
+                fields.Add(new StatusField(Tr.T("sch.status.inGroup", entered.Name.Length > 0 ? entered.Name : Tr.T("sch.status.unnamedGroup"))));
+            }
+
             if (_editor.Selection is [var single])
             {
                 fields.Add(new StatusField(Tr.T("sch.status.selected", SchItemProperties.Header(single, Instance).Title)));
@@ -1700,6 +1705,24 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", ShortcutText = "`", MenuKey = "menu.view", MenuOrder = 30,
                 CanExecute = () => _netAnchor is not null || _editor.Selection.Any(i => NetOf(i) is not null),
                 Execute = ToggleNetHighlight,
+            },
+            new("sch.group", "sch.command.group")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 62,
+                CanExecute = () => SchGroups.Grouping(Sheet, _editor.Selection, _editor.EnteredGroup).Count > 1,
+                Execute = () => Guard(() => _editor.Group(), context),
+            },
+            new("sch.ungroup", "sch.command.ungroup")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 63,
+                CanExecute = () => _editor.Selection.Any(i => SchGroups.Top(Sheet, i, _editor.EnteredGroup) is not null),
+                Execute = () => Guard(() => _editor.Ungroup(), context),
+            },
+            new("sch.leaveGroup", "sch.command.leaveGroup")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 64,
+                CanExecute = () => _editor.EnteredGroup is not null,
+                Execute = () => Guard(() => _editor.LeaveGroup(), context),
             },
             new("sch.fieldsTable", "sch.command.fieldsTable")
             {

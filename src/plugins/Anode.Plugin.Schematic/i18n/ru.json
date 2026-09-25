@@ -28,6 +28,9 @@
       "circle": "Окружность"
     },
     "command": {
+      "group": "Сгруппировать",
+      "ungroup": "Разгруппировать",
+      "leaveGroup": "Выйти из группы",
       "fieldsTable": "Таблица полей символов",
       "find": "Найти",
       "findReplace": "Найти и заменить",
@@ -160,7 +163,7 @@
     },
     "summary": { "sheet": "схема · {0}" },
     "symbol": { "one": "компонент", "few": "компонента", "many": "компонентов" },
-    "status": {
+    "status": { "inGroup": "в группе: {0}", "unnamedGroup": "без имени",
       "cursor": "X {0} Y {1} {2}",
       "symbols": "{0} {1}",
       "selected": "выделено: {0}",

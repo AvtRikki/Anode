@@ -46,6 +46,7 @@ public sealed class Schematic : INodeHost
     private readonly List<SchImage> _images = [];
     private readonly List<SchRuleArea> _ruleAreas = [];
     private readonly List<SchTable> _tables = [];
+    private readonly List<SchGroup> _groups = [];
     private readonly List<SList> _other = [];
 
     private Schematic(SDocument document)
@@ -106,6 +107,9 @@ public sealed class Schematic : INodeHost
                     break;
                 case "table":
                     _tables.Add(new SchTable(child));
+                    break;
+                case "group":
+                    _groups.Add(new SchGroup(child));
                     break;
                 case var head when SchGraphic.IsGraphicHead(head):
                     _graphics.Add(new SchGraphic(child));
@@ -177,6 +181,12 @@ public sealed class Schematic : INodeHost
     /// <summary>Tables drawn on the sheet.</summary>
     public IReadOnlyList<SchTable> Tables => _tables;
 
+    /// <summary>
+    /// Groups: items that select and move as one. A group is not drawn — it names its members by id — and a group
+    /// may be a member of another.
+    /// </summary>
+    public IReadOnlyList<SchGroup> Groups => _groups;
+
     /// <summary>Top-level lists this model does not interpret. Kept in the file untouched.</summary>
     public IReadOnlyList<SList> OtherItems => _other;
 
@@ -232,6 +242,7 @@ public sealed class Schematic : INodeHost
         "image" => new SchImage(node),
         "rule_area" => new SchRuleArea(node),
         "table" => new SchTable(node),
+        "group" => new SchGroup(node),
         var head when SchGraphic.IsGraphicHead(head) => new SchGraphic(node),
         _ => null,
     };
@@ -263,6 +274,7 @@ public sealed class Schematic : INodeHost
             SchImage im => _images.Remove(im),
             SchRuleArea ra => _ruleAreas.Remove(ra),
             SchTable tb => _tables.Remove(tb),
+            SchGroup gr => _groups.Remove(gr),
             _ => false,
         };
 
@@ -287,6 +299,7 @@ public sealed class Schematic : INodeHost
             case SchImage im: _images.Add(im); break;
             case SchRuleArea ra: _ruleAreas.Add(ra); break;
             case SchTable tb: _tables.Add(tb); break;
+            case SchGroup gr: _groups.Add(gr); break;
         }
     }
 
