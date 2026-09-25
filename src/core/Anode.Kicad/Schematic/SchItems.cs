@@ -191,6 +191,7 @@ public sealed class LibSymbol : SchItem
 {
     private readonly List<SchGraphic> _graphics = [];
     private readonly List<SchPin> _pins = [];
+    private readonly List<SchField> _fields = [];
 
     internal LibSymbol(SList node)
         : base(node)
@@ -210,7 +211,10 @@ public sealed class LibSymbol : SchItem
         Name = Node.Str(1) ?? string.Empty;
         _graphics.Clear();
         _pins.Clear();
+        _fields.Clear();
         Units.Clear();
+
+        _fields.AddRange(Node.Lists().Where(l => l.Head == "property").Select(l => new SchField(l)));
 
         // Bodies live in child symbols named "<symbol>_<unit>_<bodyStyle>"; unit 0 is common to every unit.
         foreach (var unit in Node.Lists().Where(l => l.Head == "symbol"))
@@ -249,6 +253,9 @@ public sealed class LibSymbol : SchItem
     public IReadOnlyList<SchGraphic> Graphics => _graphics;
 
     public IReadOnlyList<SchPin> Pins => _pins;
+
+    /// <summary>The symbol's own fields — reference, value, footprint… — in the library's coordinates, Y upward.</summary>
+    public IReadOnlyList<SchField> Fields => _fields;
 
     /// <summary>
     /// The designator prefix the library gives this part — "R", "C", "U". KiCad writes it with a question mark on a

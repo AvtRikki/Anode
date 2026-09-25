@@ -48,6 +48,36 @@ public static class SchematicSceneBuilder
     /// Draws the frame and title block again — after the title block was edited, or the tab turned to another place
     /// in the design. Only the frame's own layer is rebuilt.
     /// </summary>
+    /// <summary>
+    /// One symbol of a library on its own, as the symbol editor shows it: the body of one unit and body style, its
+    /// pins, its fields, and a cross at its origin. A library draws a symbol with Y upward, so it is drawn through a
+    /// flip — the scene's own points are sheet-like, Y down, and whoever writes back into the library turns Y over.
+    /// </summary>
+    /// <param name="shown">The symbol whose fields are drawn.</param>
+    /// <param name="body">Whose body is drawn: the symbol itself, or the one it is derived from.</param>
+    public static SchematicScene BuildSymbol(LibSymbol shown, LibSymbol body, int unit, int bodyStyle)
+    {
+        // The scene belongs to a sheet; a symbol on its own stands on an empty one, which has nothing to add.
+        var host = Schematic.Parse("(kicad_sch (version 20250114) (generator \"anode\") (paper \"A4\"))");
+        var scene = new SchematicScene(host, Vector2L.Zero);
+        new Builder(scene).AddLibrarySymbol(shown, body, unit, bodyStyle);
+
+        foreach (string hidden in (string[])[LayerStyle.Sch.HiddenField, LayerStyle.Sch.HiddenPin])
+        {
+            scene.Layer(hidden).IsVisible = false;
+        }
+
+        scene.Commit();
+
+        // What "zoom to fit" shows: the symbol with a margin, never less than a small square about the origin.
+        var bounds = scene.Bounds.IsEmpty ? new RectD(-5, -5, 5, 5) : scene.Bounds.Union(-5, -5).Union(5, 5);
+        scene.BoardOutline = bounds.Inflate(5);
+        return scene;
+    }
+
+    /// <summary>The flip a library symbol is drawn through: its Y runs up, the scene's down.</summary>
+    public static Transform2D LibraryToScene { get; } = Transform2D.Scale(1, -1);
+
     public static void RedrawFrame(SchematicScene scene)
     {
         DrawingSheetLayers.Clear(LayerStyle.Sch.Frame, scene.Layers, scene.Layer);
@@ -251,6 +281,36 @@ public static class SchematicSceneBuilder
                 {
                     Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, value,
                         field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
+                }
+            }
+        }
+
+        public void AddLibrarySymbol(LibSymbol shown, LibSymbol body, int unit, int bodyStyle)
+        {
+            var t = LibraryToScene;
+
+            // KiCad marks a symbol's origin with a small cross: it is where the part is held when placed.
+            const long arm = 1_270_000;
+            Line(LayerStyle.Sch.Frame, new Vector2D(-arm, 0), new Vector2D(arm, 0), 0, OutlineLoops.NoOwner);
+            Line(LayerStyle.Sch.Frame, new Vector2D(0, -arm), new Vector2D(0, arm), 0, OutlineLoops.NoOwner);
+
+            foreach (var graphic in body.GraphicsOf(unit, bodyStyle))
+            {
+                Styled(graphic.StrokeStyle, () => AddGraphic(graphic, t, LayerStyle.Sch.Symbol, scene.AddOwner(graphic)));
+            }
+
+            foreach (var pin in body.PinsOf(unit, bodyStyle))
+            {
+                AddPin(pin, body, t, scene.AddOwner(pin));
+            }
+
+            // Fields stand where the library puts them, turned over like everything else; their text stays upright.
+            foreach (var field in shown.Fields)
+            {
+                if (field.Value.Length > 0)
+                {
+                    Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, field.Value,
+                        t.Apply(field.Position.ToDouble()), field.TextHeight, field.Font, field.Angle, field.Alignment, scene.AddOwner(field));
                 }
             }
         }

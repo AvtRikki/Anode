@@ -72,6 +72,12 @@ public sealed class SchematicEditor
 
     public UndoStack History { get; } = new();
 
+    /// <summary>
+    /// Nothing is changed through this editor: it selects, and shows, and that is all. What a library symbol is
+    /// looked at through until it can be edited in its own coordinates.
+    /// </summary>
+    public bool IsReadOnly { get; init; }
+
     /// <summary>Grid step for move snapping: 50 mil, as KiCad draws schematics on. 0 disables snapping.</summary>
     public long GridNm { get; set; } = 1_270_000;
 
@@ -351,7 +357,7 @@ public sealed class SchematicEditor
     /// </summary>
     public bool BeginMove(SchItem? grabbed, Vector2D cursorScene, bool stretching = false)
     {
-        if (Move is not null)
+        if (Move is not null || IsReadOnly)
         {
             return false;
         }
@@ -471,7 +477,7 @@ public sealed class SchematicEditor
 
     /// <summary>The handles of the one item selected, when it is a shape whose points can be pulled.</summary>
     public IReadOnlyList<SchHandle> Handles =>
-        Move is null && _selection is [var item] && item.IsAttached ? SchPoints.Handles(item) : [];
+        Move is null && !IsReadOnly && _selection is [var item] && item.IsAttached ? SchPoints.Handles(item) : [];
 
     /// <summary>
     /// Takes hold of a handle. Until it is let go the shape is redrawn as it is being pulled; letting go makes it
@@ -1085,6 +1091,11 @@ public sealed class SchematicEditor
     /// </summary>
     private void Execute(IEditCommand command, bool removedFromScene = false)
     {
+        if (IsReadOnly)
+        {
+            return;
+        }
+
         var affected = command.Affected.OfType<SchItem>().ToList();
         if (!removedFromScene)
         {
