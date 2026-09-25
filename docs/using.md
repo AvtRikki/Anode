@@ -72,6 +72,12 @@ the command palette, which lists every command with its shortcut.
   Choosing a row lights that net, choosing it again puts it out. The backquote does the same from a selection.
 - **Edit → Write as a label / global label / hierarchical label / text** changes what selected words mean without
   moving them. What is already of that kind is left alone.
+- A selected child sheet lists in the inspector, under **Pins and labels inside**, what does not agree with the
+  hierarchical labels in its file: labels with no pin, pins with no label, and pins whose shape differs. The
+  footer adds pins for the labels (outputs on the right edge, the rest on the left, 2.54 mm apart, clear of the
+  pins already there), gives pins their labels' shapes, or removes the pins that name nothing; a pin with no label
+  can be pointed at a label with no pin, which renames it. Each is one step to undo. Only the pins are written:
+  the labels live in the child's file, and are changed there.
 - **Edit → Find** (⌘F) opens the find panel at the foot of the window; **Find and replace** (⌘⌥F) puts the
   caret in the replace box. Every place on the sheet that matches is listed with what it belongs to; Enter or F3
   goes to the next, Shift+Enter or Shift+F3 to the one before, and each is selected and brought into view. Replace

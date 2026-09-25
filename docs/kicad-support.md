@@ -158,6 +158,19 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+Sheet pins are brought in step with the hierarchical labels inside the sheet as KiCad's Sync Sheet Pins, Import
+Sheet Pins and Cleanup Sheet Pins do (`sync_sheet_pin/`): a pin and a label agree when their names read the same
+and their shapes are the same, labels of one name count once, and they are listed in KiCad's order of names. A pin
+whose name agrees but shape does not is its own group here, where KiCad lists both halves as unmatched. Names are
+compared as shown, as the check compares them, so what the inspector lists is exactly what the check reports —
+proven on KiCad's demos. Pins added for labels are put down in one go (outputs right, the rest left, 100 mil
+apart, never in a corner, never on another pin) where KiCad places them one by one under the pointer; a sheet
+too small for them all keeps the rest out and says which.
+
+Not done: writing the labels inside from here — adding a label for a pin, renaming or removing one — since the
+child's file is not the sheet on screen. The child is read as it is on disk, so edits to it not yet saved are not
+seen.
+
 Find and replace follows KiCad's rules (`sch_find_replace_tool.cpp`, `EDA_ITEM::Matches` and `Replace`): the
 fields of parts, sheets and labels — hidden ones only when asked — designators as the appearance on screen reads
 them, with the unit's letter too, so U1B is found; labels, texts, sheet pins, and pin names and numbers when asked.

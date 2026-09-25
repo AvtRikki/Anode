@@ -333,8 +333,12 @@ public sealed class SchematicDocument : DocumentBase
             subtitle ??= Path.GetFileName(FilePath);
             return new SelectionInfo(title, subtitle, [.. SchItemProperties.For(item)], tag)
             {
-                Blocks = [.. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf, Instance)],
-                Actions = Actions(item),
+                Blocks =
+                [
+                    .. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf, Instance),
+                    .. item is SchSheet sheet && PinMatch(sheet) is { } match ? [PinBlock(sheet, match)] : Array.Empty<InspectorBlock>(),
+                ],
+                Actions = [.. item is SchSheet placed && PinMatch(placed) is { } found ? SyncActions(placed, found) : [], .. Actions(item)],
             };
         }
     }
@@ -1229,6 +1233,104 @@ public sealed class SchematicDocument : DocumentBase
         }
 
         return "input";
+    }
+
+    /// <summary>
+    /// How a child sheet's pins stand against the hierarchical labels inside it, read from the file it names as that
+    /// file is on disk; null when there is no file to read.
+    /// </summary>
+    internal SheetPinMatch? PinMatch(SchSheet sheet) =>
+        ChildFile(sheet) is { } file && OpenSheet(file) is { } child ? SchSheetSync.Compare(sheet, child) : null;
+
+    /// <summary>
+    /// The pins of a selected sheet against the labels inside it: what has no partner, and what disagrees on shape.
+    /// A pin that names nothing can be pointed at a label that has no pin, which renames it — the usual cause is a
+    /// label renamed inside and the pin left behind.
+    /// </summary>
+    private InspectorBlock PinBlock(SchSheet sheet, SheetPinMatch match)
+    {
+        var rows = new List<InspectorRow>();
+        if (match.IsInStep)
+        {
+            rows.Add(new InspectorRow(Tr.T("sch.sync.inStep"), match.Matched.Count.ToString(CultureInfo.InvariantCulture)));
+            return new InspectorBlock(Tr.T("sch.sync.title"), rows);
+        }
+
+        foreach (var (pin, label) in match.ShapeDiffers)
+        {
+            rows.Add(new InspectorRow(KicadText.Unescape(pin.Name), Tr.T("sch.sync.shapes", pin.Shape, label.Shape))
+            {
+                Trailing = Tr.T("sch.sync.shapeDiffers"),
+                IsUnresolved = true,
+            });
+        }
+
+        foreach (var label in match.LabelsWithoutPin)
+        {
+            rows.Add(new InspectorRow(label.Shown, label.Shape) { Trailing = Tr.T("sch.sync.noPin"), IsUnresolved = true });
+        }
+
+        var free = match.LabelsWithoutPin.ToDictionary(l => l.Shown, StringComparer.Ordinal);
+        foreach (var pin in match.PinsWithoutLabel)
+        {
+            var target = pin;
+            rows.Add(new InspectorRow(KicadText.Unescape(pin.Name), Tr.T("sch.sync.noLabel"))
+            {
+                Trailing = pin.Shape,
+                IsUnresolved = true,
+                Choices = free.Count > 0 ? [.. free.Keys] : null,
+                Commit = free.Count > 0
+                    ? name =>
+                    {
+                        if (free.TryGetValue(name, out var label))
+                        {
+                            _editor.Modify(Tr.T("sch.sync.rename"), [sheet], () => SchSheetSync.Adopt(target, label));
+                        }
+                    }
+                    : null,
+            });
+        }
+
+        return new InspectorBlock(Tr.T("sch.sync.title"), rows);
+    }
+
+    /// <summary>
+    /// The ways of bringing a sheet's pins in step, each one step to undo: pins for the labels that have none, the
+    /// labels' shapes for pins that disagree, and taking off the pins that name nothing.
+    /// </summary>
+    private IEnumerable<InspectorAction> SyncActions(SchSheet sheet, SheetPinMatch match)
+    {
+        if (match.LabelsWithoutPin.Count > 0)
+        {
+            yield return new InspectorAction(Tr.T("sch.sync.addPins", match.LabelsWithoutPin.Count), () =>
+            {
+                IReadOnlyList<SchLabel> unplaced = [];
+                _editor.Modify(Tr.T("sch.sync.addPinsStep"), [sheet], () => unplaced = SchSheetSync.AddPins(sheet, match.LabelsWithoutPin));
+                if (unplaced.Count > 0)
+                {
+                    Warn(Tr.T("sch.sync.noRoom", unplaced.Count, string.Join(", ", unplaced.Select(l => l.Shown))));
+                }
+            })
+            { IsPrimary = true };
+        }
+
+        if (match.ShapeDiffers.Count > 0)
+        {
+            yield return new InspectorAction(Tr.T("sch.sync.takeShapes", match.ShapeDiffers.Count), () =>
+                _editor.Modify(Tr.T("sch.sync.takeShapesStep"), [sheet], () =>
+                {
+                    foreach (var (pin, label) in match.ShapeDiffers)
+                    {
+                        SchSheetSync.Adopt(pin, label);
+                    }
+                }));
+        }
+
+        if (match.PinsWithoutLabel.Count > 0)
+        {
+            yield return new InspectorAction(Tr.T("sch.sync.removePins", match.PinsWithoutLabel.Count), () =>
+                _editor.Modify(Tr.T("sch.sync.removePinsStep"), [sheet], () => SchSheetSync.RemovePins(sheet, match.PinsWithoutLabel)));
+        }
     }
 
     /// <summary>The file a child sheet reads, beside this one; null when the sheet names none or this one has no path.</summary>
