@@ -67,10 +67,34 @@ public class SchBomTests
         Assert.NotEmpty(shared);
         Assert.All(shared, l => Assert.All(l.References, r => Assert.NotEqual(string.Empty, r)));
 
-        // One line per value, datasheet, footprint and do-not-place: nothing is listed twice under the same four.
+        // One line per value and do-not-place, KiCad's default grouping: nothing is listed twice under the same two.
         Assert.Equal(
             lines.Count,
-            lines.Select(l => (l.Value, l.Datasheet, l.Footprint, l.Dnp)).Distinct().Count());
+            lines.Select(l => (l.Value, l.Dnp)).Distinct().Count());
+    }
+
+    /// <summary>
+    /// KiCad's default preset groups by value alone (and do-not-place): two resistors of one value on different
+    /// footprints are one line, the footprint column naming both, as KiCad writes mixed values on export.
+    /// </summary>
+    [Fact]
+    public void One_value_on_two_footprints_is_one_line_naming_both()
+    {
+        var sheet = Schematic.Parse(
+            "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + Part(1, "R1", "10k", "Resistor_SMD:R_0805") + Part(2, "R2", "10k", "Resistor_SMD:R_0603") + Part(3, "R3", "10k", "")
+            + "\t(embedded_fonts no))\n");
+
+        var line = Assert.Single(SchBom.Build("/virtual/root.kicad_sch", _ => sheet));
+
+        Assert.Equal(["R1", "R2", "R3"], line.References);
+        Assert.Equal("Resistor_SMD:R_0603,Resistor_SMD:R_0805", line.Footprint);
+
+        static string Part(int n, string reference, string value, string footprint) =>
+            $"\t(symbol (lib_id \"Device:R\") (at {20 * n} 50 0) (unit 1) (uuid \"0a1b2c3d-0000-4000-8000-00000000000{n}\")\n"
+            + $"\t\t(property \"Reference\" \"{reference}\" (at 0 0 0)) (property \"Value\" \"{value}\" (at 0 0 0))"
+            + $" (property \"Footprint\" \"{footprint}\" (at 0 0 0))\n"
+            + $"\t\t(instances (project \"t\" (path \"/6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\" (reference \"{reference}\") (unit 1)))))\n";
     }
 
     [Fact]

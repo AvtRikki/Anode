@@ -9,9 +9,10 @@ public sealed record BomLine(IReadOnlyList<string> References, string Value, str
 }
 
 /// <summary>
-/// The parts of a design as a bill of materials, grouped as KiCad groups them by default ("Grouped By Value"): one
-/// line per value, its parts listed by designator, with the datasheet and footprint they carry and how many there
-/// are. Parts marked do-not-place are a line of their own, as KiCad keeps that column apart.
+/// The parts of a design as a bill of materials, grouped as KiCad groups them by default ("Grouped By Value",
+/// <c>BOM_PRESET::GroupedByValue</c>): one line per value, its parts listed by designator, with the datasheets and
+/// footprints they carry and how many there are. Only the value and do-not-place are grouped by — parts of one value
+/// on two footprints are one line naming both, as KiCad lists mixed values on export.
 ///
 /// A power symbol is not a part and is left out, and so is one the file keeps off the bill — which KiCad writes the
 /// positive way round, as <c>(in_bom no)</c>. A part on a sheet placed twice is two parts, with the designator each
@@ -53,12 +54,12 @@ public static class SchBom
         return
         [
             .. parts
-                .GroupBy(p => (p.Value, p.Datasheet, p.Footprint, p.Dnp))
+                .GroupBy(p => (p.Value, p.Dnp))
                 .Select(g => new BomLine(
                     [.. g.Select(p => p.Reference).Distinct(StringComparer.Ordinal).Order(KicadOrder.Instance)],
                     g.Key.Value,
-                    g.Key.Datasheet,
-                    g.Key.Footprint,
+                    Mixed(g.Select(p => p.Datasheet)),
+                    Mixed(g.Select(p => p.Footprint)),
                     g.Key.Dnp))
                 .OrderBy(line => line.References[0], KicadOrder.Instance),
         ];
@@ -86,6 +87,13 @@ public static class SchBom
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// A column the line does not group by, as KiCad writes it on export: each different value once, empty ones
+    /// left out, joined by commas — two footprints for one value are both on the line rather than two lines.
+    /// </summary>
+    private static string Mixed(IEnumerable<string> values) =>
+        string.Join(",", values.Where(v => v.Length > 0).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal));
 
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
 
