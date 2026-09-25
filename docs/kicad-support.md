@@ -158,6 +158,14 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+Unfold from Bus is KiCad's (`SCH_LINE_WIRE_BUS_TOOL::doUnfoldBus`, key C): the bus selected, or the one under
+the pointer, offers the members its names spell out — a vector's range, a group's members, an alias's list; a bus
+with no name offers nothing, as KiCad's says "Bus has no members". The entry is KiCad's 100 mil each way, on the bus
+at the point nearest the pointer, leaning toward it; the label is a local label at the entry's end. Where KiCad
+lets the label follow the pointer until a click, and flips the entry as the pointer moves, here both are put down
+at once and the wire tool takes over from the entry's end. Nested buses are offered spelled out, where KiCad shows
+a submenu for each.
+
 Groups (`(group "name" (uuid …) (members …))`) are read and written as KiCad does, member ids sorted, and selected
 by its rules (`sch_selection_tool.cpp`, `sch_group_tool.cpp`): a click takes the outermost group an item is in, or
 the outermost one inside the group gone into; grouping a whole group nests it; ungrouping hands a nested group's

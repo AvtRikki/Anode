@@ -1706,6 +1706,12 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _netAnchor is not null || _editor.Selection.Any(i => NetOf(i) is not null),
                 Execute = ToggleNetHighlight,
             },
+            new("sch.unfoldBus", "sch.command.unfoldBus")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "C", Gesture = new KeyGesture(Key.C),
+                MenuKey = "menu.place", MenuOrder = 15,
+                Execute = () => _ = UnfoldBusAsync(),
+            },
             new("sch.group", "sch.command.group")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 62,
@@ -1837,6 +1843,44 @@ public sealed class SchematicDocument : DocumentBase
 
     private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
         new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    /// <summary>
+    /// Breaks a net out of a bus, as KiCad's Unfold from Bus does: the bus selected, or the one under the pointer,
+    /// offers the nets it carries; the one chosen gets an entry off the bus and a label naming it, as one step to
+    /// undo, and a wire is started from the end of the entry for the rest of the way.
+    /// </summary>
+    private async Task UnfoldBusAsync()
+    {
+        if (_canvas is not { } canvas || canvas.CursorSheet is not { } cursor)
+        {
+            return;
+        }
+
+        var bus = _editor.Selection is [SchWire { IsBus: true } chosenBus]
+            ? chosenBus
+            : SchWires.At(Sheet.Wires.Where(w => w.IsBus), cursor);
+        if (bus is null)
+        {
+            Warn(Tr.T("sch.unfold.noBus"));
+            return;
+        }
+
+        var members = SchBusUnfold.Members(Sheet, bus);
+        if (members.Count == 0)
+        {
+            Warn(Tr.T("sch.unfold.noMembers"));
+            return;
+        }
+
+        if (await canvas.ChooseAsync(members) is not { } net || SchBusUnfold.Unfold(bus, net, cursor, cursor) is not { } unfolding)
+        {
+            return;
+        }
+
+        _editor.Apply(Tr.T("sch.command.unfoldBus"), [unfolding.Entry, unfolding.Label], []);
+        UseTool("sch.tool.wire");
+        (canvas.Tool as WireTool)?.Click(unfolding.WireEnd);
+    }
 
     /// <summary>The fields table's place at the foot of the window.</summary>
     internal const string FieldsPanelId = "sch.fields";

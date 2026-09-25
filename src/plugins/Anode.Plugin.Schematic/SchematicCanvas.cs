@@ -263,6 +263,30 @@ public sealed class SchematicCanvas : Panel
     /// one until this answers; Enter gives the name, Esc gives nothing. The field belongs to the canvas because the
     /// canvas is what owns the screen — the tool only knows it asked.
     /// </summary>
+    /// <summary>Where the pointer last was over the canvas, in sheet nanometres; null before it has been over it.</summary>
+    internal Vector2L? CursorSheet => Scene is { } scene && _lastPoint != default ? scene.ToSheetNm(World(_lastPoint)).Round() : null;
+
+    /// <summary>
+    /// Offers a short list at the pointer and answers what was chosen, or null when the menu was closed without a
+    /// choice — the menu KiCad pops up for Unfold from Bus.
+    /// </summary>
+    internal Task<string?> ChooseAsync(IReadOnlyList<string> choices)
+    {
+        var answer = new TaskCompletionSource<string?>();
+        var menu = new ContextMenu { Placement = Avalonia.Controls.PlacementMode.Pointer };
+        foreach (string choice in choices)
+        {
+            var item = new MenuItem { Header = choice };
+            item.Click += (_, _) => answer.TrySetResult(choice);
+            menu.Items.Add(item);
+        }
+
+        // Closed is raised before the item's Click on some platforms: the answer is given a turn to arrive first.
+        menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => answer.TrySetResult(null));
+        menu.Open(this);
+        return answer.Task;
+    }
+
     internal Task<string?> AskForNameAsync(Vector2L sheetPoint, string initial)
     {
         if (Scene is not { } scene)

@@ -19,7 +19,12 @@ public sealed record SchBus(IReadOnlyList<string> Names, IReadOnlyList<SchLabel>
 /// </summary>
 public static class SchBuses
 {
-    public static IReadOnlyList<SchBus> Of(Schematic sheet)
+    public static IReadOnlyList<SchBus> Of(Schematic sheet) => Build(sheet, only: null);
+
+    /// <summary>The bus a point is on — at an end of a bus wire or part way along one — or null.</summary>
+    public static SchBus? At(Schematic sheet, Vector2L point) => Build(sheet, only: point).FirstOrDefault();
+
+    private static IReadOnlyList<SchBus> Build(Schematic sheet, Vector2L? only)
     {
         var segments = new List<(Vector2L A, Vector2L B)>();
         foreach (var wire in sheet.Wires.Where(w => w.IsBus))
@@ -63,6 +68,12 @@ public static class SchBuses
             }
         }
 
+        int? wanted = only is { } point ? On(segments, groups, point) : null;
+        if (only is not null && wanted is null)
+        {
+            return [];
+        }
+
         var labels = new Dictionary<int, List<SchLabel>>();
         var pins = new Dictionary<int, List<SchSheetPin>>();
 
@@ -83,7 +94,7 @@ public static class SchBuses
         }
 
         var buses = new List<SchBus>();
-        foreach (int group in labels.Keys.Concat(pins.Keys).Distinct())
+        foreach (int group in labels.Keys.Concat(pins.Keys).Distinct().Where(g => wanted is null || g == wanted))
         {
             var onIt = labels.GetValueOrDefault(group) ?? [];
             var reaching = pins.GetValueOrDefault(group) ?? [];

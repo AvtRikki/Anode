@@ -83,6 +83,10 @@ the command palette, which lists every command with its shortcut.
   sides, a circle its centre and a point on its rim. Esc while pulling puts it back. A double click on the outline
   of a selected line or polyline puts a corner in there; a double click on a corner takes it out. Each is one step
   to undo. A held item has no handles.
+- **Place → Unfold from bus** (C) breaks a net out of a bus: point at a bus, or select one, and a menu offers the
+  nets its name carries (D[0..7], a group, an alias). The one chosen gets a bus entry where the bus passes nearest
+  the pointer, leaning to the pointer's side, and a label naming it at the entry's end, as one step to undo; a wire
+  then starts from there for the rest of the way.
 - **Groups.** A click on anything in a group selects the whole group — the outermost one, when groups sit inside
   groups — and a box takes a group only when it encloses all of it (crossing: when it touches any of it). A double
   click goes into the group, where a click takes one item; Esc with nothing selected, a click outside it, or

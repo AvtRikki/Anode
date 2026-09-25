@@ -28,6 +28,7 @@
       "circle": "Circle"
     },
     "command": {
+      "unfoldBus": "Unfold from bus",
       "group": "Group",
       "ungroup": "Ungroup",
       "leaveGroup": "Leave group",
@@ -106,6 +107,7 @@
     },
     "nets": { "sheet": "Sheet", "design": "Design", "filter": "Filter", "empty": "Open a sheet to see its nets.", "count": "{0} {1}", "found": "{0} of {1}" },
     "find": { "find": "Find", "with": "Replace with", "replace": "Replace", "replaceAll": "Replace all", "previous": "Previous (Shift+Enter)", "next": "Next (Enter)", "matchCase": "Match case", "hiddenFields": "Hidden fields", "pins": "Pin names and numbers", "references": "Replace designators", "selection": "Selection only", "plain": "Anywhere", "wholeWord": "Whole words", "wildcard": "Wildcards", "regex": "Regular expression", "empty": "Open a sheet to search it.", "none": "Not found", "of": "{0} of {1}", "count": "{0} found", "replaced": "Replaced {0}", "sheet": "Sheet", "text": "Text", "textBox": "Text box", "reference": "Designator", "pinName": "Pin name", "pinNumber": "Pin number", "sheetPin": "Sheet pin", "label": { "local": "Label", "global": "Global label", "hierarchical": "Hierarchical label", "netclassflag": "Net class flag" } },
+    "unfold": { "noBus": "Select a bus, or point at one, to unfold a net from it.", "noMembers": "This bus has no members: name it with a label like D[0..7]." },
     "fields": { "filter": "Filter designators", "group": "Group identical", "excluded": "Parts kept off the BOM", "count": "{0} lines, {1} parts", "empty": "Open a sheet to see its parts' fields.", "reference": "Reference", "quantity": "Qty", "dnp": "DNP", "mixed": "-- mixed values --", "edit": "Edit {0}" },
     "sync": { "title": "Pins and labels inside", "inStep": "All pins answer a label", "shapes": "{0} here, {1} inside", "shapeDiffers": "shape differs", "noPin": "no pin", "noLabel": "no label inside", "rename": "Match sheet pin to label", "addPins": "Add pins for {0} labels", "addPinsStep": "Add sheet pins", "noRoom": "No room on the sheet edge for {0}: {1}. Make the sheet taller and add them again.", "takeShapes": "Give {0} pins their labels' shapes", "takeShapesStep": "Match sheet pin shapes", "removePins": "Remove {0} pins without labels", "removePinsStep": "Remove sheet pins" },
     "net": { "one": "net", "other": "nets" },
