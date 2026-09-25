@@ -26,7 +26,7 @@ refresh these loading diagnostics.
   placed twice appears twice; choosing a place opens that place in the tab.
 - **Left bottom — Layers** (board) **or Nets** (sheet).
 - **Right top — Inspector**, beside the **Components** panel on a sheet.
-- **Bottom — Checks**, **Console**, and **Find** on a sheet.
+- **Bottom — Checks**, **Console**, and **Find** and **Fields** on a sheet.
 
 Every panel is also an icon in the rail; a stack can be collapsed, and a panel sent to the rail and back. ⌘K opens
 the command palette, which lists every command with its shortcut.
@@ -78,6 +78,13 @@ the command palette, which lists every command with its shortcut.
   pins already there), gives pins their labels' shapes, or removes the pins that name nothing; a pin with no label
   can be pointed at a label with no pin, which renames it. Each is one step to undo. Only the pins are written:
   the labels live in the child's file, and are changed there.
+- **Edit → Symbol fields table** opens the fields panel at the foot of the window: every part of the sheet as a
+  line, every field any part carries as a column. Parts of one value are one line, as KiCad groups them by default;
+  the switch turns grouping off (the units of one part stay one line either way). A value typed into a cell is
+  written into every part of its line, as one step to undo; a cell whose parts disagree reads "-- mixed values --"
+  and changes nothing unless something is typed. A part without the field is given one, hidden. Designators are not
+  written here, and a click on them selects the parts and brings them into view. Parts kept off the BOM are shown
+  when asked; power symbols never.
 - **Edit → Find** (⌘F) opens the find panel at the foot of the window; **Find and replace** (⌘⌥F) puts the
   caret in the replace box. Every place on the sheet that matches is listed with what it belongs to; Enter or F3
   goes to the next, Shift+Enter or Shift+F3 to the one before, and each is selected and brought into view. Replace

@@ -54,6 +54,15 @@ public sealed class SchematicPlugin : IPlugin
             Order = 20,
         });
 
+        // Every part of the sheet with every field it carries: KiCad's Symbol Fields Table, beside Find.
+        context.Panels.Register(new PanelDescriptor(SchematicDocument.FieldsPanelId, "sch.panel.fields", DockArea.Bottom, workbench => new FieldsPanel(workbench))
+        {
+            IconKey = Icons.Component,
+            RailLabelKey = "sch.panel.fieldsRail",
+            DocumentTypes = [SchematicDocumentType.TypeId],
+            Order = 30,
+        });
+
         context.Log.Info(Tr.English("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }

@@ -254,7 +254,7 @@ internal sealed class FindPanel : ContentControl
     private Control Layout()
     {
         var findLine = new DockPanel { LastChildFill = true };
-        foreach (var control in new Control[] { _count, _next, _previous })
+        foreach (var control in new Control[] { _mode, _count, _next, _previous })
         {
             DockPanel.SetDock(control, Dock.Right);
             control.Margin = new Thickness(6, 0, 0, 0);
@@ -274,21 +274,24 @@ internal sealed class FindPanel : ContentControl
         withLine.Children.Add(_with);
 
         var switches = new WrapPanel { Orientation = Orientation.Horizontal };
-        foreach (var control in new Control[] { _mode, _case, _hidden, _pins, _references, _selection })
+        foreach (var control in new Control[] { _case, _hidden, _pins, _references, _selection })
         {
-            control.Margin = new Thickness(0, 0, 12, 4);
+            control.Margin = new Thickness(0, 0, 12, 2);
             control.VerticalAlignment = VerticalAlignment.Center;
             switches.Children.Add(control);
         }
 
-        var controls = new StackPanel { Spacing = 6, Width = 380 };
+        var controls = new StackPanel { Spacing = 6 };
         controls.Children.Add(findLine);
         controls.Children.Add(withLine);
         controls.Children.Add(switches);
 
         var body = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(controls, Dock.Left);
-        body.Children.Add(controls);
+        // The foot of the window is short until someone pulls it taller: the switches that do not fit scroll
+        // rather than being cut off.
+        var side = new ScrollViewer { Content = controls, Width = 540, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto };
+        DockPanel.SetDock(side, Dock.Left);
+        body.Children.Add(side);
         body.Children.Add(new ScrollViewer { Content = _rows, Margin = new Thickness(14, 0, 0, 0) });
         return body;
     }

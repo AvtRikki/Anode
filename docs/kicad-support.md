@@ -158,6 +158,22 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+The fields table is KiCad's Symbol Fields Table (`fields_data_model.cpp`) with its default preset, "Grouped By
+Value": lines group by value and do-not-place, units of one designator are always one line (never when it is not
+numbered yet), designators are shortened as KiCad shortens them (R1-R4, R7), and lines are sorted by them. Power
+symbols are left out, and parts kept off the BOM unless asked for. A field is found without regard to case; one a
+part does not have is added only when there is something to put in it, hidden and at the part, turned as its
+designator is — written as a copy of a field the part already hides, so it comes out in the file's own version's
+way (`(hide yes)` on the field in KiCad 9, inside its effects before). Every other field any part carries is a
+column, where KiCad's dialog starts with them hidden. There is no Apply: each value is its own step to undo.
+
+The bill of materials groups the same way — by value and do-not-place only — with a line's different footprints
+and datasheets listed together, comma-separated, as KiCad writes mixed values on export. It used to split a value
+by footprint and datasheet as well, which KiCad's default preset does not.
+
+Not done in the table: the sheet on screen only (KiCad can show the whole design), the attribute columns
+(do-not-place is shown, not written; keep-off-the-board and simulation are not shown), presets, and export from it.
+
 Sheet pins are brought in step with the hierarchical labels inside the sheet as KiCad's Sync Sheet Pins, Import
 Sheet Pins and Cleanup Sheet Pins do (`sync_sheet_pin/`): a pin and a label agree when their names read the same
 and their shapes are the same, labels of one name count once, and they are listed in KiCad's order of names. A pin

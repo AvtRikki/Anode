@@ -678,6 +678,37 @@ public sealed class SchematicDocument : DocumentBase
     internal IReadOnlyList<SchFindHit> Find(SchFindOptions options, IReadOnlyCollection<SchItem>? within = null) =>
         SchFind.All(Sheet, options, Instance, within);
 
+    /// <summary>The parts of the sheet on screen the fields table shows, read with the designators of this appearance.</summary>
+    internal IReadOnlyList<SymbolInstance> FieldParts(bool includeExcluded) => SchFieldsTable.Parts(Sheet, Instance, includeExcluded);
+
+    /// <summary>
+    /// Writes one value into a field of every part of a line of the fields table, as one step to undo. Nothing
+    /// happens when every part already says it.
+    /// </summary>
+    internal void WriteField(SchFieldsRow row, string field, string value)
+    {
+        if (row.Value(field) == value || row.Symbols.Any(s => !s.IsAttached))
+        {
+            return;
+        }
+
+        _editor.Modify(Tr.T("sch.fields.edit", field), [.. row.Symbols], () => SchFieldsTable.Write(row, field, value));
+    }
+
+    /// <summary>Selects the parts of a line and brings them into view.</summary>
+    internal void ShowParts(SchFieldsRow row)
+    {
+        var parts = row.Symbols.Where(s => s.IsAttached).Cast<SchItem>().ToList();
+        if (parts.Count == 0)
+        {
+            return;
+        }
+
+        _editor.SetSelection(parts);
+        var area = parts.Aggregate(RectD.Empty, (all, part) => all.Union(_editor.Scene.BoundsOf(part)));
+        _canvas?.ShowArea(area);
+    }
+
     /// <summary>What is selected now, for a search to be narrowed to.</summary>
     internal IReadOnlyList<SchItem> SelectedItems => [.. _editor.Selection];
 
@@ -1670,6 +1701,11 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _netAnchor is not null || _editor.Selection.Any(i => NetOf(i) is not null),
                 Execute = ToggleNetHighlight,
             },
+            new("sch.fieldsTable", "sch.command.fieldsTable")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 68,
+                Execute = () => context.Workbench.RevealPanel(FieldsPanelId),
+            },
             new("sch.annotate", "sch.command.annotate")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 70,
@@ -1778,6 +1814,9 @@ public sealed class SchematicDocument : DocumentBase
 
     private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
         new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    /// <summary>The fields table's place at the foot of the window.</summary>
+    internal const string FieldsPanelId = "sch.fields";
 
     /// <summary>Brings the find panel up and puts the caret in it.</summary>
     private static void OpenFind(IPluginContext context, bool replace)
