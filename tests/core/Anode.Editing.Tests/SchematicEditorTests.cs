@@ -803,6 +803,80 @@ public class SchematicEditorTests
         FormattableString.Invariant($"\t(wire (pts (xy {x1} {y1}) (xy {x2} {y2})) (stroke (width 0) (type default))")
         + $" (uuid \"1a1b2c3d-0000-4000-8000-00000000000{n}\"))\n";
 
+    /// <summary>
+    /// Pulling a handle redraws the shape as it goes, lands on the grid, and letting go is one step: undone, the
+    /// file is as it was, byte for byte.
+    /// </summary>
+    [Fact]
+    public void A_pulled_point_lands_on_the_grid_and_is_one_step_to_undo()
+    {
+        var editor = Lined(out var sheet);
+        var line = sheet.Graphics.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([line]);
+        var handle = editor.Handles[1];
+        Assert.True(editor.BeginPointEdit(line, handle));
+
+        // Off the grid on purpose: 26.1 mm is not a multiple of 1.27.
+        editor.UpdatePointEdit(editor.Scene.ToSceneMm(new Vector2D(26_100_000, 12_600_000)));
+        Assert.Equal(new Vector2L(26_670_000, 12_700_000), line.Points[1]);
+
+        editor.CommitPointEdit();
+        Assert.Null(editor.PointEdit);
+        Assert.Equal(new Vector2L(26_670_000, 12_700_000), line.Points[1]);
+
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    [Fact]
+    public void A_point_edit_called_off_changes_nothing()
+    {
+        var editor = Lined(out var sheet);
+        var line = sheet.Graphics.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([line]);
+        editor.BeginPointEdit(line, editor.Handles[0]);
+        editor.UpdatePointEdit(editor.Scene.ToSceneMm(new Vector2D(5_080_000, 5_080_000)));
+        editor.CancelPointEdit();
+
+        Assert.Equal(original, sheet.Document.ToBytes());
+        Assert.False(editor.History.CanUndo);
+        Assert.False(editor.Scene.BoundsOf(line).IsEmpty);
+    }
+
+    [Fact]
+    public void A_corner_put_in_and_taken_out_is_a_step_each()
+    {
+        var editor = Lined(out var sheet);
+        var line = sheet.Graphics.Single();
+        byte[] original = sheet.Document.ToBytes();
+
+        editor.SetSelection([line]);
+        Assert.True(editor.AddCorner(line, editor.Scene.ToSceneMm(new Vector2D(15_240_000, 10_160_000))));
+        Assert.Equal(3, line.Points.Length);
+
+        Assert.True(editor.RemoveCorner(line, editor.Handles[1]));
+        Assert.Equal(2, line.Points.Length);
+
+        editor.Undo();
+        editor.Undo();
+        Assert.Equal(original, sheet.Document.ToBytes());
+    }
+
+    /// <summary>A line on the grid, from (10.16, 10.16) to (20.32, 10.16).</summary>
+    private static SchematicEditor Lined(out Schematic sheet)
+    {
+        sheet = Schematic.Parse(
+            "(kicad_sch (version 20260206) (generator \"anode\") (uuid \"6f6b3b2a-0d2f-4a2f-9a9e-1a0d5c2f7b10\") (paper \"A4\")\n"
+            + "\t(polyline (pts (xy 10.16 10.16) (xy 20.32 10.16)) (stroke (width 0) (type default)) (uuid \"2a1b2c3d-0000-4000-8000-000000000001\"))\n"
+            + "\t(embedded_fonts no))\n");
+
+        return new SchematicEditor(SchematicSceneBuilder.Build(sheet));
+    }
+
     /// <summary>A resistor with a wire running from its lower pin.</summary>
     private static SchematicEditor Wired(out Schematic sheet, bool bus = false, double strokeWidthMm = 0, string beyond = "")
     {

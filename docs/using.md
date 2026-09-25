@@ -78,6 +78,11 @@ the command palette, which lists every command with its shortcut.
   pins already there), gives pins their labels' shapes, or removes the pins that name nothing; a pin with no label
   can be pointed at a label with no pin, which renames it. Each is one step to undo. Only the pins are written:
   the labels live in the child's file, and are changed there.
+- A selected line, polyline, curve, rectangle, circle or rule area shows handles. Pull one to move that point — it
+  lands on the grid, and lines drawn to meet it there come along; a rectangle has its corners and the middles of its
+  sides, a circle its centre and a point on its rim. Esc while pulling puts it back. A double click on the outline
+  of a selected line or polyline puts a corner in there; a double click on a corner takes it out. Each is one step
+  to undo. A held item has no handles.
 - **Edit → Symbol fields table** opens the fields panel at the foot of the window: every part of the sheet as a
   line, every field any part carries as a column. Parts of one value are one line, as KiCad groups them by default;
   the switch turns grouping off (the units of one part stay one line either way). A value typed into a cell is

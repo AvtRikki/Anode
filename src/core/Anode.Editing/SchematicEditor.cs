@@ -299,6 +299,119 @@ public sealed class SchematicEditor
     /// <summary>How far apart the steps put into neighbouring wires are set: one grid, as KiCad does.</summary>
     private long DragStep => GridNm > 0 ? GridNm : 1_270_000;
 
+    /// <summary>A handle being pulled: which, of what, and the items as they were before it was taken hold of.</summary>
+    public sealed record PointEditing(SchItem Item, SchHandle Handle, IReadOnlyList<SchItem> Affected, IReadOnlyList<Sexpr.SList> Before)
+    {
+        public Vector2L To { get; internal set; }
+    }
+
+    /// <summary>The handle being pulled, if one is.</summary>
+    public PointEditing? PointEdit { get; private set; }
+
+    /// <summary>The handles of the one item selected, when it is a shape whose points can be pulled.</summary>
+    public IReadOnlyList<SchHandle> Handles =>
+        Move is null && _selection is [var item] && item.IsAttached ? SchPoints.Handles(item) : [];
+
+    /// <summary>
+    /// Takes hold of a handle. Until it is let go the shape is redrawn as it is being pulled; letting go makes it
+    /// one step to undo, and calling it off puts everything back as it was.
+    /// </summary>
+    public bool BeginPointEdit(SchItem item, SchHandle handle)
+    {
+        if (Move is not null || PointEdit is not null || !SchPoints.Handles(item).Contains(handle))
+        {
+            return false;
+        }
+
+        var affected = SchPoints.Affected(Sheet, item, handle);
+        PointEdit = new PointEditing(item, handle, affected, [.. affected.Select(a => a.Node.CloneList())]) { To = handle.At };
+        return true;
+    }
+
+    /// <summary>Pulls the handle to the cursor, snapped to the grid as KiCad snaps a point being edited.</summary>
+    public void UpdatePointEdit(Vector2D cursorScene)
+    {
+        if (PointEdit is not { } edit)
+        {
+            return;
+        }
+
+        var to = Snap(Scene.ToSheetNm(cursorScene).Round());
+        if (to == edit.To)
+        {
+            return;
+        }
+
+        edit.To = to;
+        Restore(edit);
+        SchPoints.Move(Sheet, edit.Item, edit.Handle, to);
+        Refresh(edit.Affected);
+    }
+
+    public void CommitPointEdit()
+    {
+        if (PointEdit is not { } edit)
+        {
+            return;
+        }
+
+        PointEdit = null;
+        Restore(edit);
+        if (edit.To == edit.Handle.At)
+        {
+            Refresh(edit.Affected);
+            return;
+        }
+
+        Execute(new ModifyNodesCommand("Move point", edit.Affected, () => SchPoints.Move(Sheet, edit.Item, edit.Handle, edit.To)));
+    }
+
+    public void CancelPointEdit()
+    {
+        if (PointEdit is not { } edit)
+        {
+            return;
+        }
+
+        PointEdit = null;
+        Restore(edit);
+        Refresh(edit.Affected);
+    }
+
+    /// <summary>Puts a corner into the selected outline where it passes nearest the point, as one step to undo.</summary>
+    public bool AddCorner(SchItem item, Vector2D atScene)
+    {
+        if (!SchPoints.CanAddCorner(item))
+        {
+            return false;
+        }
+
+        var at = Snap(Scene.ToSheetNm(atScene).Round());
+        Execute(new ModifyNodesCommand("Add corner", [item], () => SchPoints.AddCorner(item, at)));
+        return true;
+    }
+
+    /// <summary>Takes a corner out of the selected outline, as one step to undo.</summary>
+    public bool RemoveCorner(SchItem item, SchHandle handle)
+    {
+        if (!SchPoints.CanRemoveCorner(item, handle))
+        {
+            return false;
+        }
+
+        Execute(new ModifyNodesCommand("Remove corner", [item], () => SchPoints.RemoveCorner(item, handle)));
+        return true;
+    }
+
+    private static void Restore(PointEditing edit)
+    {
+        for (int i = 0; i < edit.Affected.Count; i++)
+        {
+            edit.Affected[i].Node.RestoreFrom(edit.Before[i]);
+            edit.Affected[i].AfterRestore();
+        }
+    }
+
     /// <summary>What the step is called, which is what the reader is offered to undo.</summary>
     private static string Named(double rotation, int stretched) =>
         stretched > 0 ? "Drag" : rotation == 0 ? "Move" : "Move and rotate";

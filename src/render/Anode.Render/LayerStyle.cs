@@ -62,6 +62,12 @@ public static class LayerStyle
         public const string HiddenField = "#SchHiddenField";
 
         public const string HiddenPin = "#SchHiddenPin";
+
+        /// <summary>The handles of a shape whose points are being edited: a ring in the selection's colour…</summary>
+        public const string Handle = "#SchHandle";
+
+        /// <summary>…around a core of the paper, so a handle reads over any line it sits on.</summary>
+        public const string HandleCore = "#SchHandleCore";
     }
 
     /// <summary>
@@ -119,6 +125,8 @@ public static class LayerStyle
         [Sch.RuleArea] = new(0x7c, 0x4d, 0xa8, 180),
         [Sch.HiddenField] = new(0x20, 0x1e, 0x1d, 90),
         [Sch.HiddenPin] = new(0x20, 0x1e, 0x1d, 90),
+        [Sch.Handle] = ColorRgba.Rgb(0x00, 0x88, 0xb0),
+        [Sch.HandleCore] = ColorRgba.Rgb(0xf8, 0xf4, 0xf4),
     };
 
     /// <summary>Inner copper is one grey; the drawing stays readable when a board has more than four layers.</summary>
@@ -160,6 +168,8 @@ public static class LayerStyle
         [Sch.RuleArea] = ColorRgba.Rgb(0xc0, 0x9c, 0xe0),
         [Sch.HiddenField] = new(132, 132, 132, 160),
         [Sch.HiddenPin] = new(132, 132, 132, 160),
+        [Sch.Handle] = ColorRgba.Rgb(255, 255, 255),
+        [Sch.HandleCore] = ColorRgba.Rgb(0, 16, 35),
 
         // KiCad's own drawing-sheet colour.
         [Sch.Frame] = ColorRgba.Rgb(132, 0, 0),

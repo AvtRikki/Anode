@@ -158,6 +158,17 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+Points of drawn shapes are edited as KiCad's point editor edits them (`sch_point_editor.cpp`): a handle per point of
+a line, polyline, curve or rule area — one for the first and last point of an outline that closes on itself, which
+stays closed; four corners and four side middles for a rectangle; centre and rim for a circle. A handle lands on the
+grid. Pulling the end of a two-point line pulls the end of another two-point line that meets it there, as KiCad's
+line behaviour does. Corners go into the side nearest where they are asked for, and come out down to two points for
+a line and three for a rule area — KiCad's limits; where KiCad offers these in a context menu, a double click does it
+here. A corner can be put into a two-point line too, which KiCad reads back as a polyline.
+
+Not done: arcs (KiCad has three ways of editing one, and none is here yet), text boxes, sheets, pictures and table
+cells.
+
 The fields table is KiCad's Symbol Fields Table (`fields_data_model.cpp`) with its default preset, "Grouped By
 Value": lines group by value and do-not-place, units of one designator are always one line (never when it is not
 numbered yet), designators are shortened as KiCad shortens them (R1-R4, R7), and lines are sorted by them. Power

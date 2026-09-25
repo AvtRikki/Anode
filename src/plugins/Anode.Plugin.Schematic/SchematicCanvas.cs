@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using Anode.Editing;
 using Anode.Geometry;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
 using Anode.Render;
 using Anode.Render.Avalonia;
 
@@ -99,7 +100,12 @@ public sealed class SchematicCanvas : Panel
         Panning,
         BoxSelecting,
         Moving,
+        EditingPoint,
     }
+
+    /// <summary>How big a handle is drawn, and how near the pointer has to be to take hold of it, in pixels.</summary>
+    private const double HandlePixels = 4.5;
+    private const double HandleReachPixels = 8;
 
     public SchematicEditor? Editor
     {
@@ -460,6 +466,28 @@ public sealed class SchematicCanvas : Panel
             tool.Click(toolScene.ToSheetNm(World(point.Position)).Round());
             Present();
         }
+        else if (props.IsLeftButtonPressed && Editor is { } editor && editor.Selection is [var shape] && HandleUnder(point.Position) is { } handle)
+        {
+            // A double click on a corner takes it out; a single one takes hold of it.
+            if (e.ClickCount == 2)
+            {
+                editor.RemoveCorner(shape, handle);
+            }
+            else if (editor.BeginPointEdit(shape, handle))
+            {
+                _gesture = Gesture.EditingPoint;
+                e.Pointer.Capture(this);
+            }
+
+            Present();
+        }
+        else if (props.IsLeftButtonPressed && e.ClickCount == 2 && Editor is { } outlined && outlined.Selection is [var line]
+            && SchPoints.CanAddCorner(line) && Pick(point.Position) is var hit and >= 0 && ReferenceEquals(outlined.Scene.Owner(hit), line))
+        {
+            // A double click on the outline of the selected shape puts a corner in there.
+            outlined.AddCorner(line, World(point.Position));
+            Present();
+        }
         else if (props.IsLeftButtonPressed)
         {
             _pressOwner = Pick(point.Position);
@@ -489,6 +517,11 @@ public sealed class SchematicCanvas : Panel
 
             case Gesture.Moving:
                 Editor?.UpdateMove(World(p));
+                Present();
+                break;
+
+            case Gesture.EditingPoint:
+                Editor?.UpdatePointEdit(World(p));
                 Present();
                 break;
 
@@ -530,6 +563,11 @@ public sealed class SchematicCanvas : Panel
 
             case Gesture.Moving:
                 // The move stays on the cursor until the next click, as KiCad does.
+                break;
+
+            case Gesture.EditingPoint:
+                Editor?.CommitPointEdit();
+                _gesture = Gesture.None;
                 break;
 
             default:
@@ -580,6 +618,11 @@ public sealed class SchematicCanvas : Panel
                 else if (_gesture == Gesture.Moving)
                 {
                     editor?.CancelMove();
+                    _gesture = Gesture.None;
+                }
+                else if (_gesture == Gesture.EditingPoint)
+                {
+                    editor?.CancelPointEdit();
                     _gesture = Gesture.None;
                 }
                 else
@@ -657,6 +700,56 @@ public sealed class SchematicCanvas : Panel
         }
 
         Present();
+    }
+
+    /// <summary>The handle of the selected shape under the pointer, if it is near enough one to take hold of it.</summary>
+    private SchHandle? HandleUnder(Point screen)
+    {
+        if (Editor is not { } editor || _tool is not null || _gesture != Gesture.None)
+        {
+            return null;
+        }
+
+        SchHandle? nearest = null;
+        double best = HandleReachPixels * HandleReachPixels;
+        foreach (var handle in editor.Handles)
+        {
+            var at = _camera.WorldToScreen(editor.Scene.ToSceneMm(handle.At.ToDouble()));
+            double dx = at.X - screen.X, dy = at.Y - screen.Y;
+            if ((dx * dx) + (dy * dy) <= best)
+            {
+                best = (dx * dx) + (dy * dy);
+                nearest = handle;
+            }
+        }
+
+        return nearest;
+    }
+
+    /// <summary>
+    /// The handles of the selected shape, drawn over everything: a ring of the selection's colour round a core of
+    /// the paper, the same size on screen at any zoom. The handle being pulled is drawn where it now is.
+    /// </summary>
+    private IReadOnlyList<LayerGeometry>? HandleLayers(SchematicEditor editor)
+    {
+        var handles = editor.PointEdit is { } edit ? SchPoints.Handles(edit.Item) : editor.Handles;
+        if (handles.Count == 0 || _tool is not null)
+        {
+            return null;
+        }
+
+        float outer = (float)(HandlePixels / _camera.PixelsPerMm);
+        var ring = new LayerGeometry(LayerStyle.Sch.Handle);
+        var core = new LayerGeometry(LayerStyle.Sch.HandleCore);
+        foreach (var handle in handles)
+        {
+            var mm = editor.Scene.ToSceneMm(handle.At.ToDouble());
+            var at = new System.Numerics.Vector2((float)mm.X, (float)mm.Y);
+            ring.Circles.Add(new CirclePrim(at, outer, -1));
+            core.Circles.Add(new CirclePrim(at, outer * 0.55f, -1));
+        }
+
+        return [ring, core];
     }
 
     /// <summary>Topmost primitive under the cursor, or -1. Decoration layers (the paper) are never picked.</summary>
@@ -761,7 +854,7 @@ public sealed class SchematicCanvas : Panel
         {
             Preview = move?.Preview is { } moved ? moved : _tool?.Preview is { } drawn ? [drawn] : null,
             PreviewTransform = move?.PreviewTransform ?? Transform2D.Identity,
-            PreviewInPlace = move?.Rubber?.Layers,
+            PreviewInPlace = move?.Rubber?.Layers ?? HandleLayers(editor),
             SelectionBox = _gesture == Gesture.BoxSelecting ? SelectionBox(_lastPoint) : null,
             SelectionBoxCrossing = _gesture == Gesture.BoxSelecting && IsCrossing(_lastPoint),
         };
