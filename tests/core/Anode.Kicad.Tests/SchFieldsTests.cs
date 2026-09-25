@@ -64,6 +64,42 @@ public class SchFieldsTests
         Assert.Equal(before, sheet.Document.ToBytes());
     }
 
+    /// <summary>
+    /// Flags are written the way the file says them: "keep off the bill" is <c>(in_bom no)</c>, "keep off the board"
+    /// <c>(on_board no)</c>; do-not-place and keep out of simulation say what they mean. A part already so is left
+    /// alone, byte for byte.
+    /// </summary>
+    [Theory]
+    [InlineData("${DNP}", "(dnp yes)")]
+    [InlineData("${EXCLUDE_FROM_BOM}", "(in_bom no)")]
+    [InlineData("${EXCLUDE_FROM_BOARD}", "(on_board no)")]
+    [InlineData("${EXCLUDE_FROM_SIM}", "(exclude_from_sim yes)")]
+    public void A_flag_is_written_in_the_files_own_words(string column, string written)
+    {
+        var sheet = Sheet();
+
+        Assert.True(SchFields.SetFlag(sheet.Symbols, column, true));
+        Assert.All(sheet.Symbols, s => Assert.True(SchFields.IsOn(s, column)));
+        Assert.Contains(written, sheet.Symbols[0].Node.ToString(), StringComparison.Ordinal);
+
+        byte[] set = sheet.Document.ToBytes();
+        Assert.False(SchFields.SetFlag(sheet.Symbols, column, true));
+        Assert.Equal(set, sheet.Document.ToBytes());
+
+        Assert.True(SchFields.SetFlag(sheet.Symbols, column, false));
+        Assert.All(sheet.Symbols, s => Assert.False(SchFields.IsOn(s, column)));
+    }
+
+    [Fact]
+    public void A_column_that_is_not_a_flag_sets_nothing()
+    {
+        var sheet = Sheet();
+        byte[] before = sheet.Document.ToBytes();
+
+        Assert.False(SchFields.SetFlag(sheet.Symbols, "Value", true));
+        Assert.Equal(before, sheet.Document.ToBytes());
+    }
+
     /// <summary>On a real sheet written by KiCad 9, a field added from the bill reads back as KiCad writes one.</summary>
     [Fact]
     public void On_a_real_sheet_an_added_field_is_written_as_KiCad_writes_one()

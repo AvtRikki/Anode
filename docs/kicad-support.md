@@ -202,8 +202,14 @@ field is found without regard to case, one a part lacks is added only when there
 at the part, at its designator's angle, cloned from a field the part already hides so it comes out in the file's own
 version's way; designators and generated columns are never written.
 
-Not done in the bill: changing the flags (DNP and the exclusions show, but are written from the inspector), saving a
-preset back to the project, the other export formats, and the bill following edits to sheets that are not open.
+Flags are set from the bill as KiCad's table sets them (`setAttributeValue`), each written in the file's own words —
+`(dnp yes)`, `(in_bom no)`, `(on_board no)`, `(exclude_from_sim yes)` — and a part already so is left untouched. A
+change made from the bill is one step on each sheet it reaches and one step on the bill's own undo, which takes it
+back on all those sheets together, and only while each of them has done nothing since: undoing from under a later
+edit would take the drawing apart, so that is left to the sheet's own undo.
+
+Not done in the bill: saving a preset back to the project, the other export formats, and the bill following edits to
+sheets that are not open.
 
 Sheet pins are brought in step with the hierarchical labels inside the sheet as KiCad's Sync Sheet Pins, Import
 Sheet Pins and Cleanup Sheet Pins do (`sync_sheet_pin/`): a pin and a label agree when their names read the same

@@ -171,6 +171,12 @@ public sealed class UndoStack
 
     public bool CanRedo => _undone.Count > 0;
 
+    /// <summary>The step an undo would take back, or null.</summary>
+    public IEditCommand? LastDone => CanUndo ? _done[^1] : null;
+
+    /// <summary>The step a redo would do again, or null.</summary>
+    public IEditCommand? NextRedo => CanRedo ? _undone[^1] : null;
+
     public string? UndoName => CanUndo ? _done[^1].Name : null;
 
     public string? RedoName => CanRedo ? _undone[^1].Name : null;

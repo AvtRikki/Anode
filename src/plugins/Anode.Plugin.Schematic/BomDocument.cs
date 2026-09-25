@@ -1,5 +1,7 @@
 using System.Text;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Anode.Kicad.Editing;
 using Avalonia.Threading;
 using Anode.Kicad;
 using Anode.Sdk;
@@ -24,7 +26,16 @@ internal sealed class BomDocument : DocumentBase
 
     private readonly IWorkbench _workbench;
     private readonly Dictionary<string, (DateTime Written, Anode.Kicad.Schematic? Sheet)> _disk = new(StringComparer.Ordinal);
+    private readonly List<BomEdit> _done = [];
+    private readonly List<BomEdit> _undone = [];
+    private readonly List<IDisposable> _registrations = [];
     private bool _refreshPosted;
+
+    /// <summary>
+    /// One change made from the bill: the step it came to on each sheet it touched. It is undone and redone whole,
+    /// on every one of those sheets, or not at all.
+    /// </summary>
+    private sealed record BomEdit(string Name, IReadOnlyList<(SchematicDocument Sheet, IEditCommand Step)> Steps);
 
     private BomDocument(IWorkbench workbench, string rootFile)
     {
@@ -119,21 +130,131 @@ internal sealed class BomDocument : DocumentBase
     /// that each change is made — and saved, and undone — in the sheet it belongs to; the bill then comes back to
     /// the front.
     /// </summary>
-    public async Task WriteAsync(BomRow row, string field, string value)
+    public Task WriteAsync(BomRow row, string field, string value) =>
+        ChangeAsync(row, Tr.T("sch.bom.edit", field), (sheet, ids) => sheet.WriteField(ids, field, value));
+
+    /// <summary>Sets or clears one of the parts' flags — do not place, keep off the bill, the board, simulation — for a line.</summary>
+    public Task SetFlagAsync(BomRow row, string column, bool on) =>
+        ChangeAsync(row, Tr.T("sch.bom.edit", column), (sheet, ids) => sheet.SetFlag(ids, column, on));
+
+    /// <summary>
+    /// Makes one change to the parts of a line, sheet by sheet, and remembers it as one thing to undo from the bill.
+    /// Each sheet keeps its own step too, so the change can equally be undone on the sheet itself.
+    /// </summary>
+    private async Task ChangeAsync(BomRow row, string name, Func<SchematicDocument, IReadOnlyCollection<string>, IEditCommand?> change)
     {
+        var steps = new List<(SchematicDocument, IEditCommand)>();
         foreach (var byFile in row.Parts.GroupBy(p => p.File, StringComparer.Ordinal))
         {
-            if (await SheetDocument(byFile.Key) is not { } sheet)
+            if (await SheetDocument(byFile.Key) is { } sheet && change(sheet, Ids(byFile)) is { } step)
             {
-                continue;
+                steps.Add((sheet, step));
             }
+        }
 
-            sheet.WriteField(Ids(byFile), field, value);
+        if (steps.Count > 0)
+        {
+            _done.Add(new BomEdit(name, steps));
+            _undone.Clear();
         }
 
         _workbench.Show(this);
         Refresh();
     }
+
+    /// <summary>
+    /// Whether the last change made from the bill can be taken back: every sheet it touched is still open and has
+    /// done nothing since. A sheet edited after it has its own later steps on top, and undoing under them would
+    /// take the drawing apart; the sheet's own undo is the way back then.
+    /// </summary>
+    public bool CanUndo => _done.Count > 0 && _done[^1].Steps.All(s => IsOpen(s.Sheet) && s.Sheet.IsLastDone(s.Step));
+
+    public bool CanRedo => _undone.Count > 0 && _undone[^1].Steps.All(s => IsOpen(s.Sheet) && s.Sheet.IsNextRedo(s.Step));
+
+    public string? UndoName => _done.Count > 0 ? _done[^1].Name : null;
+
+    public string? RedoName => _undone.Count > 0 ? _undone[^1].Name : null;
+
+    /// <summary>Takes back the last change made from the bill, on every sheet it touched.</summary>
+    public void Undo()
+    {
+        if (!CanUndo)
+        {
+            return;
+        }
+
+        var edit = _done[^1];
+        _done.RemoveAt(_done.Count - 1);
+        foreach (var (sheet, _) in edit.Steps.Reverse())
+        {
+            sheet.UndoLast();
+        }
+
+        _undone.Add(edit);
+        Refresh();
+    }
+
+    public void Redo()
+    {
+        if (!CanRedo)
+        {
+            return;
+        }
+
+        var edit = _undone[^1];
+        _undone.RemoveAt(_undone.Count - 1);
+        foreach (var (sheet, _) in edit.Steps)
+        {
+            sheet.RedoNext();
+        }
+
+        _done.Add(edit);
+        Refresh();
+    }
+
+    public override void Activate(IPluginContext context)
+    {
+        // The bill's own undo: what it changed, it takes back, across every sheet the change reached.
+        CommandDescriptor[] commands =
+        [
+            new("edit.undo", "sch.command.undo")
+            {
+                ScopeKey = "scope.bom", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
+                MenuKey = "menu.edit", MenuOrder = 0,
+                CanExecute = () => CanUndo,
+                Execute = Undo,
+            },
+            new("edit.redo", "sch.command.redo")
+            {
+                ScopeKey = "scope.bom", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
+                MenuKey = "menu.edit", MenuOrder = 10,
+                CanExecute = () => CanRedo,
+                Execute = Redo,
+            },
+        ];
+
+        foreach (var command in commands)
+        {
+            _registrations.Add(context.Commands.Register(command));
+        }
+
+        Refresh();
+    }
+
+    public override void Deactivate()
+    {
+        foreach (var registration in _registrations)
+        {
+            registration.Dispose();
+        }
+
+        _registrations.Clear();
+    }
+
+    private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
+        new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    private bool IsOpen(SchematicDocument sheet) => _workbench.Documents.Contains(sheet);
 
     /// <summary>Turns to the first sheet the line's parts are on, at the place they stand in, and selects them there.</summary>
     public async Task ShowAsync(BomRow row)
@@ -179,6 +300,7 @@ internal sealed class BomDocument : DocumentBase
 
     public override void Dispose()
     {
+        Deactivate();
         SchematicDocument.SheetEdited -= OnSheetEdited;
         _workbench.ActiveDocumentChanged -= PostRefresh;
         Made.Remove((_workbench, RootFile));

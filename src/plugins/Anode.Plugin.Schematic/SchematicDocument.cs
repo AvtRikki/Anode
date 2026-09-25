@@ -694,17 +694,46 @@ public sealed class SchematicDocument : DocumentBase
     /// Writes one value into a field of the symbols named, as one step to undo on this sheet. Nothing happens when
     /// every one of them already says it.
     /// </summary>
-    internal bool WriteField(IReadOnlyCollection<string> uuids, string field, string value)
+    internal IEditCommand? WriteField(IReadOnlyCollection<string> uuids, string field, string value)
     {
-        var symbols = Sheet.Symbols.Where(s => s.Uuid is { } id && uuids.Contains(id)).ToList();
+        var symbols = Symbols(uuids);
         if (symbols.Count == 0 || symbols.All(s => SchFields.Read(s, field) == value))
         {
-            return false;
+            return null;
         }
 
         _editor.Modify(Tr.T("sch.bom.edit", field), [.. symbols], () => SchFields.Write(symbols, field, value));
-        return true;
+        return _editor.History.LastDone;
     }
+
+    /// <summary>
+    /// Sets one of the flags a bill column names on the symbols named, as one step to undo on this sheet; answers the
+    /// step, or null when every one of them already had it so.
+    /// </summary>
+    internal IEditCommand? SetFlag(IReadOnlyCollection<string> uuids, string column, bool on)
+    {
+        var symbols = Symbols(uuids);
+        if (symbols.All(s => SchFields.IsOn(s, column) == on))
+        {
+            return null;
+        }
+
+        _editor.Modify(Tr.T("sch.bom.edit", column), [.. symbols], () => SchFields.SetFlag(symbols, column, on));
+        return _editor.History.LastDone;
+    }
+
+    /// <summary>Whether <paramref name="step"/> is the last thing done on this sheet, and so the one an undo takes back.</summary>
+    internal bool IsLastDone(IEditCommand step) => ReferenceEquals(_editor.History.LastDone, step);
+
+    /// <summary>Whether <paramref name="step"/> is the next thing a redo on this sheet would do again.</summary>
+    internal bool IsNextRedo(IEditCommand step) => ReferenceEquals(_editor.History.NextRedo, step);
+
+    internal void UndoLast() => _editor.Undo();
+
+    internal void RedoNext() => _editor.Redo();
+
+    private List<SymbolInstance> Symbols(IReadOnlyCollection<string> uuids) =>
+        [.. Sheet.Symbols.Where(s => s.Uuid is { } id && uuids.Contains(id))];
 
     /// <summary>Selects the symbols named and brings them into view.</summary>
     internal void ShowSymbols(IReadOnlyCollection<string> uuids)

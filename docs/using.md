@@ -99,8 +99,11 @@ the command palette, which lists every command with its shortcut.
   narrows it to designators, and a switch shows every field any part carries. The bill follows the design: an edit
   on any open sheet shows in it. A value typed into a line is written into every part of it, through the sheets'
   own editors — a sheet that is not open is opened for it — so each change is saved and undone on its sheet. A
-  click on the designators turns to the parts and selects them. **Export report…** writes the bill as it is at that
-  moment, as KiCad's CSV export writes it.
+  click on the designators turns to the parts and selects them. Flags — DNP, and keeping a part off the BOM, the
+  board or simulation — are ticks: a tick set for some parts of a line and not others is shown neither way, and
+  clicking it decides it for all of them. ⌘Z on the bill takes back the last change made from it on every sheet it
+  reached, as one step, and ⌘⇧Z makes it again; once a sheet has been edited on its own since, the bill leaves it to
+  that sheet's undo. **Export report…** writes the bill as it is at that moment, as KiCad's CSV export writes it.
 - **Edit → Find** (⌘F) opens the find panel at the foot of the window; **Find and replace** (⌘⌥F) puts the
   caret in the replace box. Every place on the sheet that matches is listed with what it belongs to; Enter or F3
   goes to the next, Shift+Enter or Shift+F3 to the one before, and each is selected and brought into view. Replace

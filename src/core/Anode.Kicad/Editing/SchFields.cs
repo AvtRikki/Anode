@@ -42,6 +42,50 @@ public static class SchFields
         return changed;
     }
 
+    /// <summary>
+    /// Sets one of a part's flags — the bill's <c>${DNP}</c>, <c>${EXCLUDE_FROM_BOM}</c>, <c>${EXCLUDE_FROM_BOARD}</c>,
+    /// <c>${EXCLUDE_FROM_SIM}</c> columns — on every symbol, as KiCad's table does (<c>setAttributeValue</c>). Each is
+    /// written the way the file says it: a part kept off the bill is <c>(in_bom no)</c>, one kept off the board
+    /// <c>(on_board no)</c>; the other two say what they mean. Symbols already so are left alone, byte for byte.
+    /// Answers whether anything changed; a column that is not a flag changes nothing.
+    /// </summary>
+    public static bool SetFlag(IEnumerable<SymbolInstance> symbols, string column, bool on)
+    {
+        if (!BomPreset.IsAttribute(column))
+        {
+            return false;
+        }
+
+        var (word, written) = Word(column, on);
+        bool changed = false;
+        foreach (var symbol in symbols.Where(s => IsOn(s, column) != on))
+        {
+            SchWrites.SetFlag(symbol, word, written);
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    /// <summary>Whether a part has the flag a bill column names set.</summary>
+    public static bool IsOn(SymbolInstance symbol, string column) => column switch
+    {
+        BomPreset.Dnp => symbol.IsDnp,
+        BomPreset.ExcludeFromBom => !symbol.InBom,
+        BomPreset.ExcludeFromBoard => !symbol.OnBoard,
+        BomPreset.ExcludeFromSim => symbol.ExcludedFromSim,
+        _ => false,
+    };
+
+    /// <summary>The file's word for a flag, and what it is written as for the flag to be on or off.</summary>
+    private static (string Word, bool Written) Word(string column, bool on) => column switch
+    {
+        BomPreset.Dnp => ("dnp", on),
+        BomPreset.ExcludeFromBom => ("in_bom", !on),
+        BomPreset.ExcludeFromBoard => ("on_board", !on),
+        _ => ("exclude_from_sim", on),
+    };
+
     /// <summary>The value a part gives a field, found without regard to case, as written; empty when it has none.</summary>
     public static string Read(SymbolInstance symbol, string field) => Property(symbol, field)?.Str(2) ?? string.Empty;
 

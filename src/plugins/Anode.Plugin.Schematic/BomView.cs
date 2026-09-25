@@ -7,6 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Anode.Kicad;
+using Anode.Kicad.Editing;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Schematic;
@@ -215,7 +216,29 @@ internal sealed class BomView : DockPanel
             return button;
         }
 
-        // Counts and flags are worked out, not written: they read as quiet text.
+        // A flag is a tick, as in KiCad's table: set for every part, for none, or — for a line whose parts disagree —
+        // neither, until it is clicked and so decided for all of them.
+        if (BomPreset.IsAttribute(column))
+        {
+            var states = row.Parts.Select(p => SchFields.IsOn(p.Symbol, column)).Distinct().ToList();
+            bool? on = states.Count == 1 ? states[0] : null;
+            var tick = new CheckBox { IsChecked = on, IsThreeState = false, MinHeight = 0, VerticalAlignment = VerticalAlignment.Center };
+            if (on is null)
+            {
+                ToolTip.SetTip(tick, Tr.T("sch.bom.mixed"));
+            }
+
+            tick.IsCheckedChanged += (_, _) =>
+            {
+                if (tick.IsChecked is { } wanted && wanted != on)
+                {
+                    _ = _document.SetFlagAsync(row, column, wanted);
+                }
+            };
+            return tick;
+        }
+
+        // Counts are worked out, not written: they read as quiet text.
         if (BomPreset.IsGenerated(column))
         {
             var quiet = Ui.Mono(value ?? Tr.T("sch.bom.mixed"), "dim");
