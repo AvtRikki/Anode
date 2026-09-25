@@ -26,7 +26,7 @@ refresh these loading diagnostics.
   placed twice appears twice; choosing a place opens that place in the tab.
 - **Left bottom — Layers** (board) **or Nets** (sheet).
 - **Right top — Inspector**, beside the **Components** panel on a sheet.
-- **Bottom — Checks** and **Console.**
+- **Bottom — Checks**, **Console**, and **Find** on a sheet.
 
 Every panel is also an icon in the rail; a stack can be collapsed, and a panel sent to the rail and back. ⌘K opens
 the command palette, which lists every command with its shortcut.
@@ -72,6 +72,13 @@ the command palette, which lists every command with its shortcut.
   Choosing a row lights that net, choosing it again puts it out. The backquote does the same from a selection.
 - **Edit → Write as a label / global label / hierarchical label / text** changes what selected words mean without
   moving them. What is already of that kind is left alone.
+- **Edit → Find** (⌘F) opens the find panel at the foot of the window; **Find and replace** (⌘⌥F) puts the
+  caret in the replace box. Every place on the sheet that matches is listed with what it belongs to; Enter or F3
+  goes to the next, Shift+Enter or Shift+F3 to the one before, and each is selected and brought into view. Replace
+  changes the place on show and goes on; Replace all changes every place on the sheet as one step to undo.
+  Switches: match case; anywhere, whole words, wildcards or a regular expression; hidden fields; pin names and
+  numbers; replacing designators (off, so replacing "R" in values does not rename every resistor); and the
+  selection only, taken when the switch is turned on.
 - **Edit → Align** brings the selection to one edge, to its middle, or onto the grid. Things only slide.
 - **Edit → Hold in place / Let go** locks what is selected. A held item does not move, turn or delete with the rest.
 - **View → Show hidden fields / hidden pins** brings out what the sheet keeps out of sight, and puts it back.

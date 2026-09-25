@@ -158,6 +158,20 @@ whichever of those partners stands nearest to it. A partner on another sheet is 
 has been found, and pins of one part drawn on top of each other, as a chip's several ground pins are, are one
 connection rather than a quarrel with themselves.
 
+Find and replace follows KiCad's rules (`sch_find_replace_tool.cpp`, `EDA_ITEM::Matches` and `Replace`): the
+fields of parts, sheets and labels — hidden ones only when asked — designators as the appearance on screen reads
+them, with the unit's letter too, so U1B is found; labels, texts, sheet pins, and pin names and numbers when asked.
+Words are compared anywhere, as whole words, against `*` and `?`, or as a regular expression, which KiCad's `&` and
+`\1` replacements are read for; an expression that will not compile finds nothing. Places come left to right, then
+top to bottom, and a part is listed once per field that matched rather than again for itself. What KiCad will not
+write is not written: pins, a sheet's file name, a label's cross-references, designators unless asked, and held
+items. A label's name is replaced escaped as KiCad escapes a net name; a label an older KiCad wrote with its slash
+bare is renamed too, where KiCad would find it and leave it as it was. Tables are not searched, as in KiCad.
+
+Not done: finding across the whole design (the sheet on screen is searched, and a replace of everything stays on it,
+since writing sheets that are not open would edit files behind the designer's back), net names, and the library
+fields of a part (description, keywords).
+
 Not done: numbering a whole design again in one step (a sheet at a time is what the editor offers, since renaming
 parts on sheets that are not open would edit files behind the designer's back), and the exclusions a project lists
 for single findings — matching one needs the marker written exactly as KiCad writes it, down to its position.

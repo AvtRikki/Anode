@@ -667,6 +667,53 @@ public sealed class SchematicDocument : DocumentBase
     internal void LightNet(SchNet? net) =>
         HighlightNet(net?.Items.FirstOrDefault(i => i is SchWire) ?? net?.Items.FirstOrDefault(i => i is not SymbolInstance) ?? net?.Items.FirstOrDefault());
 
+    /// <summary>
+    /// Every place on the sheet on screen that says what is looked for, read with the designators of the appearance
+    /// on screen. <paramref name="within"/> narrows it to what was selected when the search was narrowed.
+    /// </summary>
+    internal IReadOnlyList<SchFindHit> Find(SchFindOptions options, IReadOnlyCollection<SchItem>? within = null) =>
+        SchFind.All(Sheet, options, Instance, within);
+
+    /// <summary>What is selected now, for a search to be narrowed to.</summary>
+    internal IReadOnlyList<SchItem> SelectedItems => [.. _editor.Selection];
+
+    /// <summary>Selects what a find landed on and brings it into view, zooming in only when it would be hard to see.</summary>
+    internal void Show(SchFindHit hit) => Focus(hit.Item);
+
+    /// <summary>Replaces what was found in one place, as one step to undo. False where nothing could be written.</summary>
+    internal bool Replace(SchFindHit hit, SchFindOptions options, string with)
+    {
+        if (!SchFind.CanReplace(hit, options, with, Instance))
+        {
+            return false;
+        }
+
+        _editor.Modify(Tr.T("sch.command.replace"), [hit.Item], () => SchFind.Replace(hit, options, with, Instance));
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces every place on the sheet on screen at once, as one step to undo. Answers how many places changed.
+    /// Other sheets are left alone: they are not open, and writing them would edit files behind the designer's back.
+    /// </summary>
+    internal int ReplaceAll(IReadOnlyList<SchFindHit> hits, SchFindOptions options, string with)
+    {
+        var writable = hits.Where(h => SchFind.CanReplace(h, options, with, Instance)).ToList();
+        if (writable.Count == 0)
+        {
+            return 0;
+        }
+
+        _editor.Modify(Tr.T("sch.command.replaceAll"), [.. writable.Select(h => h.Item).Distinct()], () =>
+        {
+            foreach (var hit in writable)
+            {
+                SchFind.Replace(hit, options, with, Instance);
+            }
+        });
+        return writable.Count;
+    }
+
     internal void HighlightNet(SchItem? anchor)
     {
         _netAnchor = anchor;
@@ -1346,6 +1393,32 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _editor.Selection.Count > 0,
                 Execute = () => Guard(() => _editor.DeleteSelection(), context),
             },
+            new("edit.find", "sch.command.find")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘F", Gesture = Shortcut(Key.F),
+                MenuKey = "menu.edit", MenuOrder = 24,
+                Execute = () => OpenFind(context, replace: false),
+            },
+            new("edit.findReplace", "sch.command.findReplace")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘⌥F", Gesture = Shortcut(Key.F, KeyModifiers.Alt),
+                MenuKey = "menu.edit", MenuOrder = 25,
+                Execute = () => OpenFind(context, replace: true),
+            },
+            new("edit.findNext", "sch.command.findNext")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "F3", Gesture = new KeyGesture(Key.F3),
+                MenuKey = "menu.edit", MenuOrder = 26,
+                CanExecute = () => FindSession.Text.Length > 0,
+                Execute = () => Guard(() => FindSession.Step(this, 1), context),
+            },
+            new("edit.findPrevious", "sch.command.findPrevious")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⇧F3", Gesture = new KeyGesture(Key.F3, KeyModifiers.Shift),
+                MenuKey = "menu.edit", MenuOrder = 27,
+                CanExecute = () => FindSession.Text.Length > 0,
+                Execute = () => Guard(() => FindSession.Step(this, -1), context),
+            },
             new("sch.move", "sch.command.move")
             {
                 ScopeKey = "scope.schematic", ShortcutText = "M", MenuKey = "menu.edit", MenuOrder = 30,
@@ -1603,6 +1676,13 @@ public sealed class SchematicDocument : DocumentBase
 
     private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
         new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    /// <summary>Brings the find panel up and puts the caret in it.</summary>
+    private static void OpenFind(IPluginContext context, bool replace)
+    {
+        context.Workbench.RevealPanel(FindSession.PanelId);
+        FindSession.RequestFocus(replace);
+    }
 
     private void Guard(Action action, IPluginContext context)
     {

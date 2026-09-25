@@ -49,6 +49,13 @@ public interface IWorkbench
     void FocusInspector() => InspectorFocus.Request();
 
     /// <summary>
+    /// Brings a panel to the front of its section, opening the section if it was closed — what a command that works
+    /// through a panel does first, as Ctrl+F does with Find. Unlike the rail icon it never closes anything: asking
+    /// twice leaves the panel where the first asking put it.
+    /// </summary>
+    void RevealPanel(string panelId);
+
+    /// <summary>
     /// Asks where to put a file the plugin is about to write — an export, a report. Answers the path chosen, or null
     /// when nobody chose one. The plugin writes the file itself; the workbench only asks the question.
     /// </summary>

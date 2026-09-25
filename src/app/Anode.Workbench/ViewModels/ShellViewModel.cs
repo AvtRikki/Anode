@@ -826,6 +826,28 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         }
     }
 
+    public void RevealPanel(string panelId)
+    {
+        foreach (var stack in Stacks)
+        {
+            if (stack.Tabs.FirstOrDefault(t => t.Descriptor.Id == panelId) is { } tab)
+            {
+                CloseSlideOver();
+                IsLeftDockVisible |= LeftStacks.Contains(stack);
+                IsRightDockVisible |= RightStacks.Contains(stack);
+                IsBottomDockVisible |= ReferenceEquals(BottomStack, stack);
+                stack.Select(tab);
+                RefreshRailState();
+                return;
+            }
+        }
+
+        if (SlideOver?.Id != panelId && Panels.Panels.FirstOrDefault(p => p.Id == panelId) is { } descriptor)
+        {
+            ToggleSlideOver(descriptor);
+        }
+    }
+
     /// <summary>A section opened or closed: the columns of the frame follow it.</summary>
     public void RaiseDockVisibility()
     {

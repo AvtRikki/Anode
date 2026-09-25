@@ -45,6 +45,15 @@ public sealed class SchematicPlugin : IPlugin
             Order = 20,
         });
 
+        // Find and Replace at the foot of the window, beside the checks: a list of places, each with where it is.
+        context.Panels.Register(new PanelDescriptor(FindSession.PanelId, "sch.panel.find", DockArea.Bottom, workbench => new FindPanel(workbench))
+        {
+            IconKey = Icons.Search,
+            RailLabelKey = "sch.panel.findRail",
+            DocumentTypes = [SchematicDocumentType.TypeId],
+            Order = 20,
+        });
+
         context.Log.Info(Tr.English("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
     }
 }
