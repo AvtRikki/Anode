@@ -509,6 +509,17 @@ public sealed partial class ShellViewModel : ObservableObject, IWorkbench
         }
     }
 
+    public void Show(IDocument document)
+    {
+        if (Panes.SelectMany(p => p.Tabs).FirstOrDefault(t => ReferenceEquals(t.Document, document)) is { } tab)
+        {
+            ActivateTab(tab);
+            return;
+        }
+
+        AddDocument(document);
+    }
+
     public void ShowBanner(Banner banner) => CurrentBanner = banner;
 
     public void DismissBanner(Banner banner)

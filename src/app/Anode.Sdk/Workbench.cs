@@ -36,6 +36,12 @@ public interface IWorkbench
 
     void Activate(IDocument document);
 
+    /// <summary>
+    /// Puts a document that is not a file of its own — a view over others, such as a design's bill of materials — in a
+    /// tab and brings it up; one already in a tab is brought up again. Whoever made it keeps it, to show it again.
+    /// </summary>
+    void Show(IDocument document);
+
     /// <summary>Shows the banner over the canvas; showing another one replaces it.</summary>
     void ShowBanner(Banner banner);
 

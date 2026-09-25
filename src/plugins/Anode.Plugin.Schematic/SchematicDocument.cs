@@ -252,6 +252,7 @@ public sealed class SchematicDocument : DocumentBase
         _editor.History.Changed += ForgetDerived;
         _editor.History.Changed += RefreshNetHighlight;
         _editor.History.Changed += RedrawFrame;
+        _editor.History.Changed += () => SheetEdited?.Invoke(this);
         _checks = SheetChecks.Run(schematic);
         Tr.Changed += OnLanguageChanged;
     }
@@ -683,27 +684,32 @@ public sealed class SchematicDocument : DocumentBase
     internal IReadOnlyList<SchFindHit> Find(SchFindOptions options, IReadOnlyCollection<SchItem>? within = null) =>
         SchFind.All(Sheet, options, Instance, within);
 
-    /// <summary>The parts of the sheet on screen the fields table shows, read with the designators of this appearance.</summary>
-    internal IReadOnlyList<SymbolInstance> FieldParts(bool includeExcluded) => SchFieldsTable.Parts(Sheet, Instance, includeExcluded);
+    /// <summary>
+    /// Raised when any open sheet changes — an edit, an undo — so that views over the design, the bill of materials
+    /// among them, can read it again.
+    /// </summary>
+    internal static event Action<SchematicDocument>? SheetEdited;
 
     /// <summary>
-    /// Writes one value into a field of every part of a line of the fields table, as one step to undo. Nothing
-    /// happens when every part already says it.
+    /// Writes one value into a field of the symbols named, as one step to undo on this sheet. Nothing happens when
+    /// every one of them already says it.
     /// </summary>
-    internal void WriteField(SchFieldsRow row, string field, string value)
+    internal bool WriteField(IReadOnlyCollection<string> uuids, string field, string value)
     {
-        if (row.Value(field) == value || row.Symbols.Any(s => !s.IsAttached))
+        var symbols = Sheet.Symbols.Where(s => s.Uuid is { } id && uuids.Contains(id)).ToList();
+        if (symbols.Count == 0 || symbols.All(s => SchFields.Read(s, field) == value))
         {
-            return;
+            return false;
         }
 
-        _editor.Modify(Tr.T("sch.fields.edit", field), [.. row.Symbols], () => SchFieldsTable.Write(row, field, value));
+        _editor.Modify(Tr.T("sch.bom.edit", field), [.. symbols], () => SchFields.Write(symbols, field, value));
+        return true;
     }
 
-    /// <summary>Selects the parts of a line and brings them into view.</summary>
-    internal void ShowParts(SchFieldsRow row)
+    /// <summary>Selects the symbols named and brings them into view.</summary>
+    internal void ShowSymbols(IReadOnlyCollection<string> uuids)
     {
-        var parts = row.Symbols.Where(s => s.IsAttached).Cast<SchItem>().ToList();
+        var parts = Sheet.Symbols.Where(s => s.Uuid is { } id && uuids.Contains(id)).Cast<SchItem>().ToList();
         if (parts.Count == 0)
         {
             return;
@@ -1730,10 +1736,10 @@ public sealed class SchematicDocument : DocumentBase
                 CanExecute = () => _editor.EnteredGroup is not null,
                 Execute = () => Guard(() => _editor.LeaveGroup(), context),
             },
-            new("sch.fieldsTable", "sch.command.fieldsTable")
+            new("sch.bom", "sch.command.bom")
             {
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 68,
-                Execute = () => context.Workbench.RevealPanel(FieldsPanelId),
+                Execute = () => Guard(() => context.Workbench.Show(BomDocument.For(context.Workbench, RootFile())), context),
             },
             new("sch.annotate", "sch.command.annotate")
             {
@@ -1881,9 +1887,6 @@ public sealed class SchematicDocument : DocumentBase
         UseTool("sch.tool.wire");
         (canvas.Tool as WireTool)?.Click(unfolding.WireEnd);
     }
-
-    /// <summary>The fields table's place at the foot of the window.</summary>
-    internal const string FieldsPanelId = "sch.fields";
 
     /// <summary>Brings the find panel up and puts the caret in it.</summary>
     private static void OpenFind(IPluginContext context, bool replace)

@@ -13,14 +13,14 @@ using Anode.Workbench.Views;
 namespace Anode.Workbench.Tests;
 
 /// <summary>
-/// The panels at the foot of a sheet — the fields table and find — driven as a person drives them, on one of KiCad's
-/// own designs: the command brings the panel up, a value typed into a line of the table lands in every part of it,
-/// and the find box finds.
+/// The bill of materials and find, driven as a person drives them, on one of KiCad's own designs: the command brings
+/// the bill up as a tab of its own, a value typed into a line of it lands in every part of it through the sheet's own
+/// editor, and the find box finds.
 /// </summary>
 public class SheetTablesTests
 {
     [Fact]
-    public Task A_value_typed_into_the_table_lands_in_every_part_of_its_line() => ShellWindowTests.Dispatch(directory =>
+    public Task A_value_typed_into_the_bill_lands_in_every_part_of_its_line() => ShellWindowTests.Dispatch(directory =>
     {
         string demo = Path.Combine(TestData.KiCadDir, "demos", "pic_programmer");
         Assert.SkipUnless(Directory.Exists(demo), TestData.SkipReason);
@@ -46,27 +46,47 @@ public class SheetTablesTests
             Assert.NotNull(document);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.True(shell.Commands.TryExecute("sch.fieldsTable"));
-            ShellWindowTests.Snapshot(window, directory, "sheet-fields-table");
+            // The bill is a tab of its own, over the whole design, laid out by the preset the project names.
+            Assert.True(shell.Commands.TryExecute("sch.bom"));
+            Dispatcher.UIThread.RunJobs();
+            var bom = shell.ActiveDocument;
+            Assert.NotNull(bom);
+            Assert.Null(bom!.FilePath);
+            Assert.Equal("anode.bom", bom.DocumentTypeId);
+            ShellWindowTests.Snapshot(window, directory, "sheet-bom");
 
-            var table = window.GetVisualDescendants().FirstOrDefault(v => v.GetType().Name == "FieldsPanel");
-            Assert.True(table is not null, "the fields table did not come up");
+            var table = window.GetVisualDescendants().FirstOrDefault(v => v.GetType().Name == "BomView");
+            Assert.True(table is not null, "the bill did not come up");
 
-            // The seven 10K resistors are one line, grouped by value as KiCad groups them: one box says 10K.
+            // The project's own preset groups by nothing, as KiCad would show it: seven lines of 10K. Grouped by value,
+            // as a person would choose it, the seven are one line and one box says 10K.
+            Assert.Equal(7, table!.GetVisualDescendants().OfType<TextBox>().Count(b => b.Text == "10K"));
+            var presets = table.GetVisualDescendants().OfType<ComboBox>().First();
+            presets.SelectedIndex = presets.Items.Cast<string>().ToList().IndexOf("Grouped By Value");
+            Dispatcher.UIThread.RunJobs();
+
             var cell = Assert.Single(table!.GetVisualDescendants().OfType<TextBox>(), b => b.Text == "10K");
             cell.Focus();
             cell.SelectAll();
             window.KeyTextInput("12K");
             window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
-            Dispatcher.UIThread.RunJobs();
+            for (int i = 0; i < 50 && !document!.IsDirty; i++)
+            {
+                Dispatcher.UIThread.RunJobs();
+                Thread.Sleep(2);
+            }
 
-            Assert.True(document!.IsDirty, "writing into the table did not change the sheet");
+            // Written into the sheet, through its own editor: the sheet is changed, and the bill came back to the front.
+            Assert.True(document!.IsDirty, "writing into the bill did not change the sheet");
+            Assert.Same(bom, shell.ActiveDocument);
             Assert.True(Pump(document.SaveAsync()));
             string written = File.ReadAllText(sheet);
             Assert.Equal(7, Count(written, "(property \"Value\" \"12K\""));
             Assert.Equal(0, Count(written, "(property \"Value\" \"10K\""));
 
-            // One value typed is one step back.
+            // One value typed is one step back, taken on the sheet it was written to.
+            shell.Activate(document);
+            Dispatcher.UIThread.RunJobs();
             Assert.True(shell.Commands.TryExecute("edit.undo"));
             Dispatcher.UIThread.RunJobs();
             Assert.True(Pump(document.SaveAsync()));

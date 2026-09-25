@@ -192,8 +192,8 @@ public class NetsPanelTests
     }
 
     /// <summary>
-    /// The bill of materials command writes the design's parts where the picker points, as the CSV KiCad's own
-    /// default preset writes: the columns in its order, one line per part that is the same thing.
+    /// The bill of materials command writes the design's parts where the picker points, as KiCad writes the CSV for
+    /// the project's preset: its columns in its order, under its labels.
     /// </summary>
     [Fact]
     public Task The_bill_of_materials_command_writes_the_designs_parts()
@@ -233,7 +233,8 @@ public class NetsPanelTests
                 Assert.True(File.Exists(target), "the bill of materials was not written");
                 string[] rows = File.ReadAllLines(target);
 
-                Assert.Equal("\"Reference\",\"Value\",\"Datasheet\",\"Footprint\",\"Qty\",\"DNP\"", rows[0]);
+                // The columns of the preset the demo's project names, under its labels — it has no DNP column.
+                Assert.Equal("\"Reference\",\"Value\",\"Datasheet\",\"Footprint\",\"Qty\"", rows[0]);
                 Assert.True(rows.Length > 1, "the bill of materials has no parts on it");
 
                 // The amplifier sheet stands twice, so its parts are there under the designators of both places.

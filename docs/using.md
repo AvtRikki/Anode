@@ -26,7 +26,7 @@ refresh these loading diagnostics.
   placed twice appears twice; choosing a place opens that place in the tab.
 - **Left bottom — Layers** (board) **or Nets** (sheet).
 - **Right top — Inspector**, beside the **Components** panel on a sheet.
-- **Bottom — Checks**, **Console**, and **Find** and **Fields** on a sheet.
+- **Bottom — Checks**, **Console**, and **Find** on a sheet.
 
 Every panel is also an icon in the rail; a stack can be collapsed, and a panel sent to the rail and back. ⌘K opens
 the command palette, which lists every command with its shortcut.
@@ -93,13 +93,14 @@ the command palette, which lists every command with its shortcut.
   **Edit → Leave group** comes back out. **Edit → Group** groups the selection (two whole groups nest rather than
   come apart), **Ungroup** takes apart the outermost group of what is selected. Deleting members takes them out of
   their group, and a group left empty goes too — each of these one step to undo.
-- **Edit → Symbol fields table** opens the fields panel at the foot of the window: every part of the sheet as a
-  line, every field any part carries as a column. Parts of one value are one line, as KiCad groups them by default;
-  the switch turns grouping off (the units of one part stay one line either way). A value typed into a cell is
-  written into every part of its line, as one step to undo; a cell whose parts disagree reads "-- mixed values --"
-  and changes nothing unless something is typed. A part without the field is given one, hidden. Designators are not
-  written here, and a click on them selects the parts and brings them into view. Parts kept off the BOM are shown
-  when asked; power symbols never.
+- **Edit → Bill of materials** opens the design's BOM as a tab of its own: every part of every sheet, in every place a
+  sheet stands, laid out by the preset the project names (KiCad's own, from the `.kicad_pro`) — KiCad's Default
+  Editing when it names none. The other presets KiCad has, and those the project keeps, are a choice away; a filter
+  narrows it to designators, and a switch shows every field any part carries. The bill follows the design: an edit
+  on any open sheet shows in it. A value typed into a line is written into every part of it, through the sheets'
+  own editors — a sheet that is not open is opened for it — so each change is saved and undone on its sheet. A
+  click on the designators turns to the parts and selects them. **Export report…** writes the bill as it is at that
+  moment, as KiCad's CSV export writes it.
 - **Edit → Find** (⌘F) opens the find panel at the foot of the window; **Find and replace** (⌘⌥F) puts the
   caret in the replace box. Every place on the sheet that matches is listed with what it belongs to; Enter or F3
   goes to the next, Shift+Enter or Shift+F3 to the one before, and each is selected and brought into view. Replace

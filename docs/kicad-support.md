@@ -186,21 +186,24 @@ here. A corner can be put into a two-point line too, which KiCad reads back as a
 Not done: arcs (KiCad has three ways of editing one, and none is here yet), text boxes, sheets, pictures and table
 cells.
 
-The fields table is KiCad's Symbol Fields Table (`fields_data_model.cpp`) with its default preset, "Grouped By
-Value": lines group by value and do-not-place, units of one designator are always one line (never when it is not
-numbered yet), designators are shortened as KiCad shortens them (R1-R4, R7), and lines are sorted by them. Power
-symbols are left out, and parts kept off the BOM unless asked for. A field is found without regard to case; one a
-part does not have is added only when there is something to put in it, hidden and at the part, turned as its
-designator is — written as a copy of a field the part already hides, so it comes out in the file's own version's
-way (`(hide yes)` on the field in KiCad 9, inside its effects before). Every other field any part carries is a
-column, where KiCad's dialog starts with them hidden. There is no Apply: each value is its own step to undo.
+The bill of materials is KiCad's Symbol Fields Table and BOM export (`fields_data_model.cpp`) for the whole design,
+laid out by a preset read from the project as KiCad writes it (`schematic.bom_settings`, `schematic.bom_presets`),
+or by KiCad's default, Default Editing, when the project names none — which groups by value, footprint and the three
+flags, and lists parts kept off the BOM, marked. KiCad's other built-in presets are offered too. Its rules: power
+symbols are never parts; units of one designator are one line, never one not numbered yet (`unitMatch`); with
+grouping on, parts are one line when every group-by column reads the same (`groupMatch`), and a preset that groups by
+nothing groups nothing; lines sort by the preset's column, then designator, and are numbered after
+(`${ITEM_NUMBER}`); a preset's column no part has is shown empty, as KiCad does with the "Quantity" column KiCad 8.0
+first wrote. On screen designators are shortened (R1-R4, R7) and a mixed column says so; the export is KiCad's "CSV"
+format preset — shown columns under their labels, all quoted, designators one by one, mixed values listed.
 
-The bill of materials groups the same way — by value and do-not-place only — with a line's different footprints
-and datasheets listed together, comma-separated, as KiCad writes mixed values on export. It used to split a value
-by footprint and datasheet as well, which KiCad's default preset does not.
+A value written into the bill goes into the fields of every part of its line, by KiCad's rules (`ApplyData`): a
+field is found without regard to case, one a part lacks is added only when there is something to put in it, hidden,
+at the part, at its designator's angle, cloned from a field the part already hides so it comes out in the file's own
+version's way; designators and generated columns are never written.
 
-Not done in the table: the sheet on screen only (KiCad can show the whole design), the attribute columns
-(do-not-place is shown, not written; keep-off-the-board and simulation are not shown), presets, and export from it.
+Not done in the bill: changing the flags (DNP and the exclusions show, but are written from the inspector), saving a
+preset back to the project, the other export formats, and the bill following edits to sheets that are not open.
 
 Sheet pins are brought in step with the hierarchical labels inside the sheet as KiCad's Sync Sheet Pins, Import
 Sheet Pins and Cleanup Sheet Pins do (`sync_sheet_pin/`): a pin and a label agree when their names read the same

@@ -92,7 +92,7 @@ public class DesignNumbersTests
         Assert.True(numbers.IsTaken("R", 301), "R301 is the second");
 
         // Nothing the design already carries is offered again.
-        foreach (var line in SchBom.Build(root))
+        foreach (var line in SchBom.Build(root).Rows)
         {
             foreach (string reference in line.References)
             {
