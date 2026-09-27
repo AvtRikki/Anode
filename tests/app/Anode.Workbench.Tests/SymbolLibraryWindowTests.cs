@@ -84,6 +84,68 @@ public class SymbolLibraryWindowTests
         }
     });
 
+    /// <summary>
+    /// A library from nothing, and a symbol in it, the way a person makes them: File → New symbol library asks where,
+    /// the + in the panel asks for a name, Enter makes the symbol and brings it up, and saving writes what KiCad reads.
+    /// </summary>
+    [Fact]
+    public Task A_new_library_and_a_new_symbol_in_it() => ShellWindowTests.Dispatch(directory =>
+    {
+        GraphicsOptions.Renderer = RendererKind.Skia;
+        Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        string folder = Directory.CreateTempSubdirectory("anode-newlib-").FullName;
+        try
+        {
+            string path = Path.Combine(folder, "mine.kicad_sym");
+            var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+            var window = new MainWindow { DataContext = shell, Width = 1440, Height = 900 };
+            window.Show();
+
+            // After the window, which sets its own picker.
+            shell.PickNewFile = (_, _, _, _) => Task.FromResult<string?>(path);
+
+            Assert.True(shell.Commands.TryExecute("sch.newLibrary"));
+            for (int i = 0; i < 2000 && shell.ActiveDocument?.DocumentTypeId != "anode.symlib"; i++)
+            {
+                Dispatcher.UIThread.RunJobs();
+                Thread.Sleep(1);
+            }
+
+            var document = shell.ActiveDocument;
+            Assert.Equal("anode.symlib", document?.DocumentTypeId);
+            Assert.True(File.Exists(path));
+
+            // The + opens a box for the name; Enter makes it.
+            Assert.True(shell.Commands.TryExecute("sch.lib.newSymbol"));
+            Dispatcher.UIThread.RunJobs();
+            using (var frame = window.CaptureRenderedFrame())
+            {
+                Assert.NotNull(frame);
+            }
+
+            var panel = window.GetVisualDescendants().First(v => v.GetType().Name == "SymbolListPanel");
+            var box = panel.GetVisualDescendants().OfType<TextBox>().Single(b => b.IsVisible && b.PlaceholderText == Tr.T("sch.lib.newName"));
+            box.Focus();
+            window.KeyTextInput("OPA1612");
+            window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(document!.IsDirty);
+            Assert.Contains(document.StatusFields, f => f.Text.StartsWith("OPA1612", StringComparison.Ordinal));
+            ShellWindowTests.Snapshot(window, directory, "symbol-library-new");
+
+            Assert.True(Pump(document.SaveAsync()));
+            Assert.Contains("(symbol \"OPA1612\"", File.ReadAllText(path), StringComparison.Ordinal);
+            Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+            window.Close();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    });
+
     private static T Pump<T>(Task<T> task)
     {
         for (int i = 0; i < 5000 && !task.IsCompleted; i++)

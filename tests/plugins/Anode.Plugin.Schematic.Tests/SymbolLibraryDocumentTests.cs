@@ -179,6 +179,45 @@ public class SymbolLibraryDocumentTests
         }
     }
 
+    /// <summary>A new symbol is added, brought up, and is one step to undo; the library is changed until saved.</summary>
+    [Fact]
+    public async Task A_new_symbol_is_brought_up_and_is_one_step_to_undo()
+    {
+        string folder = Directory.CreateTempSubdirectory("anode-symlib-").FullName;
+        try
+        {
+            string path = Path.Combine(folder, "mine.kicad_sym");
+            File.WriteAllText(path, SymbolLibrary.EmptyText);
+            using var document = new SymbolLibraryDocument(path, SymbolLibrary.Load(path));
+            Assert.Null(document.Current);
+
+            Assert.Null(document.AddSymbol("OPA1612"));
+            Assert.Equal("OPA1612", document.Current?.Name);
+            Assert.True(document.IsDirty);
+            Assert.NotNull(document.Editor);
+
+            // A name taken is refused, and nothing is added.
+            Assert.NotNull(document.AddSymbol("OPA1612"));
+            Assert.Single(document.Library.Symbols);
+
+            document.History.Undo();
+            Assert.Empty(document.Library.Symbols);
+            Assert.Null(document.Current);
+            Assert.False(document.IsDirty);
+
+            document.History.Redo();
+            Assert.Equal("OPA1612", document.Current?.Name);
+
+            Assert.True(await document.SaveAsync());
+            Assert.False(document.IsDirty);
+            Assert.NotNull(SymbolLibrary.Load(path).Find("OPA1612"));
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static SymbolLibraryDocument Open() => new(File4xxx, SymbolLibrary.Load(File4xxx));
 
     private static List<string> PinsDrawn(SymbolLibraryDocument document) =>

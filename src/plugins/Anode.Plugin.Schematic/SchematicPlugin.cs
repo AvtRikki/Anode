@@ -1,4 +1,5 @@
 using System.Reflection;
+using Anode.Kicad;
 using Anode.Sdk;
 
 namespace Anode.Plugin.Schematic;
@@ -22,7 +23,12 @@ public sealed class SchematicPlugin : IPlugin
 
         // A symbol library is a document of its own: the file is what is saved, one of its symbols is on the canvas.
         context.Documents.Register(new SymbolLibraryDocumentType());
-        context.Panels.Register(new PanelDescriptor("sch.library", "sch.panel.library", DockArea.LeftBottom, workbench => new SymbolListPanel(workbench))
+        context.Commands.Register(new CommandDescriptor("sch.newLibrary", "sch.command.newLibrary")
+        {
+            MenuKey = "menu.file", MenuOrder = 6,
+            Execute = () => _ = NewLibraryAsync(context),
+        });
+        context.Panels.Register(new PanelDescriptor(SymbolListPanel.PanelId, "sch.panel.library", DockArea.LeftBottom, workbench => new SymbolListPanel(workbench))
         {
             IconKey = Icons.Component,
             RailLabelKey = "sch.panel.libraryRail",
@@ -65,5 +71,35 @@ public sealed class SchematicPlugin : IPlugin
         });
 
         context.Log.Info(Tr.English("sch.log.activated", context.Manifest.Name, context.Manifest.Version));
+    }
+
+    /// <summary>
+    /// A new, empty symbol library where the person asks for one, written as KiCad 9 writes one and opened. A file
+    /// that is already there is never written over: that would throw away a library.
+    /// </summary>
+    internal static async Task NewLibraryAsync(IPluginContext context)
+    {
+        if (await context.Workbench.AskWhereToWriteAsync("symbols.kicad_sym", ".kicad_sym", "sch.command.newLibrary") is not { Length: > 0 } path)
+        {
+            return;
+        }
+
+        try
+        {
+            path = Path.ChangeExtension(Path.GetFullPath(path), ".kicad_sym");
+            _ = SymbolLibrary.Parse(SymbolLibrary.EmptyText);
+            await using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
+            await using (var writer = new StreamWriter(stream))
+            {
+                await writer.WriteAsync(SymbolLibrary.EmptyText);
+            }
+
+            await context.Workbench.OpenAsync(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            context.Log.Error(ex.Message, ex);
+            context.Workbench.ShowBanner(new Banner(Tr.T("sch.lib.createFailed", ex.Message)));
+        }
     }
 }

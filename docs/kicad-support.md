@@ -255,7 +255,13 @@ derived with `extends`, its parent's body with its own fields. Hidden fields are
 out of what zoom-to-fit covers, since a library often parks its footprint and datasheet far off. The origin is marked
 with a cross, as KiCad's symbol editor marks it.
 
-Not done: editing symbols, creating, copying, renaming and deleting them, unit names, and pin tables.
+A new library is written as KiCad 9 writes one (version 20241209). A new symbol carries the defaults of KiCad's New
+Symbol (`LIB_SYMBOL`'s constructor, `CreateSymbol`): reference U, value the name, both shown, footprint, datasheet and
+description present but hidden, pin names 20 mil in, in the BOM and on the board, not excluded from simulation, one
+unit, one body — and an empty body unit to draw in. KiCad puts the reference and value both on the origin; here they
+stand a grid either side of it, so both can be read. Adding a symbol is a step on the library's own undo.
+
+Not done: editing symbols, copying, renaming and deleting them, unit names, and pin tables.
 
 ## Drawing sheets (`.kicad_wks`)
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Anode.Editing;
 using Anode.Kicad;
 using Anode.Kicad.Editing;
@@ -34,6 +35,7 @@ internal sealed class SymbolLibraryDocumentType : IDocumentType
 /// </summary>
 internal sealed class SymbolLibraryDocument : DocumentBase
 {
+    private readonly List<IDisposable> _registrations = [];
     private SchematicEditor? _editor;
     private SchematicCanvas? _canvas;
     private string _cursor = string.Empty;
@@ -42,11 +44,17 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     {
         FilePath = Path.GetFullPath(path);
         Library = library;
+        History.Changed += OnHistoryChanged;
         if (library.Symbols.FirstOrDefault() is { } first)
         {
             Show(first.Name);
         }
     }
+
+    /// <summary>What has been done to the library, to undo: one history for the whole file, as it is one thing saved.</summary>
+    public UndoStack History { get; } = new();
+
+    public override bool IsDirty => History.IsDirty;
 
     public SymbolLibrary Library { get; }
 
@@ -118,7 +126,8 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         Library.Save(temp);
         File.Move(temp, target, overwrite: true);
         FilePath = Path.GetFullPath(target);
-        OnPropertiesChanged(nameof(FilePath), nameof(Title));
+        History.MarkSaved();
+        OnPropertiesChanged(nameof(FilePath), nameof(Title), nameof(IsDirty));
         return Task.FromResult(true);
     }
 
@@ -151,6 +160,96 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         };
         _canvas = canvas;
         return new SymbolLibraryView(this, canvas);
+    }
+
+    /// <summary>
+    /// Adds a new symbol to the library under <paramref name="name"/>, as KiCad's New Symbol does, and brings it up —
+    /// one step to undo. Answers why the name will not do, in the words the person is shown, or null when it did.
+    /// </summary>
+    public string? AddSymbol(string name)
+    {
+        name = name.Trim();
+        if (Library.NameProblem(name) is { } problem)
+        {
+            return Tr.T("sch.lib.name." + problem, name);
+        }
+
+        var symbol = SymbolLibrary.NewSymbol(name);
+        History.Execute(new AddNodesCommand(Library, [symbol]));
+        Show(name);
+        return null;
+    }
+
+    public override void Activate(IPluginContext context)
+    {
+        CommandDescriptor[] commands =
+        [
+            new("edit.undo", "sch.command.undo")
+            {
+                ScopeKey = "scope.symlib", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
+                MenuKey = "menu.edit", MenuOrder = 0,
+                CanExecute = () => History.CanUndo,
+                Execute = () => History.Undo(),
+            },
+            new("edit.redo", "sch.command.redo")
+            {
+                ScopeKey = "scope.symlib", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
+                MenuKey = "menu.edit", MenuOrder = 10,
+                CanExecute = () => History.CanRedo,
+                Execute = () => History.Redo(),
+            },
+            new("sch.lib.newSymbol", "sch.command.newSymbol")
+            {
+                ScopeKey = "scope.symlib", ShortcutText = "⌘N", Gesture = Shortcut(Key.N),
+                MenuKey = "menu.file", MenuOrder = 5,
+                Execute = () =>
+                {
+                    context.Workbench.RevealPanel(SymbolListPanel.PanelId);
+                    SymbolListPanel.RequestNewSymbol();
+                },
+            },
+        ];
+
+        foreach (var command in commands)
+        {
+            _registrations.Add(context.Commands.Register(command));
+        }
+    }
+
+    public override void Deactivate()
+    {
+        foreach (var registration in _registrations)
+        {
+            registration.Dispose();
+        }
+
+        _registrations.Clear();
+    }
+
+    public override void Dispose()
+    {
+        Deactivate();
+        History.Changed -= OnHistoryChanged;
+        base.Dispose();
+    }
+
+    private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
+        new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
+
+    /// <summary>
+    /// An undo or redo may take away the symbol on the canvas — a new one undone — or change what it is; either
+    /// way the canvas is drawn again, from the first symbol when the one shown is gone or none was shown.
+    /// </summary>
+    private void OnHistoryChanged()
+    {
+        if (Current is null or { IsAttached: false })
+        {
+            Current = Library.Symbols.FirstOrDefault();
+            Unit = BodyStyle = 1;
+        }
+
+        Rebuild();
+        OnPropertiesChanged(nameof(IsDirty), nameof(Summary), nameof(Library));
     }
 
     /// <summary>The letter a unit is known by: A, B, … — KiCad's <c>LetterSubReference</c>.</summary>

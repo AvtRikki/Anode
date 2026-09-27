@@ -71,8 +71,11 @@ public static class SchematicSceneBuilder
 
         // What "zoom to fit" shows: what is shown of the symbol, with a margin, never less than a small square about
         // the origin. Hidden fields are left out — a library often parks its footprint and datasheet far off.
+        // A symbol with nothing drawn yet — a new one — gets the room a small part takes, so its two fields do not
+        // fill the view.
+        double least = body.GraphicsOf(unit, bodyStyle).Any() || body.PinsOf(unit, bodyStyle).Any() ? 5 : 15;
         var visible = scene.Layers.Where(l => l.IsVisible).Aggregate(RectD.Empty, (all, layer) => all.Union(layer.Bounds));
-        var bounds = visible.IsEmpty ? new RectD(-5, -5, 5, 5) : visible.Union(-5, -5).Union(5, 5);
+        var bounds = (visible.IsEmpty ? new RectD(-least, -least, least, least) : visible).Union(-least, -least).Union(least, least);
         scene.BoardOutline = bounds.Inflate(5);
         return scene;
     }

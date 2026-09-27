@@ -136,6 +136,11 @@ the command palette, which lists every command with its shortcut.
 - The inspector describes the symbol — fields, units, how pins are shown, and the pins of the unit on screen — or,
   with a pin, a shape or a field selected, that. Coordinates are the library's, Y upward, as KiCad's symbol editor
   gives them.
+- **File → New symbol library…** makes an empty library where you ask and opens it; a file already there is never
+  written over. **File → New symbol** (⌘N), or the **+** beside the Library panel's filter, asks for a name and adds a
+  symbol with KiCad's defaults — reference U, the name as its value, footprint, datasheet and description hidden —
+  and brings it up. A name the library already has, or one with `:` `/` `\` or a quote in it, is refused. ⌘Z takes
+  it back.
 - Saving writes the library as it stands; one nobody changed is written back byte for byte. Symbols are not edited
   here yet.
 
