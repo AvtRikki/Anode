@@ -261,7 +261,17 @@ description present but hidden, pin names 20 mil in, in the BOM and on the board
 unit, one body — and an empty body unit to draw in. KiCad puts the reference and value both on the origin; here they
 stand a grid either side of it, so both can be read. Adding a symbol is a step on the library's own undo.
 
-Not done: editing symbols, copying, renaming and deleting them, unit names, and pin tables.
+A symbol is edited through the same editor as a sheet, with its own rules: every move, turn and mirror is worked
+out in the scene as on a sheet and carried into the library through the Y flip, so the preview and the result agree.
+A pin turned a quarter counter-clockwise on screen has its angle raised by 90° as the library counts; a field turned a
+quarter reads the other way (horizontal ↔ vertical), as KiCad turns fields; a pin mirrored left for right points the
+other way. Deleted pins and shapes go back into the body they came from on undo; a new one goes into the unit and body
+on screen. Hidden pins and fields are shown, dimmed, as KiCad's symbol editor shows them by default
+(`show_hidden_lib_fields`, `show_hidden_lib_pins`). Written values follow KiCad 9: `(hide yes)` after a pin's length,
+inside a field's effects, `(pin_numbers (hide yes))` / `(pin_names … (hide yes))` for the symbol.
+
+Not done: drawing tools for symbols, copying, renaming and deleting symbols, adding fields, unit names, the pin
+table, and copy and paste inside a symbol.
 
 ## Drawing sheets (`.kicad_wks`)
 

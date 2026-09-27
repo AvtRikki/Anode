@@ -62,19 +62,18 @@ public static class SchematicSceneBuilder
         var scene = new SchematicScene(host, Vector2L.Zero);
         new Builder(scene).AddLibrarySymbol(shown, body, unit, bodyStyle);
 
-        foreach (string hidden in (string[])[LayerStyle.Sch.HiddenField, LayerStyle.Sch.HiddenPin])
-        {
-            scene.Layer(hidden).IsVisible = false;
-        }
-
+        // KiCad's symbol editor shows what is hidden, dimmed (show_hidden_lib_fields and show_hidden_lib_pins are on):
+        // a field or pin hidden from the sheet has to be seen here to be taken hold of and shown again.
+        string[] hiddenLayers = [LayerStyle.Sch.HiddenField, LayerStyle.Sch.HiddenPin];
         scene.Commit();
 
-        // What "zoom to fit" shows: what is shown of the symbol, with a margin, never less than a small square about
-        // the origin. Hidden fields are left out — a library often parks its footprint and datasheet far off.
+        // What "zoom to fit" shows: the symbol, with a margin, never less than a small square about the origin.
+        // Hidden fields are left out — a library often parks its footprint and datasheet far off.
         // A symbol with nothing drawn yet — a new one — gets the room a small part takes, so its two fields do not
         // fill the view.
         double least = body.GraphicsOf(unit, bodyStyle).Any() || body.PinsOf(unit, bodyStyle).Any() ? 5 : 15;
-        var visible = scene.Layers.Where(l => l.IsVisible).Aggregate(RectD.Empty, (all, layer) => all.Union(layer.Bounds));
+        var visible = scene.Layers.Where(l => l.IsVisible && !hiddenLayers.Contains(l.Name))
+            .Aggregate(RectD.Empty, (all, layer) => all.Union(layer.Bounds));
         var bounds = (visible.IsEmpty ? new RectD(-least, -least, least, least) : visible).Union(-least, -least).Union(least, least);
         scene.BoardOutline = bounds.Inflate(5);
         return scene;

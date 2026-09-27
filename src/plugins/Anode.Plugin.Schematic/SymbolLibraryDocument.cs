@@ -189,14 +189,14 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                 ScopeKey = "scope.symlib", ShortcutText = "⌘Z", Gesture = Shortcut(Key.Z),
                 MenuKey = "menu.edit", MenuOrder = 0,
                 CanExecute = () => History.CanUndo,
-                Execute = () => History.Undo(),
+                Execute = Undo,
             },
             new("edit.redo", "sch.command.redo")
             {
                 ScopeKey = "scope.symlib", ShortcutText = "⌘⇧Z", Gesture = Shortcut(Key.Z, KeyModifiers.Shift),
                 MenuKey = "menu.edit", MenuOrder = 10,
                 CanExecute = () => History.CanRedo,
-                Execute = () => History.Redo(),
+                Execute = Redo,
             },
             new("sch.lib.newSymbol", "sch.command.newSymbol")
             {
@@ -236,11 +236,31 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     private static KeyGesture Shortcut(Key key, KeyModifiers extra = KeyModifiers.None) =>
         new(key, (OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control) | extra);
 
+    /// <summary>Takes back the last step on the library, whichever symbol it was made on, and draws the canvas anew.</summary>
+    public void Undo()
+    {
+        if (History.CanUndo)
+        {
+            _editor?.CancelMove();
+            History.Undo();
+            AfterHistory();
+        }
+    }
+
+    public void Redo()
+    {
+        if (History.CanRedo)
+        {
+            History.Redo();
+            AfterHistory();
+        }
+    }
+
     /// <summary>
-    /// An undo or redo may take away the symbol on the canvas — a new one undone — or change what it is; either
-    /// way the canvas is drawn again, from the first symbol when the one shown is gone or none was shown.
+    /// An undo or redo may take away the symbol on the canvas — a new one undone — or change it anywhere; the
+    /// canvas is drawn afresh, from the first symbol when the one shown is gone or none was shown.
     /// </summary>
-    private void OnHistoryChanged()
+    private void AfterHistory()
     {
         if (Current is null or { IsAttached: false })
         {
@@ -249,8 +269,14 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         }
 
         Rebuild();
-        OnPropertiesChanged(nameof(IsDirty), nameof(Summary), nameof(Library));
     }
+
+    /// <summary>
+    /// A step done or undone: the file now differs from what was saved, or no longer does, and the lists and the
+    /// inspector say so. The canvas redraws what an edit touched itself.
+    /// </summary>
+    private void OnHistoryChanged() =>
+        OnPropertiesChanged(nameof(IsDirty), nameof(Summary), nameof(Library), nameof(Selection), nameof(Overview));
 
     /// <summary>The letter a unit is known by: A, B, … — KiCad's <c>LetterSubReference</c>.</summary>
     public static string UnitName(int unit) => SchFind.UnitLetters(unit);
@@ -260,12 +286,16 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         if (_editor is { } previous)
         {
             previous.SelectionChanged -= OnSelectionChanged;
+            previous.SceneChanged -= OnSelectionChanged;
         }
 
         if (Current is { } symbol && Body is { } body)
         {
-            _editor = new SchematicEditor(SchematicSceneBuilder.BuildSymbol(symbol, body, Unit, BodyStyle)) { IsReadOnly = true };
+            // What is drawn next goes into the unit and body on screen.
+            body.Drawing = (Unit, BodyStyle);
+            _editor = new SchematicEditor(SchematicSceneBuilder.BuildSymbol(symbol, body, Unit, BodyStyle), new SymbolRules(symbol, body), History);
             _editor.SelectionChanged += OnSelectionChanged;
+            _editor.SceneChanged += OnSelectionChanged;
         }
         else
         {
@@ -284,20 +314,24 @@ internal sealed class SymbolLibraryDocument : DocumentBase
 
     private SelectionInfo DescribeSymbol(LibSymbol symbol)
     {
-        string? Field(string name) => symbol.Fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase))?.Value;
         var body = Body ?? symbol;
+        bool own = ReferenceEquals(body, symbol);
 
-        var rows = new List<InspectorRow>
+        // The fields a library symbol is described by, each written where it stands — a field the symbol lacks is
+        // not offered, since adding fields is not done here yet.
+        var rows = new List<InspectorRow>();
+        foreach (var (name, key) in new[]
         {
-            new(Tr.T("sch.lib.row.reference"), Field("Reference") ?? string.Empty),
-            new(Tr.T("sch.lib.row.value"), Field("Value") ?? string.Empty),
-        };
-
-        foreach (var (name, key) in new[] { ("Description", "description"), ("ki_keywords", "keywords"), ("Footprint", "footprint"), ("Datasheet", "datasheet") })
+            ("Reference", "reference"), ("Value", "value"), ("Description", "description"),
+            ("ki_keywords", "keywords"), ("Footprint", "footprint"), ("Datasheet", "datasheet"),
+        })
         {
-            if (Field(name) is { Length: > 0 } value)
+            if (symbol.Fields.FirstOrDefault(f => string.Equals(f.Name, name, StringComparison.OrdinalIgnoreCase)) is { } field)
             {
-                rows.Add(new InspectorRow(Tr.T("sch.lib.row." + key), value));
+                rows.Add(new InspectorRow(Tr.T("sch.lib.row." + key), field.Value)
+                {
+                    Commit = v => Edit(key, [field], () => SymbolWrites.SetFieldValue(field, v)),
+                });
             }
         }
 
@@ -311,8 +345,16 @@ internal sealed class SymbolLibraryDocument : DocumentBase
             new(Tr.T("sch.lib.row.units"), body.UnitCount.ToString(CultureInfo.InvariantCulture)),
             new(Tr.T("sch.lib.row.deMorgan"), YesNo(body.HasAlternateBody)),
             new(Tr.T("sch.lib.row.power"), YesNo(symbol.IsPower)),
-            new(Tr.T("sch.lib.row.pinNumbers"), YesNo(body.ShowPinNumbers)),
-            new(Tr.T("sch.lib.row.pinNames"), YesNo(body.ShowPinNames)),
+            new(Tr.T("sch.lib.row.pinNumbers"), Tr.T("sch.lib.shown"))
+            {
+                Switch = body.ShowPinNumbers,
+                Commit = own ? v => EditSymbol("pinNumbers", body, () => SymbolWrites.SetPinTextShown(body, "pin_numbers", v == "yes")) : null,
+            },
+            new(Tr.T("sch.lib.row.pinNames"), Tr.T("sch.lib.shown"))
+            {
+                Switch = body.ShowPinNames,
+                Commit = own ? v => EditSymbol("pinNames", body, () => SymbolWrites.SetPinTextShown(body, "pin_names", v == "yes")) : null,
+            },
             new(Tr.T("sch.lib.row.pinNameOffset"), Mm(body.PinNameOffset)),
         };
 
@@ -334,6 +376,10 @@ internal sealed class SymbolLibraryDocument : DocumentBase
 
     private SelectionInfo? Describe(SchItem item)
     {
+        // What belongs to a derived symbol's parent is shown, not written: the body is the parent's to change.
+        bool own = Current is { } shown && (item is SchField ? shown.Fields.Contains(item) : ReferenceEquals(Body, shown));
+        Action<string>? Writes(string key, Action<string> write) => own ? v => Edit(key, [item], () => write(v)) : null;
+
         switch (item)
         {
             case SchPin pin:
@@ -343,14 +389,45 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                     [
                         new InspectorBlock(Tr.T("sch.lib.block.pin"),
                         [
-                            new(Tr.T("sch.lib.row.number"), pin.Number),
-                            new(Tr.T("sch.lib.row.name"), pin.Name),
-                            new(Tr.T("sch.lib.row.type"), pin.ElectricalType),
-                            new(Tr.T("sch.lib.row.shape"), pin.GraphicStyle),
-                            new(Tr.T("sch.lib.row.length"), Mm(pin.Length)),
-                            new(Tr.T("sch.lib.row.orientation"), Tr.T("sch.lib.orientation." + Orientation(pin.Angle))),
+                            new(Tr.T("sch.lib.row.number"), pin.Number) { Commit = Writes("number", v => SymbolWrites.SetPinNumber(pin, v)) },
+                            new(Tr.T("sch.lib.row.name"), pin.Name) { Commit = Writes("name", v => SymbolWrites.SetPinName(pin, v)) },
+                            new(Tr.T("sch.lib.row.type"), pin.ElectricalType)
+                            {
+                                Choices = SymbolWrites.PinTypes,
+                                Commit = Writes("type", v => SymbolWrites.SetPinType(pin, v)),
+                            },
+                            new(Tr.T("sch.lib.row.shape"), pin.GraphicStyle)
+                            {
+                                Choices = SymbolWrites.PinShapes,
+                                Commit = Writes("shape", v => SymbolWrites.SetPinShape(pin, v)),
+                            },
+                            new(Tr.T("sch.lib.row.length"), MmValue(pin.Length))
+                            {
+                                Commit = Writes("length", v =>
+                                {
+                                    if (ParseMm(v) is { } nm)
+                                    {
+                                        SymbolWrites.SetPinLength(pin, nm);
+                                    }
+                                }),
+                            },
+                            new(Tr.T("sch.lib.row.orientation"), Tr.T("sch.lib.orientation." + Orientation(pin.Angle)))
+                            {
+                                Choices = [.. Directions.Select(d => Tr.T("sch.lib.orientation." + d.Word))],
+                                Commit = Writes("orientation", v =>
+                                {
+                                    if (Directions.FirstOrDefault(d => Tr.T("sch.lib.orientation." + d.Word) == v) is { Word: not null } chosen)
+                                    {
+                                        SymbolWrites.SetPinAngle(pin, chosen.Angle);
+                                    }
+                                }),
+                            },
                             new(Tr.T("sch.lib.row.position"), Point(pin.Position)),
-                            new(Tr.T("sch.lib.row.hidden"), YesNo(pin.IsHidden)),
+                            new(Tr.T("sch.lib.row.hidden"), Tr.T("sch.lib.hiddenWord"))
+                            {
+                                Switch = pin.IsHidden,
+                                Commit = Writes("hidden", v => SymbolWrites.SetPinHidden(pin, v == "yes")),
+                            },
                         ]),
                     ],
                 };
@@ -362,9 +439,22 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                     [
                         new InspectorBlock(Tr.T("sch.lib.block.graphic"),
                         [
-                            new(Tr.T("sch.lib.row.strokeWidth"), Mm(graphic.StrokeWidth)),
+                            new(Tr.T("sch.lib.row.strokeWidth"), MmValue(graphic.StrokeWidth))
+                            {
+                                Commit = Writes("strokeWidth", v =>
+                                {
+                                    if (ParseMm(v) is { } nm)
+                                    {
+                                        SymbolWrites.SetStrokeWidth(graphic, nm);
+                                    }
+                                }),
+                            },
                             new(Tr.T("sch.lib.row.strokeType"), graphic.StrokeStyle),
-                            new(Tr.T("sch.lib.row.fill"), graphic.Fill),
+                            new(Tr.T("sch.lib.row.fill"), graphic.Fill)
+                            {
+                                Choices = SymbolWrites.Fills,
+                                Commit = Writes("fill", v => SymbolWrites.SetFill(graphic, v)),
+                            },
                         ]),
                     ],
                 };
@@ -376,9 +466,13 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                     [
                         new InspectorBlock(Tr.T("sch.lib.block.field"),
                         [
-                            new(Tr.T("sch.lib.row.value"), field.Value),
+                            new(Tr.T("sch.lib.row.value"), field.Value) { Commit = Writes("value", v => SymbolWrites.SetFieldValue(field, v)) },
                             new(Tr.T("sch.lib.row.position"), Point(field.Position)),
-                            new(Tr.T("sch.lib.row.hidden"), YesNo(field.IsHidden)),
+                            new(Tr.T("sch.lib.row.hidden"), Tr.T("sch.lib.hiddenWord"))
+                            {
+                                Switch = field.IsHidden,
+                                Commit = Writes("hidden", v => SymbolWrites.SetFieldHidden(field, v == "yes")),
+                            },
                         ]),
                     ],
                 };
@@ -387,6 +481,32 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                 return null;
         }
     }
+
+    /// <summary>One change to pins, shapes or fields, as a step on the library's history; the canvas redraws them.</summary>
+    private void Edit(string key, IReadOnlyList<SchItem> items, Action write)
+    {
+        _editor?.Modify(Tr.T("sch.lib.edit", Tr.T("sch.lib.row." + key)), items, write);
+        OnPropertiesChanged(nameof(Selection), nameof(Overview));
+    }
+
+    /// <summary>A change to the symbol as a whole — how its pins read — after which the canvas is drawn afresh.</summary>
+    private void EditSymbol(string key, LibSymbol symbol, Action write)
+    {
+        History.Execute(new ModifyNodesCommand(Tr.T("sch.lib.edit", Tr.T("sch.lib.row." + key)), [symbol], write));
+        Rebuild();
+    }
+
+    /// <summary>The four ways a pin can point, in KiCad's words, and the angle each is written as.</summary>
+    private static readonly (string Word, double Angle)[] Directions = [("right", 0), ("up", 90), ("left", 180), ("down", 270)];
+
+    private static string MmValue(long nm) => (nm / 1_000_000.0).ToString("0.####", CultureInfo.InvariantCulture);
+
+    /// <summary>A length typed in millimetres — with a point or a comma — as nanometres; null when it is not a length.</summary>
+    private static long? ParseMm(string text) =>
+        double.TryParse(text.Trim().Replace(',', '.').Replace("mm", string.Empty, StringComparison.OrdinalIgnoreCase).Trim(),
+            NumberStyles.Float, CultureInfo.InvariantCulture, out double mm) && mm >= 0 && mm < 10_000
+            ? (long)Math.Round(mm * 1_000_000)
+            : null;
 
     /// <summary>
     /// Which way a pin points from where a wire meets it, in KiCad's words: its angle 0 is "right", 90 "up",

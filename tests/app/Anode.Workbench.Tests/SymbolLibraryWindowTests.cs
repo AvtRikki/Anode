@@ -146,6 +146,63 @@ public class SymbolLibraryWindowTests
         }
     });
 
+    /// <summary>
+    /// A pin of a library symbol is selected and turned from the keyboard, as on a sheet: R on the canvas turns it,
+    /// the library is changed, and the inspector offers the pin's type to be chosen.
+    /// </summary>
+    [Fact]
+    public Task A_pin_is_turned_from_the_keyboard() => ShellWindowTests.Dispatch(directory =>
+    {
+        string library = Path.Combine(TestData.KiCadDir, "qa", "data", "eeschema", "libs", "4xxx.kicad_sym");
+        Assert.SkipUnless(File.Exists(library), TestData.SkipReason);
+
+        GraphicsOptions.Renderer = RendererKind.Skia;
+        Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+        string folder = Directory.CreateTempSubdirectory("anode-symkeys-").FullName;
+        try
+        {
+            string copy = Path.Combine(folder, "4xxx.kicad_sym");
+            File.Copy(library, copy);
+            var recents = new RecentProjectsStore(Path.Combine(folder, "recents.json"));
+            var shell = ShellWindowTests.Workbench(PanelScopeTests.PluginsRoot, recents);
+            var window = new MainWindow { DataContext = shell, Width = 1440, Height = 900 };
+            window.Show();
+
+            var document = Pump(shell.OpenAsync(copy))!;
+            document.GetType().GetMethod("Show")!.Invoke(document, ["4001"]);
+            Dispatcher.UIThread.RunJobs();
+
+            // The output pin of the first gate, chosen through the document's editor.
+            var editor = document.GetType().GetProperty("Editor", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(document)!;
+            var scene = editor.GetType().GetProperty("Scene")!.GetValue(editor)!;
+            var items = ((System.Collections.IEnumerable)scene.GetType().GetProperty("TopLevelItems")!.GetValue(scene)!).Cast<object>().ToList();
+            var pin = items.First(i => i.GetType().Name == "SchPin" && (string)i.GetType().GetProperty("Number")!.GetValue(i)! == "3");
+            double angle = (double)pin.GetType().GetProperty("Angle")!.GetValue(pin)!;
+
+            var setSelection = editor.GetType().GetMethod("SetSelection")!;
+            var chosen = Array.CreateInstance(setSelection.GetParameters()[0].ParameterType.GetGenericArguments()[0], 1);
+            chosen.SetValue(pin, 0);
+            setSelection.Invoke(editor, [chosen]);
+
+            var canvas = window.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "SchematicCanvas");
+            canvas.Focus();
+            window.KeyPressQwerty(PhysicalKey.R, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal((angle + 90) % 360, (double)pin.GetType().GetProperty("Angle")!.GetValue(pin)!);
+            Assert.True(document.IsDirty);
+            Assert.Contains(document.Selection!.Blocks.SelectMany(b => b.Rows), r => r.Choices is { Count: 12 });
+            ShellWindowTests.Snapshot(window, directory, "symbol-pin-turned");
+
+            Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
+            window.Close();
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    });
+
     private static T Pump<T>(Task<T> task)
     {
         for (int i = 0; i < 5000 && !task.IsCompleted; i++)

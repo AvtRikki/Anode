@@ -141,8 +141,15 @@ the command palette, which lists every command with its shortcut.
   symbol with KiCad's defaults — reference U, the name as its value, footprint, datasheet and description hidden —
   and brings it up. A name the library already has, or one with `:` `/` `\` or a quote in it, is refused. ⌘Z takes
   it back.
-- Saving writes the library as it stands; one nobody changed is written back byte for byte. Symbols are not edited
-  here yet.
+- A symbol is edited as a sheet is: click or box to select, drag or M to move, R and Shift+R to turn, X and Y to
+  mirror, Delete to delete, handles to pull a shape's points, Esc to let go — on the grid, in the library's own
+  coordinates. Pins, shapes and fields move; pins and shapes are deleted, fields are not (they are the symbol's own).
+  The inspector writes a pin's number, name, electrical type, graphic style, length, direction and whether it is
+  hidden; a field's value and visibility; a shape's line width and fill; and the symbol's fields and whether pin
+  numbers and names are shown. Hidden fields and pins are shown dimmed, as in KiCad's symbol editor, so they can be
+  taken hold of. A derived symbol's body is its parent's: only its own fields change from it.
+- ⌘Z and ⌘⇧Z undo and redo on the whole library — one history, since the file is one thing saved.
+- Saving writes the library as it stands; one nobody changed is written back byte for byte.
 
 ## The inspector
 

@@ -25,7 +25,7 @@ public class SymbolLibraryDocumentTests
         Assert.Equal("4001", document.Current?.Name);
         Assert.Equal((1, 1), (document.Unit, document.BodyStyle));
         Assert.NotNull(document.Editor);
-        Assert.True(document.Editor!.IsReadOnly);
+        Assert.False(document.Editor!.IsReadOnly);
     }
 
     /// <summary>
@@ -200,12 +200,12 @@ public class SymbolLibraryDocumentTests
             Assert.NotNull(document.AddSymbol("OPA1612"));
             Assert.Single(document.Library.Symbols);
 
-            document.History.Undo();
+            document.Undo();
             Assert.Empty(document.Library.Symbols);
             Assert.Null(document.Current);
             Assert.False(document.IsDirty);
 
-            document.History.Redo();
+            document.Redo();
             Assert.Equal("OPA1612", document.Current?.Name);
 
             Assert.True(await document.SaveAsync());

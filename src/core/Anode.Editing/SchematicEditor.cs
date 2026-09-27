@@ -63,17 +63,22 @@ public sealed class SchematicEditor
     private readonly ISchItemRules _rules;
 
     /// <param name="rules">What the items on the scene allow; a sheet's own when none is given.</param>
-    public SchematicEditor(SchematicScene scene, ISchItemRules? rules = null)
+    /// <param name="history">
+    /// Where the steps go: the editor's own when none is given. A library shares one across the editors of its
+    /// symbols, since the file is one thing to undo and save.
+    /// </param>
+    public SchematicEditor(SchematicScene scene, ISchItemRules? rules = null, UndoStack? history = null)
     {
         Scene = scene;
         _rules = rules ?? new SheetRules(scene.Schematic);
+        History = history ?? new UndoStack();
     }
 
     public SchematicScene Scene { get; }
 
     public Schematic Sheet => Scene.Schematic;
 
-    public UndoStack History { get; } = new();
+    public UndoStack History { get; }
 
     /// <summary>
     /// Nothing is changed through this editor: it selects, and shows, and that is all. What a library symbol is
