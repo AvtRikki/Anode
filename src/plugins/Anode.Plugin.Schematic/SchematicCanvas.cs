@@ -513,7 +513,7 @@ public sealed class SchematicCanvas : Panel
             Present();
         }
         else if (props.IsLeftButtonPressed && e.ClickCount == 2 && Editor is { } outlined && outlined.Selection is [var line]
-            && SchPoints.CanAddCorner(line) && Pick(point.Position) is var hit and >= 0 && ReferenceEquals(outlined.Scene.Owner(hit), line))
+            && outlined.CanAddCorner(line) && Pick(point.Position) is var hit and >= 0 && ReferenceEquals(outlined.Scene.Owner(hit), line))
         {
             // A double click on the outline of the selected shape puts a corner in there.
             outlined.AddCorner(line, World(point.Position));
@@ -777,7 +777,7 @@ public sealed class SchematicCanvas : Panel
     /// </summary>
     private IReadOnlyList<LayerGeometry>? HandleLayers(SchematicEditor editor)
     {
-        var handles = editor.PointEdit is { } edit ? SchPoints.Handles(edit.Item) : editor.Handles;
+        var handles = editor.PointEdit is { } edit ? editor.HandlesOf(edit.Item) : editor.Handles;
         if (handles.Count == 0 || _tool is not null)
         {
             return null;

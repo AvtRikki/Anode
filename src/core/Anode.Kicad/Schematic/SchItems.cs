@@ -190,7 +190,7 @@ public sealed class SchPin(SList node) : SchItem(node)
 }
 
 /// <summary>A symbol definition carried in the file's <c>lib_symbols</c>.</summary>
-public sealed class LibSymbol : SchItem
+public sealed class LibSymbol : SchItem, INodeHost
 {
     private readonly List<SchGraphic> _graphics = [];
     private readonly List<SchPin> _pins = [];
@@ -211,13 +211,24 @@ public sealed class LibSymbol : SchItem
 
     private void Rebuild()
     {
+        // The wrappers of what is still there are kept: what is selected, or drawn, stays the same object across an
+        // edit of the symbol — a pin deleted and put back is the pin that was selected.
+        var known = new Dictionary<SList, SchItem>(ReferenceEqualityComparer.Instance);
+        foreach (var item in _graphics.Cast<SchItem>().Concat(_pins).Concat(_fields))
+        {
+            known[item.Node] = item;
+        }
+
+        T Keep<T>(SList node, Func<SList, T> make)
+            where T : SchItem => known.TryGetValue(node, out var item) && item is T kept ? kept : make(node);
+
         Name = Node.Str(1) ?? string.Empty;
         _graphics.Clear();
         _pins.Clear();
         _fields.Clear();
         Units.Clear();
 
-        _fields.AddRange(Node.Lists().Where(l => l.Head == "property").Select(l => new SchField(l)));
+        _fields.AddRange(Node.Lists().Where(l => l.Head == "property").Select(l => Keep(l, n => new SchField(n))));
 
         // Bodies live in child symbols named "<symbol>_<unit>_<bodyStyle>"; unit 0 is common to every unit.
         foreach (var unit in Node.Lists().Where(l => l.Head == "symbol"))
@@ -227,16 +238,67 @@ public sealed class LibSymbol : SchItem
             {
                 if (SchGraphic.IsGraphicHead(child.Head))
                 {
-                    _graphics.Add(new SchGraphic(child));
+                    _graphics.Add(Keep(child, n => new SchGraphic(n)));
                     Units.Add((number, style, _graphics.Count - 1, true));
                 }
                 else if (child.Head == "pin")
                 {
-                    _pins.Add(new SchPin(child));
+                    _pins.Add(Keep(child, n => new SchPin(n)));
                     Units.Add((number, style, _pins.Count - 1, false));
                 }
             }
         }
+    }
+
+    /// <summary>Where each item taken out of the symbol came from, to put it back there.</summary>
+    private readonly Dictionary<SList, SList> _cameFrom = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// The body a new pin or shape goes into: the unit and body style on screen when it was drawn. Set by whoever
+    /// draws; <see cref="Attach"/> reads it for an item that was never in the symbol.
+    /// </summary>
+    public (int Unit, int BodyStyle) Drawing { get; set; } = (1, 1);
+
+    /// <summary>
+    /// Takes a pin or a shape out of the body it is in — the step a delete is — answering where it stood in that
+    /// body so that <see cref="Attach"/> puts it back there.
+    /// </summary>
+    public int Detach(INodeItem item)
+    {
+        var parent = item.Node.Parent as SList ?? throw new InvalidOperationException("The item is not in this symbol.");
+        int index = parent.IndexOf(item.Node);
+        parent.RemoveAt(index);
+        _cameFrom[item.Node] = parent;
+        Rebuild();
+        return index;
+    }
+
+    /// <summary>
+    /// Puts a pin or a shape into the symbol: back into the body it was taken from, or — one that is new — into the
+    /// body of the unit being drawn, which is made when the symbol has none for it yet.
+    /// </summary>
+    public void Attach(INodeItem item, int index)
+    {
+        var body = _cameFrom.Remove(item.Node, out var from) ? from : BodyFor(Drawing.Unit, Drawing.BodyStyle);
+        body.Insert(Math.Clamp(index, 0, body.Count), item.Node);
+        Rebuild();
+    }
+
+    /// <summary>The list a unit and body style's items are written in, "<c>NAME_unit_style</c>", made if missing.</summary>
+    private SList BodyFor(int unit, int style)
+    {
+        string name = $"{Name}_{unit}_{style}";
+        if (Node.Lists().FirstOrDefault(l => l.Head == "symbol" && l.Str(1) == name) is { } existing)
+        {
+            return existing;
+        }
+
+        var made = Editing.SchNodes.Adopt(SDocument.Parse($"(symbol {SEscape.Quote(name)})").Root);
+        int at = Node.Lists().LastOrDefault(l => l.Head == "symbol") is { } last ? Node.IndexOf(last) + 1
+            : Node.Find("embedded_fonts") is { } fonts ? Node.IndexOf(fonts)
+            : Node.Count;
+        Node.Insert(at, made);
+        return made;
     }
 
     public string Name { get; private set; } = string.Empty;

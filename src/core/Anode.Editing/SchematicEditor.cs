@@ -60,10 +60,13 @@ public sealed class SchMoveOperation
 public sealed class SchematicEditor
 {
     private readonly List<SchItem> _selection = [];
+    private readonly ISchItemRules _rules;
 
-    public SchematicEditor(SchematicScene scene)
+    /// <param name="rules">What the items on the scene allow; a sheet's own when none is given.</param>
+    public SchematicEditor(SchematicScene scene, ISchItemRules? rules = null)
     {
         Scene = scene;
+        _rules = rules ?? new SheetRules(scene.Schematic);
     }
 
     public SchematicScene Scene { get; }
@@ -362,7 +365,7 @@ public sealed class SchematicEditor
             return false;
         }
 
-        var items = _selection.Where(SchEdits.CanTransform).ToList();
+        var items = _selection.Where(_rules.CanTransform).ToList();
         if (items.Count == 0)
         {
             return false;
@@ -372,7 +375,7 @@ public sealed class SchematicEditor
         var preview = Scene.Remove(items, collect: true);
         var wiring = stretching ? WireDrag.For(Sheet, items) : null;
         bool stretches = wiring is { Wires.Count: > 0 };
-        Move = new SchMoveOperation(items, preview, SchEdits.Anchor(anchorItem), Scene.ToSheetNm(cursorScene))
+        Move = new SchMoveOperation(items, preview, _rules.Anchor(anchorItem), Scene.ToSheetNm(cursorScene))
         {
             Wiring = stretches ? wiring : null,
             Rubber = stretches ? new RubberBand(LayerStyle.Sch.Wire) : null,
@@ -430,7 +433,7 @@ public sealed class SchematicEditor
         {
             foreach (var item in items)
             {
-                SchEdits.Transform(item, anchor, SchEdits.CanRotate(item) ? rotation : 0, delta);
+                _rules.Transform(item, anchor, _rules.CanRotate(item) ? rotation : 0, delta);
             }
 
             shape?.Write();
@@ -475,9 +478,15 @@ public sealed class SchematicEditor
     /// <summary>The handle being pulled, if one is.</summary>
     public PointEditing? PointEdit { get; private set; }
 
+    /// <summary>The handles an item has, where the rules put them.</summary>
+    public IReadOnlyList<SchHandle> HandlesOf(SchItem item) => _rules.Handles(item);
+
+    /// <summary>Whether a corner can be put into the item's outline.</summary>
+    public bool CanAddCorner(SchItem item) => !IsReadOnly && _rules.CanAddCorner(item);
+
     /// <summary>The handles of the one item selected, when it is a shape whose points can be pulled.</summary>
     public IReadOnlyList<SchHandle> Handles =>
-        Move is null && !IsReadOnly && _selection is [var item] && item.IsAttached ? SchPoints.Handles(item) : [];
+        Move is null && !IsReadOnly && _selection is [var item] && item.IsAttached ? _rules.Handles(item) : [];
 
     /// <summary>
     /// Takes hold of a handle. Until it is let go the shape is redrawn as it is being pulled; letting go makes it
@@ -485,12 +494,12 @@ public sealed class SchematicEditor
     /// </summary>
     public bool BeginPointEdit(SchItem item, SchHandle handle)
     {
-        if (Move is not null || PointEdit is not null || !SchPoints.Handles(item).Contains(handle))
+        if (Move is not null || PointEdit is not null || !_rules.Handles(item).Contains(handle))
         {
             return false;
         }
 
-        var affected = SchPoints.Affected(Sheet, item, handle);
+        var affected = _rules.PointAffected(item, handle);
         PointEdit = new PointEditing(item, handle, affected, [.. affected.Select(a => a.Node.CloneList())]) { To = handle.At };
         return true;
     }
@@ -511,7 +520,7 @@ public sealed class SchematicEditor
 
         edit.To = to;
         Restore(edit);
-        SchPoints.Move(Sheet, edit.Item, edit.Handle, to);
+        _rules.MovePoint(edit.Item, edit.Handle, to);
         Refresh(edit.Affected);
     }
 
@@ -530,7 +539,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Execute(new ModifyNodesCommand("Move point", edit.Affected, () => SchPoints.Move(Sheet, edit.Item, edit.Handle, edit.To)));
+        Execute(new ModifyNodesCommand("Move point", edit.Affected, () => _rules.MovePoint(edit.Item, edit.Handle, edit.To)));
     }
 
     public void CancelPointEdit()
@@ -548,25 +557,25 @@ public sealed class SchematicEditor
     /// <summary>Puts a corner into the selected outline where it passes nearest the point, as one step to undo.</summary>
     public bool AddCorner(SchItem item, Vector2D atScene)
     {
-        if (!SchPoints.CanAddCorner(item))
+        if (!_rules.CanAddCorner(item))
         {
             return false;
         }
 
         var at = Snap(Scene.ToSheetNm(atScene).Round());
-        Execute(new ModifyNodesCommand("Add corner", [item], () => SchPoints.AddCorner(item, at)));
+        Execute(new ModifyNodesCommand("Add corner", [item], () => _rules.AddCorner(item, at)));
         return true;
     }
 
     /// <summary>Takes a corner out of the selected outline, as one step to undo.</summary>
     public bool RemoveCorner(SchItem item, SchHandle handle)
     {
-        if (!SchPoints.CanRemoveCorner(item, handle))
+        if (!_rules.CanRemoveCorner(item, handle))
         {
             return false;
         }
 
-        Execute(new ModifyNodesCommand("Remove corner", [item], () => SchPoints.RemoveCorner(item, handle)));
+        Execute(new ModifyNodesCommand("Remove corner", [item], () => _rules.RemoveCorner(item, handle)));
         return true;
     }
 
@@ -662,18 +671,18 @@ public sealed class SchematicEditor
             return;
         }
 
-        var items = _selection.Where(SchEdits.CanRotate).ToList();
+        var items = _selection.Where(_rules.CanRotate).ToList();
         if (items.Count == 0)
         {
             return;
         }
 
-        var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
+        var pivot = items.Count == 1 ? _rules.Anchor(items[0]) : SelectionCenter(items);
         Execute(new ModifyNodesCommand("Rotate", items, () =>
         {
             foreach (var item in items)
             {
-                SchEdits.Transform(item, pivot, degrees, default);
+                _rules.Transform(item, pivot, degrees, default);
             }
         }));
     }
@@ -686,18 +695,18 @@ public sealed class SchematicEditor
             return;
         }
 
-        var items = _selection.Where(SchEdits.CanTransform).ToList();
+        var items = _selection.Where(_rules.CanTransform).ToList();
         if (items.Count == 0)
         {
             return;
         }
 
-        var pivot = items.Count == 1 ? SchEdits.Anchor(items[0]) : SelectionCenter(items);
+        var pivot = items.Count == 1 ? _rules.Anchor(items[0]) : SelectionCenter(items);
         Execute(new ModifyNodesCommand(horizontal ? "Mirror horizontally" : "Mirror vertically", items, () =>
         {
             foreach (var item in items)
             {
-                SchEdits.Mirror(item, pivot, horizontal);
+                _rules.Mirror(item, pivot, horizontal);
             }
         }));
     }
@@ -713,7 +722,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Execute(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        Execute(new AddNodesCommand(_rules.Host, items), removedFromScene: true);
         if (select)
         {
             SetSelection(items);
@@ -805,7 +814,7 @@ public sealed class SchematicEditor
         }
 
         // A locked item is not deleted with the rest: it stays, and stays selected, so it is plain that it did.
-        var items = _selection.Where(item => !item.IsLocked).ToList();
+        var items = _selection.Where(_rules.CanDelete).ToList();
         if (items.Count == 0)
         {
             return;
@@ -826,7 +835,7 @@ public sealed class SchematicEditor
         var (shrinking, emptied) = SchGroups.Losing(Sheet, going);
         if (shrinking.Count == 0 && emptied.Count == 0)
         {
-            Execute(new DeleteNodesCommand(Sheet, going));
+            Execute(new DeleteNodesCommand(_rules.Host, going));
             return;
         }
 
@@ -843,7 +852,7 @@ public sealed class SchematicEditor
             }));
         }
 
-        steps.Add(new DeleteNodesCommand(Sheet, [.. going, .. emptied]));
+        steps.Add(new DeleteNodesCommand(_rules.Host, [.. going, .. emptied]));
         Execute(new CompositeCommand(going.Count == 1 ? "Delete item" : $"Delete {going.Count} items", steps));
     }
 
@@ -853,7 +862,7 @@ public sealed class SchematicEditor
     /// </summary>
     public void Copy()
     {
-        if (_selection.Count > 0)
+        if (_selection.Count > 0 && _rules.CanCopy)
         {
             SchClipboard.Put(_selection);
         }
@@ -877,7 +886,7 @@ public sealed class SchematicEditor
     /// </summary>
     public void Duplicate()
     {
-        if (Move is not null || _selection.Count == 0)
+        if (Move is not null || _selection.Count == 0 || !_rules.CanCopy)
         {
             return;
         }
@@ -888,9 +897,9 @@ public sealed class SchematicEditor
         {
             if (SchClone.Of(Sheet, item) is { } copy)
             {
-                if (SchEdits.CanTransform(copy))
+                if (_rules.CanTransform(copy))
                 {
-                    SchEdits.Transform(copy, SchEdits.Anchor(copy), 0, new Vector2L(step, step));
+                    _rules.Transform(copy, _rules.Anchor(copy), 0, new Vector2L(step, step));
                 }
 
                 copies.Add(copy);
@@ -901,7 +910,7 @@ public sealed class SchematicEditor
     }
 
     /// <summary>Whether there is anything to paste. A clipboard outlives the sheet it was filled from.</summary>
-    public bool CanPaste => SchClipboard.HasContent;
+    public bool CanPaste => _rules.CanCopy && SchClipboard.HasContent;
 
     /// <summary>
     /// Pastes the clipboard so that the top-left of what was copied lands on <paramref name="at"/>, snapped to the
@@ -909,7 +918,7 @@ public sealed class SchematicEditor
     /// </summary>
     public void Paste(Vector2L at)
     {
-        if (Move is not null)
+        if (Move is not null || !_rules.CanCopy)
         {
             return;
         }
@@ -923,14 +932,14 @@ public sealed class SchematicEditor
             }
         }
 
-        var movable = copies.Where(SchEdits.CanTransform).ToList();
+        var movable = copies.Where(_rules.CanTransform).ToList();
         if (movable.Count > 0)
         {
-            var origin = movable.Select(SchEdits.Anchor).Aggregate((a, b) => new Vector2L(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)));
+            var origin = movable.Select(_rules.Anchor).Aggregate((a, b) => new Vector2L(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y)));
             var delta = Snap(at) - origin;
             foreach (var copy in movable)
             {
-                SchEdits.Transform(copy, SchEdits.Anchor(copy), 0, delta);
+                _rules.Transform(copy, _rules.Anchor(copy), 0, delta);
             }
         }
 
@@ -945,7 +954,7 @@ public sealed class SchematicEditor
             return;
         }
 
-        Execute(new AddNodesCommand(Sheet, items), removedFromScene: true);
+        Execute(new AddNodesCommand(_rules.Host, items), removedFromScene: true);
         SetSelection(items);
     }
 
@@ -1000,7 +1009,7 @@ public sealed class SchematicEditor
     /// </summary>
     public void Align(AlignTo edge)
     {
-        var items = _selection.Where(SchEdits.CanTransform).ToList();
+        var items = _selection.Where(_rules.CanTransform).ToList();
         if (Move is not null || items.Count == 0 || (edge != AlignTo.Grid && items.Count < 2))
         {
             return;
@@ -1042,7 +1051,7 @@ public sealed class SchematicEditor
         {
             foreach (var (item, delta) in moves)
             {
-                SchEdits.Transform(item, default, 0, delta);
+                _rules.Transform(item, default, 0, delta);
             }
         }));
     }
@@ -1058,7 +1067,7 @@ public sealed class SchematicEditor
     /// <summary>What it would take to put an item's own point on the grid.</summary>
     private Vector2L ToGrid(SchItem item)
     {
-        var anchor = SchEdits.Anchor(item);
+        var anchor = _rules.Anchor(item);
         return Snap(anchor) - anchor;
     }
 
@@ -1125,7 +1134,7 @@ public sealed class SchematicEditor
 
     private void AddToScene(IEnumerable<SchItem> items)
     {
-        SchematicSceneBuilder.AddItems(Scene, items);
+        _rules.AddToScene(Scene, items);
         if (TriangulateChanges)
         {
             SceneTriangulator.Triangulate(Scene);

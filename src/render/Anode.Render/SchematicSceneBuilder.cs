@@ -80,6 +80,16 @@ public static class SchematicSceneBuilder
         return scene;
     }
 
+    /// <summary>
+    /// Draws pins, shapes and fields of a library symbol again after they changed, turned over as the symbol is.
+    /// </summary>
+    /// <param name="body">The symbol the pins are drawn as pins of: its names and numbers shown or not.</param>
+    public static void AddSymbolItems(SchematicScene scene, LibSymbol body, IEnumerable<SchItem> items)
+    {
+        new Builder(scene).AddLibraryItems(body, items);
+        scene.Commit();
+    }
+
     /// <summary>The flip a library symbol is drawn through: its Y runs up, the scene's down.</summary>
     public static Transform2D LibraryToScene { get; } = Transform2D.Scale(1, -1);
 
@@ -286,6 +296,27 @@ public static class SchematicSceneBuilder
                 {
                     Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, value,
                         field.Position.ToDouble(), field.TextHeight, field.Font, field.Angle, field.Alignment, owner);
+                }
+            }
+        }
+
+        public void AddLibraryItems(LibSymbol body, IEnumerable<SchItem> items)
+        {
+            var t = LibraryToScene;
+            foreach (var item in items)
+            {
+                switch (item)
+                {
+                    case SchGraphic graphic:
+                        Styled(graphic.StrokeStyle, () => AddGraphic(graphic, t, LayerStyle.Sch.Symbol, scene.AddOwner(graphic)));
+                        break;
+                    case SchPin pin:
+                        AddPin(pin, body, t, scene.AddOwner(pin));
+                        break;
+                    case SchField field when field.Value.Length > 0:
+                        Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, field.Value,
+                            t.Apply(field.Position.ToDouble()), field.TextHeight, field.Font, field.Angle, field.Alignment, scene.AddOwner(field));
+                        break;
                 }
             }
         }
