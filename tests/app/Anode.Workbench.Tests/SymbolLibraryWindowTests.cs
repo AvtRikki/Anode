@@ -135,8 +135,33 @@ public class SymbolLibraryWindowTests
             Assert.Contains(document.StatusFields, f => f.Text.StartsWith("OPA1612", StringComparison.Ordinal));
             ShellWindowTests.Snapshot(window, directory, "symbol-library-new");
 
+            // A body and two pins, drawn with the mouse: the rectangle from the middle out, pins on its left.
+            var canvas = window.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "SchematicCanvas");
+            var middle = canvas.TranslatePoint(new Point(canvas.Bounds.Width / 2, canvas.Bounds.Height / 2), window)!.Value;
+            void Click(Point at)
+            {
+                window.MouseMove(at);
+                window.MouseDown(at, MouseButton.Left);
+                window.MouseUp(at, MouseButton.Left);
+                Dispatcher.UIThread.RunJobs();
+            }
+
+            Assert.True(shell.Commands.TryExecute("sch.tool.rectangle") || Activate(document, "sch.tool.rectangle"));
+            Click(middle + new Point(-60, -90));
+            Click(middle + new Point(60, 90));
+            Activate(document, "sch.tool.pin");
+            Click(middle + new Point(-150, -40));
+            Click(middle + new Point(-150, 40));
+            window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            ShellWindowTests.Snapshot(window, directory, "symbol-library-drawn");
+
             Assert.True(Pump(document.SaveAsync()));
-            Assert.Contains("(symbol \"OPA1612\"", File.ReadAllText(path), StringComparison.Ordinal);
+            string written = File.ReadAllText(path);
+            Assert.Contains("(symbol \"OPA1612\"", written, StringComparison.Ordinal);
+            Assert.Contains("(rectangle", written, StringComparison.Ordinal);
+            Assert.Equal(2, written.Split("(pin input line").Length - 1);
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
             window.Close();
         }
@@ -202,6 +227,14 @@ public class SymbolLibraryWindowTests
             Directory.Delete(folder, recursive: true);
         }
     });
+
+    /// <summary>Picks a tool from the document's own toolbar, as a click on its button does.</summary>
+    private static bool Activate(IDocument document, string tool)
+    {
+        document.Tools.Single(t => t.Id == tool).Activate();
+        Dispatcher.UIThread.RunJobs();
+        return true;
+    }
 
     private static T Pump<T>(Task<T> task)
     {

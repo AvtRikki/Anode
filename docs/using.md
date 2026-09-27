@@ -148,6 +148,10 @@ the command palette, which lists every command with its shortcut.
   hidden; a field's value and visibility; a shape's line width and fill; and the symbol's fields and whether pin
   numbers and names are shown. Hidden fields and pins are shown dimmed, as in KiCad's symbol editor, so they can be
   taken hold of. A derived symbol's body is its parent's: only its own fields change from it.
+- Tools, in the bar over the canvas: **pin** (P) puts a pin where it is clicked — an input drawn as a plain line,
+  100 mil long, pointing right into the body, numbered one past the highest the symbol has — and stays armed for the
+  next; **line**, **rectangle**, **circle** and **arc** draw as on a sheet. What is drawn goes into the unit and
+  body on screen. Esc puts the tool down.
 - ⌘Z and ⌘⇧Z undo and redo on the whole library — one history, since the file is one thing saved.
 - Saving writes the library as it stands; one nobody changed is written back byte for byte.
 

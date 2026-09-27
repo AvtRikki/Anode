@@ -779,12 +779,12 @@ public sealed class SchematicEditor
         var steps = new List<IEditCommand>();
         if (remove.Count > 0)
         {
-            steps.Add(new DeleteNodesCommand(Sheet, remove));
+            steps.Add(new DeleteNodesCommand(_rules.Host, remove));
         }
 
         if (add.Count > 0)
         {
-            steps.Add(new AddNodesCommand(Sheet, add));
+            steps.Add(new AddNodesCommand(_rules.Host, [.. add.Select(_rules.Adopt)]));
         }
 
         Execute(new CompositeCommand(name, steps));

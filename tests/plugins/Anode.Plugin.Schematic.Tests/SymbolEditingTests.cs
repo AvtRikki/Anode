@@ -212,6 +212,53 @@ public sealed class SymbolEditingTests : IDisposable
         editor.CancelMove();
     }
 
+    /// <summary>
+    /// The pin tool puts a pin where it is clicked, pointing right into the body, numbered one past the highest; the
+    /// point is the library's, Y up, and each pin is a step to undo.
+    /// </summary>
+    [Fact]
+    public void Pins_are_placed_numbered_on_in_the_librarys_coordinates()
+    {
+        using var document = Open();
+        Assert.Null(document.AddSymbol("NEW"));
+        var tool = new PinTool(document.Editor!, document.MakePin);
+
+        tool.Click(new Vector2L(-7_620_000, -2_540_000));
+        tool.Click(new Vector2L(-7_620_000, 0));
+
+        var pins = document.Current!.Pins;
+        Assert.Equal(["1", "2"], pins.Select(p => p.Number));
+        Assert.Equal(new Vector2L(-7_620_000, 2_540_000), pins[0].Position);
+        Assert.Equal(0, pins[0].Angle);
+        Assert.Equal(PinTool.LengthNm, pins[0].Length);
+        Assert.Equal("input", pins[0].ElectricalType);
+        Assert.DoesNotContain("uuid", pins[0].Node.ToString(), StringComparison.Ordinal);
+
+        document.Undo();
+        Assert.Single(document.Current!.Pins);
+    }
+
+    /// <summary>A rectangle drawn on screen is written in the library's terms — turned over, and without an id.</summary>
+    [Fact]
+    public void A_rectangle_drawn_is_written_as_a_library_writes_one()
+    {
+        using var document = Open();
+        Assert.Null(document.AddSymbol("BOX"));
+        var tool = new ShapeTool(document.Editor!, "sch.tool.rectangle", SchShapeKind.Rectangle);
+
+        tool.Click(new Vector2L(-5_080_000, -7_620_000));
+        tool.Click(new Vector2L(5_080_000, 7_620_000));
+
+        var box = Assert.Single(document.Current!.Graphics);
+        Assert.Equal((new Vector2L(-5_080_000, 7_620_000), new Vector2L(5_080_000, -7_620_000)), (box.Start, box.End));
+        Assert.DoesNotContain("uuid", box.Node.ToString(), StringComparison.Ordinal);
+
+        // It sits in the body of the unit on screen, and the file reads back with it.
+        Assert.StartsWith("(symbol \"BOX_1_1\"", (box.Node.Parent as Anode.Sexpr.SList)?.ToString(), StringComparison.Ordinal);
+        var read = SymbolLibrary.Parse(document.Library.Document.ToString()).Find("BOX")!;
+        Assert.Single(read.GraphicsOf(1, 1));
+    }
+
     private static SchPin Pin(SymbolLibraryDocument document) => document.Current!.Pins.Single();
 
     private static void Move(SymbolLibraryDocument document, SchItem item, Vector2L by)

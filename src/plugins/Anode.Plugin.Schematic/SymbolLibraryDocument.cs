@@ -39,6 +39,7 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     private SchematicEditor? _editor;
     private SchematicCanvas? _canvas;
     private string _cursor = string.Empty;
+    private string? _tool;
 
     public SymbolLibraryDocument(string path, SymbolLibrary library)
     {
@@ -144,9 +145,65 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     /// <summary>With nothing selected, the symbol itself.</summary>
     public override SelectionInfo? Overview => Current is { } symbol ? DescribeSymbol(symbol) : null;
 
+    public override IReadOnlyList<ToolDescriptor> Tools =>
+    [
+        new("sch.tool.select", "sch.tool.select", Icons.Select) { ShortcutText = "Esc", Activate = () => UseTool(null) },
+        new("sch.tool.pin", "sch.tool.pin", Icons.Pin) { ShortcutText = "P", Activate = () => UseTool("sch.tool.pin") },
+        new("sch.tool.line", "sch.tool.line", Icons.Line) { Activate = () => UseTool("sch.tool.line") },
+        new("sch.tool.rectangle", "sch.tool.rectangle", Icons.Rectangle) { Activate = () => UseTool("sch.tool.rectangle") },
+        new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
+        new("sch.tool.arc", "sch.tool.arc", Icons.Circle) { Activate = () => UseTool("sch.tool.arc") },
+    ];
+
+    public override string? ActiveToolId => _tool;
+
+    /// <summary>Puts a drawing tool on the pointer, or takes it off; a symbol that lends its body draws nothing.</summary>
+    public void UseTool(string? id)
+    {
+        _tool = id is not null && Current is { } symbol && ReferenceEquals(Body, symbol) ? id : null;
+        if (_canvas is { } canvas)
+        {
+            canvas.Tool = _tool is { } tool ? MakeTool(tool) : null;
+        }
+
+        OnPropertiesChanged(nameof(ActiveToolId), nameof(StatusFields));
+    }
+
+    private ISchTool? MakeTool(string id) => _editor is not { } editor ? null : id switch
+    {
+        "sch.tool.pin" => new PinTool(editor, MakePin),
+        "sch.tool.line" => new ShapeTool(editor, "sch.tool.line", SchShapeKind.Polyline),
+        "sch.tool.rectangle" => new ShapeTool(editor, "sch.tool.rectangle", SchShapeKind.Rectangle),
+        "sch.tool.circle" => new ShapeTool(editor, "sch.tool.circle", SchShapeKind.Circle),
+        "sch.tool.arc" => new PointsTool(editor, "sch.tool.arc", 3,
+            p => SchNodes.Arc(p[0], p[2], p[1]),
+            p => p.Count >= 3 && Anode.Geometry.ArcMath.FromStartMidEnd(p[0].ToDouble(), p[2].ToDouble(), p[1].ToDouble()) is { } arc
+                ? Anode.Geometry.ArcMath.Tessellate(arc)
+                : [.. p.Select(q => q.ToDouble())]),
+        _ => null,
+    };
+
+    /// <summary>
+    /// A new pin, as KiCad's pin tool first makes one: an input, drawn as a plain line, 100 mil long, pointing right
+    /// into the body, unnamed, and numbered one past the highest number the symbol has. It is made at the scene's
+    /// point; the rules turn it over into the library's.
+    /// </summary>
+    internal SchItem MakePin(Anode.Geometry.Vector2L at)
+    {
+        int next = (Body?.Pins ?? []).Select(p => int.TryParse(p.Number, NumberStyles.None, CultureInfo.InvariantCulture, out int n) ? n : 0)
+            .DefaultIfEmpty(0).Max() + 1;
+        string length = Anode.Kicad.KiCadNumber.FormatMm(PinTool.LengthNm);
+        string text =
+            $"(pin input line (at {Anode.Kicad.KiCadNumber.FormatMm(at.X)} {Anode.Kicad.KiCadNumber.FormatMm(at.Y)} 0) (length {length})"
+            + " (name \"~\" (effects (font (size 1.27 1.27))))"
+            + $" (number \"{next.ToString(CultureInfo.InvariantCulture)}\" (effects (font (size 1.27 1.27)))))";
+        return new SchPin(SchNodes.Adopt(Anode.Sexpr.SDocument.Parse(text).Root));
+    }
+
     protected override Control CreateView()
     {
         var canvas = new SchematicCanvas { Editor = _editor };
+        canvas.ToolCancelled += () => UseTool(null);
         canvas.CursorMoved += position =>
         {
             // The canvas speaks sheet millimetres, Y down; the library's Y runs up.
@@ -197,6 +254,12 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                 MenuKey = "menu.edit", MenuOrder = 10,
                 CanExecute = () => History.CanRedo,
                 Execute = Redo,
+            },
+            new("sch.lib.tool.pin", "sch.tool.pin")
+            {
+                ScopeKey = "scope.symlib", ShortcutText = "P", Gesture = new KeyGesture(Key.P),
+                MenuKey = "menu.place", MenuOrder = 0,
+                Execute = () => UseTool("sch.tool.pin"),
             },
             new("sch.lib.newSymbol", "sch.command.newSymbol")
             {
@@ -305,6 +368,9 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         if (_canvas is { } canvas)
         {
             canvas.Editor = _editor;
+
+            // A tool in hand stays in hand across a change of symbol or unit — on the new editor.
+            canvas.Tool = _tool is { } tool ? MakeTool(tool) : null;
         }
 
         OnPropertiesChanged(nameof(Current), nameof(Unit), nameof(BodyStyle), nameof(Selection), nameof(Overview), nameof(StatusFields));

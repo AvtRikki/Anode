@@ -6,6 +6,7 @@
     "sheets": { "missing": "file not found" },
     "sheet": { "needsFile": "Save this schematic before adding a sheet to it.", "badName": "“{0}” cannot be a file name.", "pinTaken": "This sheet already has a pin called “{0}”." },
     "tool": {
+      "pin": "Place a pin",
       "select": "Select",
       "wire": "Wire",
       "bus": "Bus",

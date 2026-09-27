@@ -270,8 +270,13 @@ on screen. Hidden pins and fields are shown, dimmed, as KiCad's symbol editor sh
 (`show_hidden_lib_fields`, `show_hidden_lib_pins`). Written values follow KiCad 9: `(hide yes)` after a pin's length,
 inside a field's effects, `(pin_numbers (hide yes))` / `(pin_names … (hide yes))` for the symbol.
 
-Not done: drawing tools for symbols, copying, renaming and deleting symbols, adding fields, unit names, the pin
-table, and copy and paste inside a symbol.
+Drawing tools make what a library holds: points turned into the library's Y, and without the `uuid` a sheet item
+carries (nothing inside a library symbol has one), into the `NAME_unit_style` body of the unit on screen, made if the
+symbol has none for it. A new pin is KiCad's pin tool's first pin — input, line, 100 mil, pointing right — numbered one
+past the highest number the symbol has, where KiCad remembers the last pin's settings and steps from it.
+
+Not done: text inside symbols (neither drawn nor written yet), curves in the symbol editor, copying, renaming and
+deleting symbols, adding fields, unit names, the pin table, and copy and paste inside a symbol.
 
 ## Drawing sheets (`.kicad_wks`)
 

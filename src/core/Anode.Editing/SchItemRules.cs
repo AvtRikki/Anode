@@ -38,6 +38,11 @@ public interface ISchItemRules
     /// <summary>Draws items again after they changed.</summary>
     void AddToScene(SchematicScene scene, IEnumerable<SchItem> items);
 
+    /// <summary>
+    /// Makes an item a tool drew — written as a sheet writes it, at the scene's points — into what the host takes.
+    /// </summary>
+    SchItem Adopt(SchItem made);
+
     IReadOnlyList<SchHandle> Handles(SchItem item);
 
     /// <summary>Everything pulling a handle may change.</summary>
@@ -74,6 +79,8 @@ public sealed class SheetRules(Schematic sheet) : ISchItemRules
     public void Mirror(SchItem item, Vector2L pivot, bool horizontal) => SchEdits.Mirror(item, pivot, horizontal);
 
     public void AddToScene(SchematicScene scene, IEnumerable<SchItem> items) => SchematicSceneBuilder.AddItems(scene, items);
+
+    public SchItem Adopt(SchItem made) => made;
 
     public IReadOnlyList<SchHandle> Handles(SchItem item) => SchPoints.Handles(item);
 
@@ -130,6 +137,21 @@ public sealed class SymbolRules(LibSymbol shown, LibSymbol body) : ISchItemRules
     }
 
     public void AddToScene(SchematicScene scene, IEnumerable<SchItem> items) => SchematicSceneBuilder.AddSymbolItems(scene, body, items);
+
+    /// <summary>
+    /// A shape or a pin drawn on screen, made into what a library holds: its points turned over into the library's
+    /// Y, and without the id a sheet item carries — nothing inside a library symbol has one.
+    /// </summary>
+    public SchItem Adopt(SchItem made)
+    {
+        if (made.Node.Find("uuid") is { } id)
+        {
+            made.Node.RemoveAt(made.Node.IndexOf(id));
+        }
+
+        SymbolEdits.Transform(made, Flip, 0);
+        return made;
+    }
 
     public IReadOnlyList<SchHandle> Handles(SchItem item) =>
         IsOwn(item) ? [.. SchPoints.Handles(item).Select(h => h with { At = Flip(h.At) })] : [];

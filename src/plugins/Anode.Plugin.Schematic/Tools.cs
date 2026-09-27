@@ -864,3 +864,43 @@ internal static class ToolDraw
         }
     }
 }
+
+/// <summary>
+/// Places pins, as KiCad's pin tool does: each click puts one down where a wire will meet it, pointing right into
+/// the body, 100 mil long, numbered one past the highest number the symbol already has. The tool stays armed, so a
+/// row of pins is a row of clicks; each is turned and renamed afterwards like any other.
+/// </summary>
+internal sealed class PinTool(SchematicEditor editor, Func<Vector2L, SchItem> make) : ISchTool
+{
+    private const double StrokeMm = 0.1524;
+
+    /// <summary>KiCad's default pin length, 100 mil.</summary>
+    public const long LengthNm = 2_540_000;
+
+    public string Id => "sch.tool.pin";
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        var at = editor.Snap(sheetPoint);
+        var layer = new LayerGeometry(LayerStyle.Sch.Pin);
+        layer.Lines.Add(new LinePrim(ToolDraw.Scene(editor, at), ToolDraw.Scene(editor, new Vector2L(at.X + LengthNm, at.Y)), (float)StrokeMm, -1));
+        Preview = layer;
+        Changed?.Invoke();
+    }
+
+    public void Click(Vector2L sheetPoint) => editor.Apply(Id, [make(editor.Snap(sheetPoint))], []);
+
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        Preview = null;
+        Changed?.Invoke();
+        return false;
+    }
+}
+
