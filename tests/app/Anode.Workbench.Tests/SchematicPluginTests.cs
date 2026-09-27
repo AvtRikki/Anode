@@ -39,8 +39,9 @@ public class SchematicPluginTests
             var shell = ShellWindowTests.Workbench(PluginRoot, recents);
 
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
-            var type = Assert.Single(shell.DocumentTypes.Types);
-            Assert.Equal("anode.schematic", type.Id);
+            // Sheets, and the symbol libraries they draw from.
+            Assert.Equal(["anode.schematic", "anode.symlib"], shell.DocumentTypes.Types.Select(t => t.Id).Order());
+            var type = shell.DocumentTypes.Types.Single(t => t.Id == "anode.schematic");
             Assert.Equal("KiCad schematic", type.Label);
 
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };

@@ -126,6 +126,19 @@ the command palette, which lists every command with its shortcut.
 - **File → Export BOM…** writes the design's bill of materials as the CSV KiCad's default preset writes: one line
   per part that is the same thing, with its designators, quantity and whether it is to be placed.
 
+## Symbol libraries
+
+- A `.kicad_sym` file opens as a tab of its own: the library is the document, and one of its symbols is on the
+  canvas at a time. The **Library** panel on the left lists its symbols with their descriptions, and a filter looks in
+  names, descriptions and keywords; a click brings a symbol up.
+- The bar over the canvas names the symbol and, where it has them, switches between its units (A, B, …) and its De
+  Morgan body. A derived symbol is drawn with the body of the one it is derived from.
+- The inspector describes the symbol — fields, units, how pins are shown, and the pins of the unit on screen — or,
+  with a pin, a shape or a field selected, that. Coordinates are the library's, Y upward, as KiCad's symbol editor
+  gives them.
+- Saving writes the library as it stands; one nobody changed is written back byte for byte. Symbols are not edited
+  here yet.
+
 ## The inspector
 
 With something selected, the inspector describes it in blocks — what it is, what it connects to, how it is set, where

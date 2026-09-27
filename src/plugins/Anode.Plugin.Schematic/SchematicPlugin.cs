@@ -20,6 +20,16 @@ public sealed class SchematicPlugin : IPlugin
 
         context.Documents.Register(new SchematicDocumentType(context.Log, remembered));
 
+        // A symbol library is a document of its own: the file is what is saved, one of its symbols is on the canvas.
+        context.Documents.Register(new SymbolLibraryDocumentType());
+        context.Panels.Register(new PanelDescriptor("sch.library", "sch.panel.library", DockArea.LeftBottom, workbench => new SymbolListPanel(workbench))
+        {
+            IconKey = Icons.Component,
+            RailLabelKey = "sch.panel.libraryRail",
+            DocumentTypes = [SymbolLibraryDocumentType.TypeId],
+            Order = 10,
+        });
+
         context.Project.Register(new SchematicStructure());
 
         // The parts a sheet can draw from. Same place as the inspector, so the two are tabs of one stack and each

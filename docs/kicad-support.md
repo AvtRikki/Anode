@@ -238,9 +238,24 @@ Not done: finding across the whole design (the sheet on screen is searched, and 
 since writing sheets that are not open would edit files behind the designer's back), net names, and the library
 fields of a part (description, keywords).
 
+Pins are drawn with their graphic style as KiCad's painter draws them (`SCH_PAINTER::draw( SCH_PIN* )`): the bubble
+of an inverted pin against the body with the line starting beyond it, a clock's triangle inside the body, the
+active-low slopes, the non-logic cross, and an X at the end of a pin whose type is not-connected — at KiCad's default
+pin symbol size of 25 mil.
+
 Not done: numbering a whole design again in one step (a sheet at a time is what the editor offers, since renaming
 parts on sheets that are not open would edit files behind the designer's back), and the exclusions a project lists
 for single findings — matching one needs the marker written exactly as KiCad writes it, down to its position.
+
+## Symbol libraries (`.kicad_sym`)
+
+A library opens as a document and is saved losslessly. A symbol is drawn on its own through a flip of Y — the library
+writes Y upward — with the body of its unit and body style, the common unit 0 with every unit, and for a symbol
+derived with `extends`, its parent's body with its own fields. Hidden fields are drawn on the hidden layer and left
+out of what zoom-to-fit covers, since a library often parks its footprint and datasheet far off. The origin is marked
+with a cross, as KiCad's symbol editor marks it.
+
+Not done: editing symbols, creating, copying, renaming and deleting them, unit names, and pin tables.
 
 ## Drawing sheets (`.kicad_wks`)
 

@@ -42,7 +42,7 @@ public class PanelScopeTests
             var shell = ShellWindowTests.Workbench(PluginsRoot, recents);
 
             Assert.DoesNotContain(shell.Log.Entries, e => e.Level == LogLevel.Error);
-            Assert.Equal(["anode.pcb", "anode.schematic"], shell.DocumentTypes.Types.Select(t => t.Id).Order());
+            Assert.Equal(["anode.pcb", "anode.schematic", "anode.symlib"], shell.DocumentTypes.Types.Select(t => t.Id).Order());
 
             var window = new MainWindow { DataContext = shell, Width = 1240, Height = 772 };
             window.Show();

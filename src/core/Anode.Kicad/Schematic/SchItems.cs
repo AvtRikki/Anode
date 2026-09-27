@@ -130,6 +130,9 @@ public sealed class SchGraphic(SList node) : SchItem(node)
     public Vector2L[] Points => Node.Find("pts")?.Points() ?? [];
 
     /// <summary>Filled bodies are drawn in their fill colour; <c>none</c> and <c>background</c> stay outlines.</summary>
+    /// <summary>How the shape is filled, in the file's word: none, outline, background, color.</summary>
+    public string Fill => Node.Find("fill")?.ChildString("type") ?? "none";
+
     public bool IsFilled => Node.Find("fill")?.ChildString("type") is "outline" or "color";
 
     public Arc? ArcGeometry => Kind == SchShapeKind.Arc

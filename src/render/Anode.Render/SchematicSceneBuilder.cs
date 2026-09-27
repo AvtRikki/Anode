@@ -69,8 +69,10 @@ public static class SchematicSceneBuilder
 
         scene.Commit();
 
-        // What "zoom to fit" shows: the symbol with a margin, never less than a small square about the origin.
-        var bounds = scene.Bounds.IsEmpty ? new RectD(-5, -5, 5, 5) : scene.Bounds.Union(-5, -5).Union(5, 5);
+        // What "zoom to fit" shows: what is shown of the symbol, with a margin, never less than a small square about
+        // the origin. Hidden fields are left out — a library often parks its footprint and datasheet far off.
+        var visible = scene.Layers.Where(l => l.IsVisible).Aggregate(RectD.Empty, (all, layer) => all.Union(layer.Bounds));
+        var bounds = visible.IsEmpty ? new RectD(-5, -5, 5, 5) : visible.Union(-5, -5).Union(5, 5);
         scene.BoardOutline = bounds.Inflate(5);
         return scene;
     }
@@ -324,7 +326,7 @@ public static class SchematicSceneBuilder
 
             var root = toSheet.Apply(pin.Position.ToDouble());
             var tip = toSheet.Apply(pin.EndPoint.ToDouble());
-            LineScene(wire, root, tip, SymbolWidth, owner);
+            PinShape(pin, wire, root, tip, owner);
 
             // Text reads left to right whatever the pin direction: horizontal pins keep 0°, vertical ones turn 90°.
             bool vertical = Math.Abs(tip.Y - root.Y) > Math.Abs(tip.X - root.X);
@@ -346,6 +348,123 @@ public static class SchematicSceneBuilder
                     ? (dy > 0 ? ("left", "center") : ("right", "center"))
                     : (dx > 0 ? ("left", "center") : ("right", "center"));
                 TextScene(words, name, anchor, pin.NameHeight, pin.NameFont, angle, alignment, owner);
+            }
+        }
+
+        /// <summary>
+        /// A pin's line with its graphic style, as KiCad's painter draws it (<c>SCH_PAINTER::draw( SCH_PIN* )</c>):
+        /// the bubble of an inverted pin at the body with the line starting beyond it, a clock's triangle inside the
+        /// body, the slopes of active-low pins, the cross of a non-logic one, and an X at the end of a pin that is not
+        /// to be connected. Sizes are KiCad's default pin symbol size, 25 mil, which a schematic may change.
+        /// </summary>
+        /// <param name="pos">Where a wire meets the pin, in sheet coordinates.</param>
+        /// <param name="p0">Where the pin meets the body.</param>
+        private void PinShape(SchPin pin, string layer, Vector2D pos, Vector2D p0, int owner)
+        {
+            const double radius = 635_000;
+            const double diam = radius * 2;
+            const double clock = radius;
+            const double target = 381_000;
+
+            var dir = new Vector2D(Math.Sign(pos.X - p0.X), Math.Sign(pos.Y - p0.Y));
+            void L(Vector2D a, Vector2D b) => LineScene(layer, a, b, SymbolWidth, owner);
+            void Tri(Vector2D a, Vector2D b, Vector2D c)
+            {
+                L(a, b);
+                L(b, c);
+            }
+
+            void Ring(Vector2D centre)
+            {
+                const int steps = 24;
+                for (int i = 0; i < steps; i++)
+                {
+                    double a0 = 2 * Math.PI * i / steps, a1 = 2 * Math.PI * (i + 1) / steps;
+                    L(centre + new Vector2D(Math.Cos(a0) * radius, Math.Sin(a0) * radius),
+                        centre + new Vector2D(Math.Cos(a1) * radius, Math.Sin(a1) * radius));
+                }
+            }
+
+            if (pin.ElectricalType == "no_connect")
+            {
+                L(p0, pos);
+                L(pos + new Vector2D(-target, -target), pos + new Vector2D(target, target));
+                L(pos + new Vector2D(target, -target), pos + new Vector2D(-target, target));
+                return;
+            }
+
+            switch (pin.GraphicStyle)
+            {
+                case "inverted":
+                    Ring(p0 + (dir * radius));
+                    L(p0 + (dir * diam), pos);
+                    break;
+
+                case "inverted_clock":
+                    Tri(p0 + (new Vector2D(dir.Y, -dir.X) * clock), p0 - (dir * clock), p0 + (new Vector2D(-dir.Y, dir.X) * clock));
+                    Ring(p0 + (dir * radius));
+                    L(p0 + (dir * diam), pos);
+                    break;
+
+                case "clock_low" or "edge_clock_high":
+                    Tri(p0 + (new Vector2D(dir.Y, -dir.X) * clock), p0 - (dir * clock), p0 + (new Vector2D(-dir.Y, dir.X) * clock));
+                    LowSlope();
+                    L(p0, pos);
+                    break;
+
+                case "clock":
+                    L(p0, pos);
+                    if (dir.Y == 0)
+                    {
+                        Tri(p0 + new Vector2D(0, clock), p0 + new Vector2D(-dir.X * clock, 0), p0 + new Vector2D(0, -clock));
+                    }
+                    else
+                    {
+                        Tri(p0 + new Vector2D(clock, 0), p0 + new Vector2D(0, -dir.Y * clock), p0 + new Vector2D(-clock, 0));
+                    }
+
+                    break;
+
+                case "input_low":
+                    L(p0, pos);
+                    LowSlope();
+                    break;
+
+                case "output_low":
+                    L(p0, pos);
+                    if (dir.Y == 0)
+                    {
+                        L(p0 - new Vector2D(0, diam), p0 + (new Vector2D(dir.X, 0) * diam));
+                    }
+                    else
+                    {
+                        L(p0 - new Vector2D(diam, 0), p0 + (new Vector2D(0, dir.Y) * diam));
+                    }
+
+                    break;
+
+                case "non_logic":
+                    L(p0, pos);
+                    L(p0 - (new Vector2D(dir.X + dir.Y, dir.Y - dir.X) * radius), p0 + (new Vector2D(dir.X + dir.Y, dir.Y - dir.X) * radius));
+                    L(p0 - (new Vector2D(dir.X - dir.Y, dir.X + dir.Y) * radius), p0 + (new Vector2D(dir.X - dir.Y, dir.X + dir.Y) * radius));
+                    break;
+
+                default:
+                    L(p0, pos);
+                    break;
+            }
+
+            // The slope of an active-low input: out from the body along the pin, and up one bubble.
+            void LowSlope()
+            {
+                if (dir.Y == 0)
+                {
+                    Tri(p0 + (new Vector2D(dir.X, 0) * diam), p0 + (new Vector2D(dir.X, -1) * diam), p0);
+                }
+                else
+                {
+                    Tri(p0 + (new Vector2D(0, dir.Y) * diam), p0 + (new Vector2D(-1, dir.Y) * diam), p0);
+                }
             }
         }
 

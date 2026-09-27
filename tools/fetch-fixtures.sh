@@ -39,6 +39,7 @@ FILES=(
   qa/data/pcbnew/custom_fields.kicad_pcb
   demos/cm5_minima/CM5.kicad_sch
   demos/cm5_minima/CM5IO.kicad_sym
+  qa/data/eeschema/libs/4xxx.kicad_sym
   demos/complex_hierarchy/complex_hierarchy.kicad_sch
   demos/complex_hierarchy/complex_hierarchy.kicad_pro
   demos/complex_hierarchy/ampli_ht.kicad_sch
