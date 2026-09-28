@@ -331,7 +331,8 @@ internal sealed class SymbolsPanel : ContentControl
 
             var preview = new SymbolPreview
             {
-                Symbol = choice.Symbol,
+                // A derived part has no body of its own to draw: it is shown flattened, with its parent's.
+                Symbol = choice.Symbol.Extends is { Length: > 0 } ? _index?.Find(choice.LibId) ?? choice.Symbol : choice.Symbol,
                 Width = 38,
                 Height = 38,
                 VerticalAlignment = VerticalAlignment.Center,

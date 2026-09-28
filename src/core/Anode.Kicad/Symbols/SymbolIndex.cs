@@ -106,16 +106,22 @@ public sealed class SymbolIndex
         return row;
     }
 
+    /// <summary>
+    /// Reads the row's library, or reads it again when the file has changed since — a library edited and saved
+    /// while a sheet that uses it is open must be seen as it now is, or updating from it takes the old symbol. A
+    /// library that could not be read is not tried again on every lookup.
+    /// </summary>
     private static void Open(SymbolLibraryRef row)
     {
-        if (row.Library is not null || row.Problem is not null)
+        if (row.Problem is not null)
         {
             return;
         }
 
         try
         {
-            // Through the cache: the same libraries are wanted again every time a sheet is opened.
+            // Through the cache: the same libraries are wanted again every time a sheet is opened, and the cache
+            // answers the copy it holds unless the file was written since.
             row.Library = SymbolLibraryCache.Load(row.Path);
         }
         catch (Exception ex) when (ex is IOException or KiCadFormatException or UnauthorizedAccessException)
@@ -125,7 +131,38 @@ public sealed class SymbolIndex
         }
     }
 
-    /// <summary>The definition a <c>lib_id</c> names, e.g. <c>Device:R</c>; null when nothing answers to it.</summary>
+    /// <summary>
+    /// The row a qualified <c>lib_id</c>'s nickname names, whether or not the library is offered in the chooser;
+    /// null for an unqualified id or a nickname no table has.
+    /// </summary>
+    public SymbolLibraryRef? RowOf(string libId)
+    {
+        int colon = libId.IndexOf(':', StringComparison.Ordinal);
+        return colon < 0 ? null : _libraries.FirstOrDefault(l => string.Equals(l.Nickname, libId[..colon], StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The definition a placed symbol's <c>lib_id</c> names, flattened as a sheet carries it, whether or not its
+    /// library is offered in the chooser: a library turned off there is kept out of the way of new parts, not taken
+    /// away from the parts already placed.
+    /// </summary>
+    public LibSymbol? FindPlaced(string libId)
+    {
+        if (RowOf(libId) is not { } row)
+        {
+            return Find(libId);
+        }
+
+        Open(row);
+        return row.Library is { } library && library.Find(libId[(libId.IndexOf(':', StringComparison.Ordinal) + 1)..]) is { } found
+            ? library.Flatten(found)
+            : null;
+    }
+
+    /// <summary>
+    /// The definition a <c>lib_id</c> names, e.g. <c>Device:R</c>, flattened as a sheet carries it; null when
+    /// nothing answers to it.
+    /// </summary>
     public LibSymbol? Find(string libId)
     {
         int colon = libId.IndexOf(':', StringComparison.Ordinal);
@@ -137,14 +174,16 @@ public sealed class SymbolIndex
                 Open(row);
                 if (row.Library?.Find(libId) is { } found)
                 {
-                    return found;
+                    return row.Library.Flatten(found);
                 }
             }
 
             return null;
         }
 
-        return Open(libId[..colon]) is { IsEnabled: true } named ? named.Library?.Find(libId[(colon + 1)..]) : null;
+        return Open(libId[..colon]) is { IsEnabled: true, Library: { } library } && library.Find(libId[(colon + 1)..]) is { } symbol
+            ? library.Flatten(symbol)
+            : null;
     }
 
     /// <summary>

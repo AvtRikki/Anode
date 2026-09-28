@@ -85,6 +85,39 @@ public class SymbolIndexTests : IDisposable
         Assert.Null(index.Find("Missing:R"));
     }
 
+    /// <summary>
+    /// A library saved while a sheet that uses it is open is read again: updating the sheet from it must take the
+    /// symbol as it now is, not as it was when the sheet was opened.
+    /// </summary>
+    [Fact]
+    public void A_library_changed_on_disk_is_read_again()
+    {
+        string path = Library("device.kicad_sym", "R", "before");
+        var index = SymbolIndex.Build(null, Table(("Device", "device.kicad_sym")), Variables);
+        Assert.Equal("before", index.Find("Device:R")?.Description);
+
+        Library("device.kicad_sym", "R", "after the edit");
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(5));
+
+        Assert.Equal("after the edit", index.Find("Device:R")?.Description);
+        Assert.Equal("after the edit", index.FindPlaced("Device:R")?.Description);
+    }
+
+    /// <summary>A library turned off in the chooser still answers for the parts already placed from it.</summary>
+    [Fact]
+    public void A_library_turned_off_still_answers_for_placed_parts()
+    {
+        Library("device.kicad_sym", "R");
+        var index = SymbolIndex.Build(null, Table(("Device", "device.kicad_sym")), Variables);
+
+        index.SetEnabled("Device", false);
+
+        Assert.Null(index.Find("Device:R"));
+        Assert.Equal("R", index.FindPlaced("Device:R")?.Name);
+        Assert.Equal("Device", index.RowOf("Device:R")?.Nickname);
+        Assert.Null(index.RowOf("R"));
+    }
+
     [Fact]
     public void A_library_that_cannot_be_read_is_remembered_rather_than_thrown()
     {

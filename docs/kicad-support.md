@@ -282,8 +282,25 @@ makes them read the other way, 0 ↔ 900. On a sheet they go through the symbol'
 to right or bottom to top. Move Symbol Anchor moves every unit's pins, shapes and words and the fields by the
 opposite of the point clicked, as KiCad's does.
 
+A symbol derived with `extends` is copied into a sheet flattened, as KiCad's `LIB_SYMBOL::Flatten` copies it: the
+root of its line under the derived name (its bodies renamed `NAME_unit_style` to match), with each derived symbol's
+fields laid over it from the root down — the mandatory fields and the keywords and footprint filters only where the
+derived one says something, any other field always. Before, a derived part was placed with `extends` in the sheet's
+`lib_symbols` and no body to draw.
+
+A sheet compares each symbol it carries with its library, as KiCad's `lib_symbol_mismatch` does (`LIB_SYMBOL::Compare`
+with `ERC`): pins by unit, body style and number; the rest of each body as a set; fields by name, for their text only;
+the unit count and the power flag. Unlike KiCad, the reference and value are left out: KiCad 7 wrote a placement's
+own ("U2", "~") into the sheet's copy, which set off the check on every such sheet. Spellings of one meaning are read
+as one: numbers in any form, a bare `hide` as `(hide yes)`, `(hide no)` and an all-zero colour as nothing, lists in
+any order. On KiCad's own `test_hier_no_connect` it finds the one real difference there (a stacked pin named "PIN" on
+the sheet and nothing in the library) and nothing else. A library is read again when its file changes; while it is
+open in a tab, its unsaved state is the one compared with and taken. A library missing from the tables, unreadable,
+or without the symbol is said in the inspector, not listed as a check: the sheet carries its own copy and is whole.
+
 Not done: text boxes inside symbols, copying, renaming and deleting symbols, adding fields, unit names, the pin table,
-and copy and paste inside a symbol.
+and copy and paste inside a symbol. KiCad's Update Symbols dialog's options to reset a placement's fields from the
+library are not offered: an update takes the library's symbol and leaves every placement's own fields as they are.
 
 ## Drawing sheets (`.kicad_wks`)
 

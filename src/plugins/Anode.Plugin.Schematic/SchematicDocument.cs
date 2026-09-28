@@ -195,7 +195,7 @@ internal sealed class SchematicDocumentType(ILog log, SymbolLibraryList remember
 }
 
 /// <summary>One open sheet: the canvas and what the workbench shows around it.</summary>
-public sealed class SchematicDocument : DocumentBase
+public sealed partial class SchematicDocument : DocumentBase
 {
     private readonly List<IDisposable> _registrations = [];
     private readonly IReadOnlyList<SheetCheck> _checks;
@@ -341,16 +341,17 @@ public sealed class SchematicDocument : DocumentBase
             {
                 Blocks =
                 [
+                    .. item is SymbolInstance placed && LibraryBlock(placed) is { } library ? [library] : Array.Empty<InspectorBlock>(),
                     .. SchItemProperties.Blocks(item, (name, mutate) => _editor.Modify(name, [item], mutate), NetOf, Instance),
                     .. item is SchSheet sheet && PinMatch(sheet) is { } match ? [PinBlock(sheet, match)] : Array.Empty<InspectorBlock>(),
                 ],
-                Actions = [.. item is SchSheet placed && PinMatch(placed) is { } found ? SyncActions(placed, found) : [], .. Actions(item)],
+                Actions = [.. item is SchSheet drawn && PinMatch(drawn) is { } found ? SyncActions(drawn, found) : [], .. Actions(item)],
             };
         }
     }
 
     public override IReadOnlyList<Issue> Issues =>
-        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. Electrical(), .. SheetPins(), .. LoosePins()];
+        [.. _checks.Select(c => c.ToIssue()), .. HierarchyIssues(), .. DrawingSheetIssue(), .. FaceIssues(), .. Duplicates(), .. Electrical(), .. SheetPins(), .. LoosePins(), .. LibraryDrift()];
 
     /// <summary>
     /// The electrical rules, over the whole design: pins that may not be wired together, and nets nothing drives.
@@ -637,7 +638,7 @@ public sealed class SchematicDocument : DocumentBase
             [new InspectorAction(Tr.T("sch.action.openSheet"), () => OpenSheet(sheet, file))],
         SymbolInstance symbol when symbol.LibId is { Length: > 0 } libId =>
         [
-            new InspectorAction(Tr.T("sch.action.updateFromLibrary"), () => UpdateFromLibrary(libId)),
+            .. LibraryActions(symbol),
 
             // Swapping needs something to swap to, and that is whatever the components panel has chosen.
             .. _part is { } chosen && !string.Equals(chosen.LibId, libId, StringComparison.Ordinal)
@@ -861,6 +862,7 @@ public sealed class SchematicDocument : DocumentBase
     private void ChangeTo(SymbolInstance symbol, string libId, LibSymbol definition)
     {
         string label = Tr.T("sch.action.changeSymbol", libId);
+        definition = Whole(libId, definition);
         try
         {
             _editor.Run(new CompositeCommand(
@@ -878,32 +880,8 @@ public sealed class SchematicDocument : DocumentBase
     }
 
     /// <summary>
-    /// Takes the sheet's copy of a definition from the library again — what a designer does once the part has been
-    /// fixed there. Every placement drawing from it is named in the change, so they all redraw, and one undo takes
-    /// the whole thing back.
-    /// </summary>
-    private void UpdateFromLibrary(string libId)
-    {
-        if (Sheet.LibrarySymbols.GetValueOrDefault(libId) is not { } current)
-        {
-            return;
-        }
-
-        if (Libraries.Find(libId) is not { } fresh)
-        {
-            _context?.Log.Error(Tr.English("sch.log.updateMissing", libId));
-            return;
-        }
-
-        _editor.Run(new ModifyNodesCommand(
-            Tr.T("sch.action.updateFromLibrary"),
-            SchSymbols.Affected(Sheet, libId),
-            () => SchSymbols.Update(Sheet, libId, fresh)));
-    }
-
-    /// <summary>
-    /// The libraries this sheet can reach, read once and kept: the project's table, what KiCad installed, and what
-    /// Anode was told to remember.
+    /// The libraries this sheet can reach: the project's table, what KiCad installed, and what Anode was told to
+    /// remember. The tables are read once; a library is read again whenever its file has changed.
     /// </summary>
     private SymbolIndex Libraries => _libraries ??= ProjectLibraries.For(FilePath, _remembered.Load());
 
@@ -1013,6 +991,7 @@ public sealed class SchematicDocument : DocumentBase
     {
         try
         {
+            definition = Whole(libId, definition);
             var symbol = SchSymbols.Place(Sheet, libId, definition, at, Designator(definition), ProjectName(), Instance ?? SchSymbols.PathOf(Sheet));
             _editor.Run(new CompositeCommand(
                 Tr.T("sch.command.symbol"),
@@ -1516,6 +1495,9 @@ public sealed class SchematicDocument : DocumentBase
     public override void Activate(IPluginContext context)
     {
         _context = context;
+
+        // Back from another tab — perhaps the library, changed there: what the sheet knew of its libraries is old.
+        _links = null;
         CommandDescriptor[] commands =
         [
             new("edit.undo", "sch.command.undo")
@@ -1764,6 +1746,19 @@ public sealed class SchematicDocument : DocumentBase
                 ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 64,
                 CanExecute = () => _editor.EnteredGroup is not null,
                 Execute = () => Guard(() => _editor.LeaveGroup(), context),
+            },
+            new("sch.editSymbol", "sch.command.editSymbol")
+            {
+                ScopeKey = "scope.schematic", ShortcutText = "⌘E", Gesture = Shortcut(Key.E),
+                MenuKey = "menu.edit", MenuOrder = 66,
+                CanExecute = () => SelectedSymbol is not null,
+                Execute = () => _ = SelectedSymbol is { } symbol ? EditInLibraryAsync(symbol) : Task.CompletedTask,
+            },
+            new("sch.updateFromLibrary", "sch.command.updateFromLibrary")
+            {
+                ScopeKey = "scope.schematic", MenuKey = "menu.edit", MenuOrder = 67,
+                CanExecute = () => _librariesRead && PlacedLibIds().Any(l => LinkOf(l).Drift is not null),
+                Execute = () => Guard(UpdateAllFromLibrary, context),
             },
             new("sch.bom", "sch.command.bom")
             {
@@ -2096,6 +2091,7 @@ public sealed class SchematicDocument : DocumentBase
         _designNets = null;
         _duplicates = null;
         _overview = null;
+        _links = null;
     }
 
     /// <summary>The sheet itself, for the inspector when nothing is selected; worked out once per state of the sheet.</summary>

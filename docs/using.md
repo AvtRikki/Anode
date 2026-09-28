@@ -157,6 +157,25 @@ the command palette, which lists every command with its shortcut.
 - ⌘Z and ⌘⇧Z undo and redo on the whole library — one history, since the file is one thing saved.
 - Saving writes the library as it stands; one nobody changed is written back byte for byte.
 
+### From the sheet to the library and back
+
+- **Edit → Edit symbol in library** (⌘E), or **Edit in library** in the inspector of a placed part, opens the part's
+  library — or brings its tab up — on its symbol, at the unit and body style the part is placed as. When that cannot
+  be done the banner says why: no library table names the library, its file is not where the table says, or it has
+  no such symbol any more.
+- A sheet notices when a symbol it carries differs from its library. The checks list it — *Symbol differs from its
+  library*, with what differs: pins added, removed or changed, the drawing, fields, the number of units, the power
+  flag — and its **Update** button takes the library's symbol onto the sheet, every placement of it at once, one step
+  to undo. **Edit → Update symbols from library** does it for every symbol that differs. The inspector of a part that
+  differs shows the same in a block at the top, and offers the update first; a part in step with its library adds
+  nothing.
+- The library a sheet compares with is the one on screen: while the library is open in a tab, its changes count
+  before they are saved, and the check says the library is not saved yet. Fix a symbol, go back to the sheet, press
+  Update. A sheet that took a change later thrown away shows the difference again, and is put back the same way.
+- Only what the part is is compared, as KiCad compares it: pins, drawing, fields' words, units. The reference and
+  value are every placement's own and are not compared, and older files' spellings — a bare `hide`, `1.270`, an
+  all-zero colour — are read as the same, so a sheet written by KiCad 7 is not called different for nothing.
+
 ## The inspector
 
 With something selected, the inspector describes it in blocks — what it is, what it connects to, how it is set, where

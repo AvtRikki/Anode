@@ -167,6 +167,79 @@ public sealed class SymbolLibrary : INodeHost
             : Find(libId[(colon + 1)..]);
     }
 
+    /// <summary>
+    /// A symbol as a sheet carries it: whole, with nothing to look up. A symbol that <c>extends</c> another has no
+    /// body of its own, and a sheet has no library to find the parent in, so KiCad copies it into the sheet flattened
+    /// (<c>LIB_SYMBOL::Flatten</c>): the root of its line with the name of this one, then each derived symbol's
+    /// fields laid over it from the root down — the reference, value, footprint, datasheet and description only when
+    /// the derived one says something, any other field always, and the keywords and footprint filters when set.
+    /// Everything else — body, pins, units, flags — is the root's.
+    ///
+    /// A symbol that extends nothing is answered as it is; so is one whose parent is missing, which has nothing to
+    /// be flattened onto. The answer to a derived symbol is a copy that belongs to no library.
+    /// </summary>
+    public LibSymbol Flatten(LibSymbol symbol)
+    {
+        var line = new List<LibSymbol> { symbol };
+        var seen = new HashSet<string>(StringComparer.Ordinal) { symbol.Name };
+        for (var at = symbol; at.Extends is { Length: > 0 } parentName && Find(parentName) is { } parent && seen.Add(parent.Name); at = parent)
+        {
+            line.Add(parent);
+        }
+
+        if (line.Count == 1)
+        {
+            return symbol;
+        }
+
+        var root = line[^1];
+        var node = Editing.SchNodes.Adopt(root.Node);
+        if (node.Find("extends") is { } loop)
+        {
+            // The root of a line that turns back on itself still names a parent; the copy stands alone.
+            node.RemoveAt(node.IndexOf(loop));
+        }
+
+        (node.AtomAt(1) ?? throw new KiCadFormatException("A symbol has no name.")).SetString(symbol.Name);
+        foreach (var body in node.Lists().Where(l => l.Head == "symbol"))
+        {
+            if (body.Str(1) is { } name && name.StartsWith(root.Name + "_", StringComparison.Ordinal))
+            {
+                body.AtomAt(1)!.SetString(symbol.Name + name[root.Name.Length..]);
+            }
+        }
+
+        for (int i = line.Count - 2; i >= 0; i--)
+        {
+            foreach (var field in line[i].Node.Lists().Where(l => l.Head == "property").ToList())
+            {
+                string name = field.Str(1) ?? string.Empty;
+                if (field.Str(2) is not { Length: > 0 } && (Mandatory.Contains(name) || name is "ki_keywords" or "ki_fp_filters"))
+                {
+                    continue;
+                }
+
+                var copy = Editing.SchNodes.Adopt(field);
+                if (node.Lists().FirstOrDefault(l => l.Head == "property" && l.Str(1) == name) is { } existing)
+                {
+                    int place = node.IndexOf(existing);
+                    node.RemoveAt(place);
+                    node.Insert(place, copy);
+                }
+                else
+                {
+                    int at = node.Lists().LastOrDefault(l => l.Head == "property") is { } last ? node.IndexOf(last) + 1 : node.Count;
+                    node.Insert(at, copy);
+                }
+            }
+        }
+
+        return new LibSymbol(node);
+    }
+
+    /// <summary>The fields every symbol has, KiCad 9's <c>MANDATORY_FIELDS</c>.</summary>
+    private static readonly string[] Mandatory = ["Reference", "Value", "Footprint", "Datasheet", "Description"];
+
     public static SymbolLibrary Load(string path) => new(SDocument.Load(path));
 
     public static SymbolLibrary Parse(string text) => new(SDocument.Parse(text));
