@@ -40,6 +40,8 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     private SchematicCanvas? _canvas;
     private string _cursor = string.Empty;
     private string? _tool;
+    private ILog? _log;
+    private string _shapeTool = "sch.tool.rectangle";
 
     public SymbolLibraryDocument(string path, SymbolLibrary library)
     {
@@ -145,15 +147,38 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     /// <summary>With nothing selected, the symbol itself.</summary>
     public override SelectionInfo? Overview => Current is { } symbol ? DescribeSymbol(symbol) : null;
 
+    /// <summary>
+    /// The symbol editor's tools, laid out as the sheet's are: selecting, then what a symbol is made of — pins,
+    /// words, and the shapes behind one button whose chevron holds the rest, the last one chosen staying on it —
+    /// and last the anchor, which moves the symbol's origin to a point clicked. KiCad's symbol editor offers the
+    /// same.
+    /// </summary>
     public override IReadOnlyList<ToolDescriptor> Tools =>
     [
         new("sch.tool.select", "sch.tool.select", Icons.Select) { ShortcutText = "Esc", Activate = () => UseTool(null) },
         new("sch.tool.pin", "sch.tool.pin", Icons.Pin) { ShortcutText = "P", Activate = () => UseTool("sch.tool.pin") },
-        new("sch.tool.line", "sch.tool.line", Icons.Line) { Activate = () => UseTool("sch.tool.line") },
-        new("sch.tool.rectangle", "sch.tool.rectangle", Icons.Rectangle) { Activate = () => UseTool("sch.tool.rectangle") },
-        new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
-        new("sch.tool.arc", "sch.tool.arc", Icons.Circle) { Activate = () => UseTool("sch.tool.arc") },
+        new("sch.tool.text", "sch.tool.text", Icons.Text) { ShortcutText = "T", Activate = () => UseTool("sch.tool.text") },
+        new(_shapeTool, _shapeTool, ShapeIcon(_shapeTool))
+        {
+            Activate = () => UseTool(_shapeTool),
+            Variants =
+            [
+                new("sch.tool.rectangle", "sch.tool.rectangle", Icons.Rectangle) { Activate = () => UseTool("sch.tool.rectangle") },
+                new("sch.tool.line", "sch.tool.line", Icons.Line) { Activate = () => UseTool("sch.tool.line") },
+                new("sch.tool.circle", "sch.tool.circle", Icons.Circle) { Activate = () => UseTool("sch.tool.circle") },
+                new("sch.tool.arc", "sch.tool.arc", Icons.Circle) { Activate = () => UseTool("sch.tool.arc") },
+                new("sch.tool.bezier", "sch.tool.bezier", Icons.Line) { Activate = () => UseTool("sch.tool.bezier") },
+            ],
+        },
+        new("sch.tool.anchor", "sch.tool.anchor", Icons.Move) { Activate = () => UseTool("sch.tool.anchor") },
     ];
+
+    private static string ShapeIcon(string tool) => tool switch
+    {
+        "sch.tool.rectangle" => Icons.Rectangle,
+        "sch.tool.circle" or "sch.tool.arc" => Icons.Circle,
+        _ => Icons.Line,
+    };
 
     public override string? ActiveToolId => _tool;
 
@@ -161,6 +186,11 @@ internal sealed class SymbolLibraryDocument : DocumentBase
     public void UseTool(string? id)
     {
         _tool = id is not null && Current is { } symbol && ReferenceEquals(Body, symbol) ? id : null;
+        if (_tool is "sch.tool.line" or "sch.tool.rectangle" or "sch.tool.circle" or "sch.tool.arc" or "sch.tool.bezier")
+        {
+            _shapeTool = _tool;
+        }
+
         if (_canvas is { } canvas)
         {
             canvas.Tool = _tool is { } tool ? MakeTool(tool) : null;
@@ -175,6 +205,12 @@ internal sealed class SymbolLibraryDocument : DocumentBase
         "sch.tool.line" => new ShapeTool(editor, "sch.tool.line", SchShapeKind.Polyline),
         "sch.tool.rectangle" => new ShapeTool(editor, "sch.tool.rectangle", SchShapeKind.Rectangle),
         "sch.tool.circle" => new ShapeTool(editor, "sch.tool.circle", SchShapeKind.Circle),
+        "sch.tool.text" when _canvas is { } canvas => new PromptTool(editor, "sch.tool.text",
+            point => canvas.AskForNameAsync(point, string.Empty), MakeText, ex => _log?.Error(ex.Message, ex)),
+        "sch.tool.bezier" => new PointsTool(editor, "sch.tool.bezier", 4,
+            SchNodes.Bezier,
+            p => Anode.Geometry.BezierMath.Tessellate([.. p.Select(q => q.ToDouble())])),
+        "sch.tool.anchor" => new PointTool(editor, "sch.tool.anchor", MoveAnchor),
         "sch.tool.arc" => new PointsTool(editor, "sch.tool.arc", 3,
             p => SchNodes.Arc(p[0], p[2], p[1]),
             p => p.Count >= 3 && Anode.Geometry.ArcMath.FromStartMidEnd(p[0].ToDouble(), p[2].ToDouble(), p[1].ToDouble()) is { } arc
@@ -198,6 +234,40 @@ internal sealed class SymbolLibraryDocument : DocumentBase
             + " (name \"~\" (effects (font (size 1.27 1.27))))"
             + $" (number \"{next.ToString(CultureInfo.InvariantCulture)}\" (effects (font (size 1.27 1.27)))))";
         return new SchPin(SchNodes.Adopt(Anode.Sexpr.SDocument.Parse(text).Root));
+    }
+
+    /// <summary>Words on the body, made at the scene's point and turned over into the library's by the rules.</summary>
+    internal SchItem MakeText(string written, Anode.Geometry.Vector2L at) =>
+        new SchText(SchNodes.Adopt(Anode.Sexpr.SDocument.Parse(
+            $"(text {Anode.Sexpr.SEscape.Quote(written)} (at {Anode.Kicad.KiCadNumber.FormatMm(at.X)} {Anode.Kicad.KiCadNumber.FormatMm(at.Y)} 0)"
+            + " (effects (font (size 1.27 1.27))))").Root));
+
+    /// <summary>
+    /// Makes the point clicked the symbol's origin, as KiCad's Move Symbol Anchor does: everything the symbol is
+    /// made of — every unit's pins, shapes and words, and its fields — moves by the opposite, as one step to undo.
+    /// The anchor is where the symbol is held when it is placed on a sheet.
+    /// </summary>
+    internal void MoveAnchor(Anode.Geometry.Vector2L scenePoint)
+    {
+        if (Current is not { } symbol || !ReferenceEquals(Body, symbol))
+        {
+            return;
+        }
+
+        var shift = SymbolRules.Flip(scenePoint);
+        if (shift == default)
+        {
+            return;
+        }
+
+        History.Execute(new ModifyNodesCommand(Tr.T("sch.tool.anchor"), [symbol], () =>
+        {
+            foreach (var item in symbol.Graphics.Cast<SchItem>().Concat(symbol.Pins).Concat(symbol.Texts).Concat(symbol.Fields).ToList())
+            {
+                SymbolEdits.Transform(item, p => p - shift, 0);
+            }
+        }));
+        Rebuild();
     }
 
     protected override Control CreateView()
@@ -239,6 +309,7 @@ internal sealed class SymbolLibraryDocument : DocumentBase
 
     public override void Activate(IPluginContext context)
     {
+        _log = context.Log;
         CommandDescriptor[] commands =
         [
             new("edit.undo", "sch.command.undo")
@@ -260,6 +331,12 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                 ScopeKey = "scope.symlib", ShortcutText = "P", Gesture = new KeyGesture(Key.P),
                 MenuKey = "menu.place", MenuOrder = 0,
                 Execute = () => UseTool("sch.tool.pin"),
+            },
+            new("sch.lib.tool.text", "sch.tool.text")
+            {
+                ScopeKey = "scope.symlib", ShortcutText = "T", Gesture = new KeyGesture(Key.T),
+                MenuKey = "menu.place", MenuOrder = 10,
+                Execute = () => UseTool("sch.tool.text"),
             },
             new("sch.lib.newSymbol", "sch.command.newSymbol")
             {
@@ -521,6 +598,19 @@ internal sealed class SymbolLibraryDocument : DocumentBase
                                 Choices = SymbolWrites.Fills,
                                 Commit = Writes("fill", v => SymbolWrites.SetFill(graphic, v)),
                             },
+                        ]),
+                    ],
+                };
+
+            case SchText text:
+                return new SelectionInfo(text.Shown, Current?.Name, [], Tr.T("sch.lib.tag.text"))
+                {
+                    Blocks =
+                    [
+                        new InspectorBlock(Tr.T("sch.lib.block.text"),
+                        [
+                            new(Tr.T("sch.lib.row.text"), text.Text) { Commit = Writes("text", v => SchWrites.SetText(text, v)) },
+                            new(Tr.T("sch.lib.row.position"), Point(text.Position)),
                         ]),
                     ],
                 };

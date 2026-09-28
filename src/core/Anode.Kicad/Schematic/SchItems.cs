@@ -195,6 +195,8 @@ public sealed class LibSymbol : SchItem, INodeHost
     private readonly List<SchGraphic> _graphics = [];
     private readonly List<SchPin> _pins = [];
     private readonly List<SchField> _fields = [];
+    private readonly List<SchText> _texts = [];
+    private readonly List<(int Unit, int Style, int Index)> _textUnits = [];
 
     internal LibSymbol(SList node)
         : base(node)
@@ -214,7 +216,7 @@ public sealed class LibSymbol : SchItem, INodeHost
         // The wrappers of what is still there are kept: what is selected, or drawn, stays the same object across an
         // edit of the symbol — a pin deleted and put back is the pin that was selected.
         var known = new Dictionary<SList, SchItem>(ReferenceEqualityComparer.Instance);
-        foreach (var item in _graphics.Cast<SchItem>().Concat(_pins).Concat(_fields))
+        foreach (var item in _graphics.Cast<SchItem>().Concat(_pins).Concat(_fields).Concat(_texts))
         {
             known[item.Node] = item;
         }
@@ -226,6 +228,8 @@ public sealed class LibSymbol : SchItem, INodeHost
         _graphics.Clear();
         _pins.Clear();
         _fields.Clear();
+        _texts.Clear();
+        _textUnits.Clear();
         Units.Clear();
 
         _fields.AddRange(Node.Lists().Where(l => l.Head == "property").Select(l => Keep(l, n => new SchField(n))));
@@ -245,6 +249,11 @@ public sealed class LibSymbol : SchItem, INodeHost
                 {
                     _pins.Add(Keep(child, n => new SchPin(n)));
                     Units.Add((number, style, _pins.Count - 1, false));
+                }
+                else if (child.Head == "text")
+                {
+                    _texts.Add(Keep(child, n => new SchText(n)));
+                    _textUnits.Add((number, style, _texts.Count - 1));
                 }
             }
         }
@@ -318,6 +327,22 @@ public sealed class LibSymbol : SchItem, INodeHost
     public IReadOnlyList<SchGraphic> Graphics => _graphics;
 
     public IReadOnlyList<SchPin> Pins => _pins;
+
+    /// <summary>
+    /// Words written on the symbol's body — "GPIO", "600mA Max" — in the library's coordinates. Their angle is
+    /// written in tenths of a degree, as nothing else in the file is: see <see cref="TextAngle"/>.
+    /// </summary>
+    public IReadOnlyList<SchText> Texts => _texts;
+
+    /// <summary>The words drawn on one unit and body style, with those common to every unit.</summary>
+    public IEnumerable<SchText> TextsOf(int unit, int bodyStyle) =>
+        _textUnits.Where(u => (u.Unit == 0 || u.Unit == unit) && (u.Style == 0 || u.Style == bodyStyle)).Select(u => _texts[u.Index]);
+
+    /// <summary>
+    /// A body text's angle in degrees. KiCad writes a symbol's text angle in tenths of a degree
+    /// (<c>parseSymbolText</c>, <c>TENTHS_OF_A_DEGREE_T</c>): 900 is vertical.
+    /// </summary>
+    public static double TextAngle(SchText text) => text.Angle / 10;
 
     /// <summary>The symbol's own fields — reference, value, footprint… — in the library's coordinates, Y upward.</summary>
     public IReadOnlyList<SchField> Fields => _fields;

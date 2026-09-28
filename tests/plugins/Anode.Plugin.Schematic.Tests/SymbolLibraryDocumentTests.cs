@@ -97,6 +97,33 @@ public class SymbolLibraryDocumentTests
         Assert.Contains(lines, l => Math.Abs(Math.Min(l.A.X, l.B.X) - 3.81f) < 0.01f && Math.Abs(Math.Max(l.A.X, l.B.X) - 7.62f) < 0.01f);
     }
 
+    /// <summary>
+    /// Words on a symbol's body are drawn — in the library, and on the sheet the symbol is placed on. The CM5 demo
+    /// labels its GPIO symbol and marks two supplies "600mA Max"; none of it was drawn before.
+    /// </summary>
+    [Fact]
+    public void Words_on_a_symbols_body_are_drawn_in_the_library_and_on_the_sheet()
+    {
+        string library = Path.Combine(TestData.KiCadDir, "demos", "cm5_minima", "CM5IO.kicad_sym");
+        string sheet = Path.Combine(TestData.KiCadDir, "demos", "cm5_minima", "CM5.kicad_sch");
+        Assert.SkipUnless(File.Exists(library) && File.Exists(sheet), TestData.SkipReason);
+
+        var gpio = SymbolLibrary.Load(library).Find("ComputeModule5-CM5_GPIO")!;
+        Assert.Contains(gpio.Texts, t => t.Shown == "GPIO");
+        var scene = SchematicSceneBuilder.BuildSymbol(gpio, gpio, 1, 1);
+        Assert.All(gpio.TextsOf(1, 1), t => Assert.False(scene.BoundsOf(t).IsEmpty, $"\"{t.Shown}\" is not drawn"));
+
+        // On the sheet: strokes where a word stands inside the body, well away from its outline and its pins.
+        var placed = Anode.Kicad.Schematic.Load(sheet);
+        var symbol = placed.Symbols.First(s => s.Definition?.TextsOf(s.Unit, s.BodyStyle).Any(t => t.Shown == "600mA Max") == true);
+        var words = symbol.Definition!.TextsOf(symbol.Unit, symbol.BodyStyle).First(t => t.Shown == "600mA Max");
+        var drawn = SchematicSceneBuilder.Build(placed);
+        var at = drawn.ToSceneMm(symbol.ToSheet.Apply(words.Position.ToDouble()));
+        var owners = drawn.OwnersOf(symbol).ToHashSet();
+        Assert.Contains(drawn.Find(LayerStyle.Sch.Symbol)!.Lines, l => owners.Contains(l.Owner)
+            && Math.Abs(l.A.X - at.X) < 6 && Math.Abs(l.A.Y - at.Y) < 1.5);
+    }
+
     /// <summary>4001 is four gates and a power unit, each drawn two ways: switching shows each one's own pins.</summary>
     [Fact]
     public void Units_and_body_styles_are_switched_between()

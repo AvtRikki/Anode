@@ -259,6 +259,64 @@ public sealed class SymbolEditingTests : IDisposable
         Assert.Single(read.GraphicsOf(1, 1));
     }
 
+    /// <summary>
+    /// Words written on the body are placed where clicked, in the library's terms; a quarter turn makes them read
+    /// the other way, written as KiCad writes a symbol text's angle — in tenths of a degree.
+    /// </summary>
+    [Fact]
+    public void Words_on_the_body_are_placed_and_turned_in_tenths_of_a_degree()
+    {
+        using var document = Open();
+        var editor = document.Editor!;
+
+        editor.Apply("sch.tool.text", [document.MakeText("GAIN", new Vector2L(0, -2_540_000))], []);
+
+        var text = Assert.Single(document.Current!.Texts);
+        Assert.Equal(new Vector2L(0, 2_540_000), text.Position);
+        Assert.Equal("GAIN", text.Shown);
+
+        editor.SetSelection([text]);
+        editor.Rotate(90);
+        Assert.Equal(90, LibSymbol.TextAngle(text));
+        Assert.Contains("900", text.Node.ToString(), StringComparison.Ordinal);
+
+        editor.Rotate(90);
+        Assert.Equal(0, LibSymbol.TextAngle(text));
+    }
+
+    /// <summary>
+    /// The anchor moved to a point clicked: everything the symbol is made of moves by the opposite, so the point
+    /// becomes the origin — one step, undone to the byte.
+    /// </summary>
+    [Fact]
+    public void The_anchor_moves_to_the_point_clicked()
+    {
+        using var document = Open();
+        byte[] original = document.Library.Document.ToBytes();
+
+        // (-2.54, 2.54) in the library is (-2.54, -2.54) on screen.
+        document.MoveAnchor(new Vector2L(-2_540_000, -2_540_000));
+
+        Assert.Equal(new Vector2L(-5_080_000, -2_540_000), Pin(document).Position);
+        var box = document.Current!.Graphics.Single();
+        Assert.Equal(new Vector2L(-2_540_000, 2_540_000), box.Start);
+        Assert.Equal(new Vector2L(2_540_000, 5_080_000), document.Current!.Fields.Single(f => f.Name == "Reference").Position);
+
+        document.Undo();
+        Assert.Equal(original, document.Library.Document.ToBytes());
+    }
+
+    [Fact]
+    public void The_tool_bar_is_laid_out_as_the_sheets_with_a_symbols_tools()
+    {
+        using var document = Open();
+        var tools = document.Tools;
+
+        Assert.Equal(["sch.tool.select", "sch.tool.pin", "sch.tool.text", "sch.tool.rectangle", "sch.tool.anchor"], tools.Select(t => t.Id));
+        Assert.Equal(["sch.tool.rectangle", "sch.tool.line", "sch.tool.circle", "sch.tool.arc", "sch.tool.bezier"],
+            tools.Single(t => t.Variants.Count > 0).Variants.Select(v => v.Id));
+    }
+
     private static SchPin Pin(SymbolLibraryDocument document) => document.Current!.Pins.Single();
 
     private static void Move(SymbolLibraryDocument document, SchItem item, Vector2L by)

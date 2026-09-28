@@ -13,7 +13,7 @@ public static class SymbolEdits
     /// <summary>What of a symbol can be moved: its pins, its shapes, its fields — none that is held in place.</summary>
     public static bool CanTransform(SchItem item) => !item.IsLocked && item switch
     {
-        SchPin or SchField => true,
+        SchPin or SchField or SchText => true,
         SchGraphic { Kind: not SchShapeKind.Unsupported } => true,
         _ => false,
     };
@@ -63,6 +63,19 @@ public static class SymbolEdits
 
                 break;
 
+            case SchText:
+                // Words on the body turn as a field does, but their angle is written in tenths of a degree.
+                if (node.Find("at") is { } spot)
+                {
+                    spot.MapPoint(map);
+                    if (Math.Abs((turn % 180) - 90) < 1e-6)
+                    {
+                        spot.SetAngle(3, Math.Abs(LibSymbol.TextAngle((SchText)item) % 180) < 1e-6 ? 900 : 0, omitWhenZero: false);
+                    }
+                }
+
+                break;
+
             case SchGraphic:
                 MapShape(node, map);
                 break;
@@ -90,7 +103,7 @@ public static class SymbolEdits
 
                 break;
 
-            case SchField:
+            case SchField or SchText:
                 node.MapChildPoint("at", map);
                 break;
 

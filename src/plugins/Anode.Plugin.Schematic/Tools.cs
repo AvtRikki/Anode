@@ -904,3 +904,40 @@ internal sealed class PinTool(SchematicEditor editor, Func<Vector2L, SchItem> ma
     }
 }
 
+
+/// <summary>
+/// Picks one point with a click and hands it over — KiCad's Move Symbol Anchor, where the point clicked becomes the
+/// symbol's origin. A small cross follows the pointer so it is plain which point it will be.
+/// </summary>
+internal sealed class PointTool(SchematicEditor editor, string id, Action<Vector2L> picked) : ISchTool
+{
+    private const double StrokeMm = 0.1524;
+    private const long ArmNm = 1_270_000;
+
+    public string Id => id;
+
+    public LayerGeometry? Preview { get; private set; }
+
+    public event Action? Changed;
+
+    public void Move(Vector2L sheetPoint)
+    {
+        var at = editor.Snap(sheetPoint);
+        var layer = new LayerGeometry(LayerStyle.Sch.Symbol);
+        layer.Lines.Add(new LinePrim(ToolDraw.Scene(editor, new Vector2L(at.X - ArmNm, at.Y)), ToolDraw.Scene(editor, new Vector2L(at.X + ArmNm, at.Y)), (float)StrokeMm, -1));
+        layer.Lines.Add(new LinePrim(ToolDraw.Scene(editor, new Vector2L(at.X, at.Y - ArmNm)), ToolDraw.Scene(editor, new Vector2L(at.X, at.Y + ArmNm)), (float)StrokeMm, -1));
+        Preview = layer;
+        Changed?.Invoke();
+    }
+
+    public void Click(Vector2L sheetPoint) => picked(editor.Snap(sheetPoint));
+
+    public bool Finish() => false;
+
+    public bool Cancel()
+    {
+        Preview = null;
+        Changed?.Invoke();
+        return false;
+    }
+}

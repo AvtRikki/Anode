@@ -281,6 +281,11 @@ public static class SchematicSceneBuilder
                 {
                     AddPin(pin, definition, t, owner);
                 }
+
+                foreach (var text in definition.TextsOf(unit, symbol.BodyStyle))
+                {
+                    BodyText(text, t, owner);
+                }
             }
 
             // Fields carry their own place and angle on the sheet, so they stay upright whatever the symbol does.
@@ -312,6 +317,9 @@ public static class SchematicSceneBuilder
                     case SchPin pin:
                         AddPin(pin, body, t, scene.AddOwner(pin));
                         break;
+                    case SchText text:
+                        BodyText(text, t, scene.AddOwner(text));
+                        break;
                     case SchField field when field.Value.Length > 0:
                         Text(field.IsHidden ? LayerStyle.Sch.HiddenField : LayerStyle.Sch.Field, field.Value,
                             t.Apply(field.Position.ToDouble()), field.TextHeight, field.Font, field.Angle, field.Alignment, scene.AddOwner(field));
@@ -337,6 +345,11 @@ public static class SchematicSceneBuilder
             foreach (var pin in body.PinsOf(unit, bodyStyle))
             {
                 AddPin(pin, body, t, scene.AddOwner(pin));
+            }
+
+            foreach (var text in body.TextsOf(unit, bodyStyle))
+            {
+                BodyText(text, t, scene.AddOwner(text));
             }
 
             // Fields stand where the library puts them, turned over like everything else; their text stays upright.
@@ -382,6 +395,27 @@ public static class SchematicSceneBuilder
                     : (dx > 0 ? ("left", "center") : ("right", "center"));
                 TextScene(words, name, anchor, pin.NameHeight, pin.NameFont, angle, alignment, owner);
             }
+        }
+
+        /// <summary>
+        /// Words on a symbol's body, carried onto the sheet with the symbol. The place goes through the symbol's
+        /// transform; the direction the words read goes through it too, and is then kept readable — left to right or
+        /// bottom to top — as KiCad keeps a symbol's text readable however the symbol is turned or mirrored.
+        /// </summary>
+        private void BodyText(SchText text, Transform2D toSheet, int owner)
+        {
+            if (text.Shown.Length == 0)
+            {
+                return;
+            }
+
+            double radians = LibSymbol.TextAngle(text) * Math.PI / 180;
+            var origin = toSheet.Apply(new Vector2D(0, 0));
+            var along = toSheet.Apply(new Vector2D(Math.Cos(radians) * 1_000_000, Math.Sin(radians) * 1_000_000)) - origin;
+            double angle = Math.Atan2(-along.Y, along.X) * 180 / Math.PI;
+            angle = ((Math.Round(angle / 90) * 90 % 180) + 180) % 180;
+
+            Text(LayerStyle.Sch.Symbol, text.Shown, toSheet.Apply(text.Position.ToDouble()), text.TextHeight, text.Font, angle, text.Alignment, owner);
         }
 
         /// <summary>

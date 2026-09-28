@@ -275,8 +275,15 @@ carries (nothing inside a library symbol has one), into the `NAME_unit_style` bo
 symbol has none for it. A new pin is KiCad's pin tool's first pin — input, line, 100 mil, pointing right — numbered one
 past the highest number the symbol has, where KiCad remembers the last pin's settings and steps from it.
 
-Not done: text inside symbols (neither drawn nor written yet), curves in the symbol editor, copying, renaming and
-deleting symbols, adding fields, unit names, the pin table, and copy and paste inside a symbol.
+Words on a symbol's body (`(text …)` inside a unit) are read, drawn — in the library and on every sheet the symbol is
+placed on, where they were missing before — moved, turned and written. Their angle is written in tenths of a degree
+(KiCad's `parseSymbolText` reads it as `TENTHS_OF_A_DEGREE_T`), unlike every other angle in the file; a quarter turn
+makes them read the other way, 0 ↔ 900. On a sheet they go through the symbol's transform and are kept readable, left
+to right or bottom to top. Move Symbol Anchor moves every unit's pins, shapes and words and the fields by the
+opposite of the point clicked, as KiCad's does.
+
+Not done: text boxes inside symbols, copying, renaming and deleting symbols, adding fields, unit names, the pin table,
+and copy and paste inside a symbol.
 
 ## Drawing sheets (`.kicad_wks`)
 
